@@ -1,0 +1,13 @@
+{
+    "公司名称": "BOSS直聘",
+    "公司简介": "未提及",
+    "工作地点": "北京市海淀区中关村大街1号海龙大厦",
+    "职位名称": "Python爬虫",
+    "学历要求": "未提及",
+    "工作经验": "未提及",
+    "职位类型": "未提及",
+    "薪资范围": "未提及",
+    "岗位职责": "1. 开发自动点击谷歌浏览器插件按钮；2. 收集用户信息。",
+    "技能要求": "Python标准库和流行第三方库, Redis/MongoDB/RabbitMQ/Memcache/Nginx, JAVA, RESTful web service规范, 面向对象设计思想, mysql存储引擎, 索引工作原理, mysql性能优化, Code Review, Tornado/Flask/Gevent/Django开发框架",
+    "其他要求": "重视代码和设计质量"
+}
