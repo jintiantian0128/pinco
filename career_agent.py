@@ -122,8 +122,7 @@ class CareerAgent:
         Returns:
             搜索结果列表
         """
-        # 这里应该调用实际的搜索API
-        # 由于API限制，这里返回模拟数据
+        #据
         logger.info(f"搜索求职建议: {query}")
         
         # 模拟搜索结果

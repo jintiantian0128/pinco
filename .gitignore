@@ -162,3 +162,8 @@ $RECYCLE.BIN/
 *.json.bak
 temp/
 logs/
+
+# Data folders
+知乎问答/
+boss招聘信息/
+.DS_Store/
