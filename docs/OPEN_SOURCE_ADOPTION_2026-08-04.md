@@ -10,6 +10,7 @@
 | 产品埋点 | [PostHog](https://github.com/PostHog/posthog) | 核心 MIT，`ee` 目录另有许可 | 借鉴 event + properties + distinct_id 的事件模型；首批内测先用 Pinco 自有轻量事件接口，减少 SDK 和隐私面 | 暂不接入自动录屏、全量 autocapture 和额外个人信息采集 |
 | 专家预约 | [Cal.diy](https://github.com/calcom/cal.diy) | MIT 社区版；官方明确提示生产自托管需自行保障安全 | 借鉴 availability → hold → confirm → complete/cancel 的状态机、幂等订单号和时段冲突校验 | 不引入整套 Next.js/Prisma/Daily 技术栈；未接微信支付前不把订单标记为已支付 |
 | 微信支付 | [微信支付商户官方文档](https://pay.wechatpay.cn/doc/v3/merchant/4012791897) + [wechatpayv3](https://github.com/minibear2021/wechatpayv3) | 官方协议 + MIT 第三方 Python 传输封装；依赖固定为 2.0.2 | 适配 JSAPI 下单、RSA 调起签名、平台公钥验签、AES-GCM 解密、主动查询/关单/退款；Pinco 自己负责服务端定价、金额核对、用户归属、幂等履约和开关 | 不信任客户端支付成功；不把商户私钥打包；不在实付与退款验收前公开售卖 |
+| 岗位来源质量 | [Google JobPosting 官方内容政策](https://developers.google.com/search/docs/appearance/structured-data/job-posting) + [Schema.org JobPosting](https://schema.org/JobPosting) | Google 要求单一真实职位、完整描述、招聘主体、地点/远程范围、发布时间，并排除新闻/广告/过期职位；Schema.org 定义标准字段 | 不复制爬虫；将其适配为保守的来源摘要门禁：必须有招聘主体、职位信号和 HTTP(S) 来源，过滤新闻/科普/榜单，只称“带来源候选”并要求打开确认有效期 | 搜索摘要不能证明仍在招聘；不把“URL 可打开”写成“真实在招”，不补写薪资、公司、职责或有效期 |
 | 云端数据 | 微信云托管自带 MySQL | 当前环境已自动提供内网地址和账号；无需额外购买 MongoDB 或配置 VPC | 后端使用 MySQL 状态仓库并通过重新部署后的同记录回读；本地仍允许 JSON 便于开发测试 | 不再把容器内 JSON 描述为云端持久化；未完成线上回读时不宣称跨设备/重启可用 |
 
 ## 首批内测的实现顺序

@@ -102,6 +102,7 @@ assert.match(mine, /reconcileExpertPayment/, 'Expert payment retries must reconc
 assert.equal(fs.existsSync(path.join(root, 'src/data/experts.ts')), false, 'Static expert candidates must not ship')
 assert.equal(fs.existsSync(path.join(root, 'src/data/community.ts')), false, 'Static community interactions must not ship')
 assert.match(jobSearch, /job\.verified_source\s*&&\s*job\.url/, 'Job cards must require a verified source URL')
+assert.match(jobSearch, /带来源候选，请打开确认在招/, 'Job cards must not claim a source-linked candidate is definitely active')
 assert.doesNotMatch(jobSearch, /公司官网、脉脉、猎聘多平台搜索/, 'UI must not advertise an unavailable official-site provider')
 assert.match(conversation, /\[5, 10, 20, 30\]/, 'Interview practice must offer 5/10/20/30 minute modes')
 assert.match(conversation, /陪我热身/, 'Interview practice must offer a warm-up intensity')

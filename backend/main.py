@@ -726,6 +726,8 @@ class JobResult(BaseModel):
     predicted_salary: Optional[str] = None
     verified_source: bool = False
     retrieved_at: Optional[str] = None
+    source_status: str = "source_link_only"
+    verification_note: str = "仅确认来源链接存在，请打开原页面确认仍在招聘"
 
 
 class JobSearchResponse(BaseModel):
@@ -830,7 +832,7 @@ PINCO_PERSONA = """你是 Pinco（温柔学姐），一位专门帮助 0-5 年�
 2. 模拟面试（行为面 + 专业面）
 3. JD 解读与投递策略
 4. 职场沟通与成长规划
-5. 岗位搜索——只有检索接口返回了带来源链接的岗位时，才可以称为真实岗位并引用公司、薪资和链接。
+5. 岗位搜索——检索结果只能称为“带来源链接的岗位候选”，不能保证仍在招聘；必须提醒用户打开原页面确认有效期。只有来源页明确包含单一职位、招聘主体和岗位描述时才可以展示，新闻、科普、榜单和搜索列表不能冒充岗位。
 6. 图片边界——除非请求里实际包含了视觉模型可读取的图片内容，否则必须明确说自己看不到画面，绝不能猜测或描述图片。
 如果用户上传了简历或贴出了 JD，主动给出针对性分析。
 当岗位检索失败或没有可信来源时，要明确说明当前没有拿到可验证结果，并给出重试或补充筛选条件的下一步；禁止编造岗位。"""
@@ -4009,15 +4011,16 @@ async def chat(request: ChatRequest):
         system = PINCO_PERSONA
         if search_results:
             jobs_text = "\n".join([
-                f"{i+1}. {job.get('title', '未知职位')} @ {job.get('company', '未知公司')} | {job.get('location', '')} | {job.get('salary', job.get('predicted_salary', ''))}\n   链接: {job.get('url', '无')}"
+                f"{i+1}. {job.get('title', '未知职位')} @ {job.get('company', '未知公司')} | {job.get('location', '')} | {job.get('salary', job.get('predicted_salary', ''))}\n   来源链接: {job.get('url', '无')}\n   核验说明: {job.get('verification_note', '请打开原页面确认仍在招聘')}"
                 for i, job in enumerate(search_results[:5])
             ])
-            # Inject search results into user message for better LLM awareness
+            # These are source-linked candidates, not proof that the opening is
+            # still active. Keep that boundary visible to the model and user.
             if conversation and conversation[-1]["role"] == "user":
                 original = conversation[-1]["content"]
-                conversation[-1]["content"] = f"【用户请求】{original}\n\n【系统已自动搜索到的真实岗位信息】\n{jobs_text}\n\n请直接基于以上搜索结果回答用户，展示具体岗位名称、公司、薪资和链接，并给出匹配度分析。禁止说\"无法搜索\"或\"没法联网\"。"
+                conversation[-1]["content"] = f"【用户请求】{original}\n\n【系统检索到的带来源岗位候选】\n{jobs_text}\n\n请基于候选给出匹配分析并附来源链接，同时明确提醒用户打开原页面确认仍在招聘。不得称为已核实在招或真实在招，也不得补写来源中没有的薪资、公司或职责。"
             else:
-                system += f"\n\n【实时搜索结果】用户正在找工作，以下是我刚搜到的真实岗位（来自各大公司官网）：\n{jobs_text}\n\n请在回复中自然引用这些岗位信息，帮用户分析匹配度，并给出投递建议。"
+                system += f"\n\n【带来源岗位候选】以下结果只确认了来源和职位信号，不保证此刻仍在招聘：\n{jobs_text}\n\n请自然引用并分析匹配度，同时提醒用户打开原页面确认有效期；不得补写来源中没有的信息。"
 
         memory_context = build_agent_memory_context(user_snapshot)
         system = build_scenario_instruction(request.scenario) + "\n\n" + system + f"""
@@ -4070,7 +4073,7 @@ memory_updates 和 used_memory_keys 中的 key 必须严格使用以下英文值
                     f"{i+1}. {job.get('title', '未知职位')} @ {job.get('company', '来源页内查看')} | {job.get('location', '')} | {job.get('salary') or '薪资见来源页'}\n   链接: {job.get('url')}"
                     for i, job in enumerate(search_results[:5])
                 ])
-                response_text = f"我已经帮你搜索到了以下真实岗位信息：\n\n{jobs_text}\n\n接下来我帮你分析匹配度和投递建议~\n\n{response_text}"
+                response_text = f"我检索到了以下带来源岗位候选，请先打开原页面确认仍在招聘：\n\n{jobs_text}\n\n下面再按现有信息分析匹配度；来源中没有的条件我不会补写。\n\n{response_text}"
         accepted_progress = persist_chat_turn(
             request.user_id,
             latest_user_text,
@@ -5012,6 +5015,33 @@ def _baidu_search_jobs(query: str, city: Optional[str], platform_key: str, limit
         print(f"[Jobs] Baidu search failed for {platform_key}: {e}")
         return []
 
+JOB_ARTICLE_INDICATORS = {
+    "什么是", "怎么做", "如何做", "趋势", "报告", "观察", "新闻", "资讯", "百科",
+    "指南", "攻略", "经验分享", "求职经验", "面试经验", "被ai改变", "薪资报告",
+    "岗位解读", "职业发展", "干货", "盘点", "榜单", "合集",
+}
+JOB_OPENING_INDICATORS = {
+    "招聘", "急聘", "诚聘", "热招", "社会招聘", "校园招聘", "立即申请", "投递简历",
+    "任职要求", "职位描述", "工作职责", "岗位职责", "工作内容", "职位详情",
+}
+
+
+def is_probable_job_posting(title: str, snippet: str, company: str, url: str) -> bool:
+    """Apply a conservative JobPosting-inspired gate to search snippets.
+
+    This never proves that a posting is still open. It only prevents obvious
+    editorial/search content from being promoted to a job card.
+    """
+    content = re.sub(r"\s+", "", f"{title} {snippet}").lower()
+    if not re.match(r"^https?://", url):
+        return False
+    if not company or company == "来源页内查看":
+        return False
+    if any(indicator in content for indicator in JOB_ARTICLE_INDICATORS):
+        return False
+    return any(indicator in content for indicator in JOB_OPENING_INDICATORS)
+
+
 def _jobs_from_search_results(query: str, city: Optional[str], platform_label: str, raw_results: List[dict]) -> List[JobResult]:
     """Convert source results without asking an LLM to invent missing job fields."""
     jobs: List[JobResult] = []
@@ -5030,8 +5060,11 @@ def _jobs_from_search_results(query: str, city: Optional[str], platform_label: s
             candidates = [part for part in parts[1:] if platform_label not in part and "招聘" not in part]
             if candidates:
                 company = candidates[0][:40]
+        if not is_probable_job_posting(title, snippet, company, url):
+            continue
+        job_title = re.sub(r"(?:招聘|急聘|诚聘|热招|招聘信息)$", "", parts[0]).strip() or parts[0]
         jobs.append(JobResult(
-            title=parts[0][:80] if parts else title[:80],
+            title=job_title[:80],
             company=company,
             location=city or "地点见来源页",
             salary=None,
@@ -5041,6 +5074,8 @@ def _jobs_from_search_results(query: str, city: Optional[str], platform_label: s
             platform=platform_label,
             verified_source=True,
             retrieved_at=now_iso(),
+            source_status="listing_signals_verified",
+            verification_note="来源摘要包含招聘主体和职位信号；请打开原页面确认仍在招聘",
         ))
     return jobs
 
@@ -5057,8 +5092,17 @@ async def search_jobs(request: JobSearchRequest):
     if JSEARCH_API_KEY:
         found = await asyncio.get_event_loop().run_in_executor(None, _jsearch_api_search, query, request.city, limit)
         for job in found:
-            job.verified_source = bool(job.url and re.match(r"^https?://", job.url))
+            job.verified_source = bool(
+                job.url
+                and re.match(r"^https?://", job.url)
+                and job.title.strip()
+                and job.company.strip()
+                and job.company not in {"未知公司", "来源页内查看"}
+                and job.summary.strip()
+            )
             job.retrieved_at = now_iso()
+            job.source_status = "provider_listing"
+            job.verification_note = "岗位提供方返回的带来源候选；请打开原页面确认仍在招聘"
         jobs.extend(job for job in found if job.verified_source)
         provider_status.append({"provider": "jsearch", "count": len(found), "ok": True})
 
@@ -5088,9 +5132,9 @@ async def search_jobs(request: JobSearchRequest):
         query=query,
         total=len(deduplicated),
         query_analysis={
-            "status": "verified_results" if deduplicated else "no_verified_results",
+            "status": "source_linked_candidates" if deduplicated else "no_qualified_candidates",
             "providers": provider_status,
-            "message": "仅返回带可打开来源链接的岗位" if deduplicated else "当前没有拿到可验证岗位，请调整关键词或稍后重试",
+            "message": "仅展示含招聘主体、职位信号和来源链接的候选；仍需打开确认有效期" if deduplicated else "当前没有拿到足够可信的岗位候选，请调整关键词或稍后重试",
         },
         jobs=deduplicated,
     )

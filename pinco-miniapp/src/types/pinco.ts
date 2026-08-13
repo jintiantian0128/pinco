@@ -260,6 +260,8 @@ export interface JobSearchResult {
   posted_at?: string
   verified_source?: boolean
   retrieved_at?: string
+  source_status?: 'provider_listing' | 'listing_signals_verified' | 'source_link_only' | 'expired' | 'unreachable'
+  verification_note?: string
 }
 
 export interface JobSearchResponse {

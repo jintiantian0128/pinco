@@ -399,8 +399,10 @@ class TrustFoundationTests(unittest.TestCase):
 
     def test_job_search_only_returns_source_linked_results(self):
         raw = [
-            {"title": "AI产品经理 - 示例科技", "url": "https://www.liepin.com/job/123", "snippet": "负责 AI 产品规划"},
+            {"title": "AI产品经理招聘 - 示例科技", "url": "https://www.liepin.com/job/123", "snippet": "职位描述：负责 AI 产品规划；任职要求：3年产品经验"},
             {"title": "AI产品经理 - 无链接公司", "url": "", "snippet": "不应返回"},
+            {"title": "什么是AI产品经理 - BOSS直聘", "url": "https://example.com/article", "snippet": "AI产品经理岗位职责与职业发展指南"},
+            {"title": "被AI改变的春招季 - 示例媒体", "url": "https://example.com/news", "snippet": "2026春招趋势报告"},
         ]
         with patch.object(main, "_baidu_search_jobs", return_value=raw), patch.object(main, "JSEARCH_API_KEY", None):
             response = asyncio.run(main.search_jobs(main.JobSearchRequest(
@@ -409,6 +411,19 @@ class TrustFoundationTests(unittest.TestCase):
         self.assertEqual(response.total, 1)
         self.assertTrue(response.jobs[0].verified_source)
         self.assertEqual(response.jobs[0].url, "https://www.liepin.com/job/123")
+        self.assertEqual(response.jobs[0].source_status, "listing_signals_verified")
+        self.assertEqual(response.query_analysis["status"], "source_linked_candidates")
+
+    def test_job_posting_gate_rejects_editorial_or_unknown_employer_content(self):
+        self.assertFalse(main.is_probable_job_posting(
+            "什么是产品经理", "岗位职责与成长指南", "BOSS直聘", "https://example.com/article"
+        ))
+        self.assertFalse(main.is_probable_job_posting(
+            "AI产品经理招聘", "任职要求：3年经验", "来源页内查看", "https://example.com/search"
+        ))
+        self.assertTrue(main.is_probable_job_posting(
+            "AI产品经理招聘", "职位描述：负责Agent产品；任职要求：3年经验", "示例科技", "https://example.com/job/1"
+        ))
 
     def test_five_minute_practice_persists_real_report(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -180,7 +180,7 @@ const JobSearchPage: React.FC = () => {
             <Text className={styles.jobSummary}>{job.summary}</Text>
             <View className={styles.jobFooter}>
               <Text className={styles.jobSource}>来源: {job.source}</Text>
-              {job.verified_source && <Text className={styles.jobSource}> · 已校验来源链接</Text>}
+              {job.verified_source && <Text className={styles.jobSource}> · 带来源候选，请打开确认在招</Text>}
               <View className={styles.jobFooterActions}>
                 <View className={styles.linkButton} onClick={() => saveJob(job)}>
                   <Text className={styles.linkButtonText}>保存岗位</Text>
