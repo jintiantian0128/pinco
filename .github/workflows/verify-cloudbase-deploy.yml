@@ -298,14 +298,26 @@ jobs:
 
       - name: Check whether rollback is required
         id: rollback_check
-        if: always() && (steps.health.outcome != 'success' || steps.public_smoke.outcome != 'success')
+        if: always()
         env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
           BASELINE_RELEASE_SHA: ${{ steps.baseline.outputs.release_sha }}
           BASELINE_VERSION: ${{ steps.baseline.outputs.version }}
           HEALTH_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health
         run: |
           response="$(curl --fail --silent --show-error --max-time 45 "$HEALTH_URL" || true)"
-          if HEALTH_RESPONSE="$response" BASELINE_RELEASE_SHA="$BASELINE_RELEASE_SHA" BASELINE_VERSION="$BASELINE_VERSION" node -e '
+          if HEALTH_RESPONSE="$response" EXPECTED_RELEASE_SHA="$EXPECTED_RELEASE_SHA" node -e '
+            const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+            const accepted = health.status === "online"
+              && health.version === "0.7.0"
+              && health.release_sha === process.env.EXPECTED_RELEASE_SHA
+              && health.llm?.online === true
+              && health.state?.durable === true
+              && health.state?.online === true;
+            process.exit(accepted ? 0 : 1);
+          '; then
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          elif HEALTH_RESPONSE="$response" BASELINE_RELEASE_SHA="$BASELINE_RELEASE_SHA" BASELINE_VERSION="$BASELINE_VERSION" node -e '
             const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
             const baselineSha = process.env.BASELINE_RELEASE_SHA || "";
             const sameRelease = baselineSha
@@ -338,7 +350,7 @@ jobs:
 
       - name: Verify production recovery
         id: recovery
-        if: always() && (steps.health.outcome != 'success' || steps.public_smoke.outcome != 'success')
+        if: always() && steps.rollback_check.outputs.required == 'true'
         env:
           BASELINE_RELEASE_SHA: ${{ steps.baseline.outputs.release_sha }}
           BASELINE_VERSION: ${{ steps.baseline.outputs.version }}
