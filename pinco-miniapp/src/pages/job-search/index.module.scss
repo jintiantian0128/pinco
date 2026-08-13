@@ -1,0 +1,234 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  display: flex;
+  flex-direction: column;
+}
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  padding: 20rpx $page-padding;
+  background: $color-bg-card;
+  gap: 16rpx;
+}
+
+.searchInput {
+  flex: 1;
+  background: $color-bg-page;
+  border-radius: $radius-round;
+  padding: 16rpx 28rpx;
+  font-size: $font-size-md;
+  min-height: 72rpx;
+}
+
+.searchButton {
+  background: $color-primary;
+  color: $color-text-white;
+  border-radius: $radius-round;
+  padding: 16rpx 32rpx;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  flex-shrink: 0;
+}
+
+.filterRow {
+  background: $color-bg-card;
+  padding: 0 $page-padding 16rpx;
+  border-bottom: 2rpx solid $color-divider;
+}
+
+.platformTabs {
+  white-space: nowrap;
+  margin-bottom: 16rpx;
+}
+
+.platformTab {
+  display: inline-block;
+  padding: 12rpx 24rpx;
+  border-radius: $radius-round;
+  background: $color-bg-page;
+  margin-right: 16rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.platformTabActive {
+  background: rgba($color-primary, 0.1);
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.cityFilter {
+  display: flex;
+  gap: 12rpx;
+}
+
+.cityChip {
+  padding: 8rpx 20rpx;
+  border-radius: $radius-round;
+  background: $color-bg-page;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
+.cityChipActive {
+  background: rgba($color-primary, 0.1);
+  color: $color-primary;
+}
+
+.results {
+  flex: 1;
+  padding: 20rpx $page-padding;
+}
+
+.jobCard {
+  background: $color-bg-card;
+  border-radius: $radius-xl;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+  box-shadow: $shadow-card;
+}
+
+.jobHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12rpx;
+}
+
+.jobTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  flex: 1;
+  margin-right: 16rpx;
+}
+
+.jobSalary {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-primary;
+  flex-shrink: 0;
+}
+
+.jobMeta {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 12rpx;
+}
+
+.jobCompany {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.platformBadge {
+  padding: 4rpx 16rpx;
+  border-radius: $radius-xs;
+  border: 2rpx solid;
+}
+
+.platformBadgeText {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+}
+
+.jobSummary {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+  margin-bottom: 16rpx;
+}
+
+.jobFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.jobFooterActions {
+  display: flex;
+  gap: 12rpx;
+  align-items: center;
+}
+
+.linkButton {
+  padding: 10rpx 24rpx;
+  border-radius: $radius-round;
+  background: $color-bg-page;
+  border: 2rpx solid $color-divider;
+}
+
+.linkButtonText {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  font-weight: $font-weight-medium;
+}
+
+.jobSource {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.jdButton {
+  padding: 10rpx 24rpx;
+  border-radius: $radius-round;
+  background: rgba($color-primary, 0.1);
+}
+
+.jdButtonText {
+  font-size: $font-size-xs;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+.loadingState, .emptyState {
+  text-align: center;
+  padding: 80rpx 40rpx;
+}
+
+.loadingText {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.emptyIcon {
+  font-size: 64rpx;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.emptyTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.emptyDesc {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  display: block;
+  margin-bottom: 32rpx;
+}
+
+.hotTags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16rpx;
+}
+
+.hotTag {
+  padding: 12rpx 28rpx;
+  border-radius: $radius-round;
+  background: $color-bg-card;
+  border: 2rpx solid $color-divider;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}

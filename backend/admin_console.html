@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Pinco 运营工作台</title>
+  <style>
+    :root{color-scheme:light;--ink:#17151d;--muted:#77727f;--line:#eae5ee;--paper:#fff;--wash:#f8f5fb;--purple:#7047eb;--pink:#e84089;--green:#167a4e;--red:#b42335;--amber:#945c06;--shadow:0 14px 40px rgba(42,25,70,.09)}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#faf8fd 0%,#f6f2fb 55%,#fff7fa 100%);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;min-height:100vh}
+    button,input,textarea{font:inherit}.shell{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:38px 0 72px}.eyebrow{font-size:13px;font-weight:700;letter-spacing:.12em;color:var(--purple);text-transform:uppercase}.hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin-bottom:24px}.hero h1{font-size:clamp(30px,5vw,48px);line-height:1.08;margin:8px 0}.hero p{color:var(--muted);margin:0;max-width:650px;line-height:1.7}.badge{padding:9px 13px;border-radius:999px;background:#eee8ff;color:#5931cc;font-size:13px;font-weight:700;white-space:nowrap}
+    .login,.panel,.card{background:rgba(255,255,255,.94);border:1px solid rgba(222,215,229,.8);box-shadow:var(--shadow);border-radius:22px}.login{padding:20px;display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:12px;align-items:center}.token{width:100%;border:1px solid var(--line);background:var(--wash);border-radius:14px;padding:13px 15px;outline:none}.token:focus{border-color:#9a80ee;box-shadow:0 0 0 3px #eee8ff}.btn{border:0;border-radius:13px;padding:12px 17px;font-weight:700;cursor:pointer}.btn:disabled{opacity:.45;cursor:not-allowed}.primary{background:linear-gradient(135deg,var(--purple),#9a55e8);color:#fff}.ghost{background:#f1edf5;color:#4e4856}.danger{background:#fff0f2;color:var(--red)}.success{background:#e9f7f0;color:var(--green)}.warning{background:#fff4df;color:var(--amber)}
+    .notice{margin:12px 4px 0;color:var(--muted);font-size:13px}.notice.ok{color:var(--green)}.notice.bad{color:var(--red)}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:22px 0}.stat{padding:18px;min-height:0}.stat strong{display:block;font-size:28px;margin-top:6px}.stat span{color:var(--muted);font-size:13px}
+    .tabs{display:flex;gap:8px;margin:22px 0 14px}.tab{border:0;background:transparent;border-radius:12px;padding:10px 15px;color:var(--muted);font-weight:700;cursor:pointer}.tab.active{background:#ebe4ff;color:#5d34d4}.panel{padding:22px;min-height:280px}.panel.stat{min-height:0}.panelHead{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.panel h2{margin:0;font-size:22px}.list{display:grid;gap:14px}.card{padding:18px;box-shadow:none}.cardTop{display:flex;justify-content:space-between;gap:14px}.card h3{margin:0 0 5px;font-size:18px}.meta,.muted{color:var(--muted);font-size:13px}.copy{white-space:pre-wrap;line-height:1.7;margin:14px 0}.facts{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.chip{font-size:12px;border-radius:999px;background:var(--wash);padding:6px 10px}.links a{color:var(--purple);display:block;word-break:break-all;margin:5px 0}.review{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:15px}.review textarea{min-height:72px;resize:vertical;border:1px solid var(--line);border-radius:12px;padding:11px}.actions{display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px}.empty{text-align:center;color:var(--muted);padding:62px 20px}.metricGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metricCard{border:1px solid var(--line);border-radius:16px;padding:16px;background:var(--wash)}.metricCard strong{display:block;font-size:24px;margin:7px 0}.metricCard small{color:var(--muted);line-height:1.5}.metricNote{margin-top:16px;padding:14px 16px;border-radius:14px;background:#fff8e8;color:#725019;line-height:1.6}.hidden{display:none!important}
+    @media(max-width:1000px){.metricGrid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:760px){.shell{width:min(100% - 20px,1180px);padding-top:24px}.hero{align-items:flex-start;flex-direction:column}.login{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.metricGrid{grid-template-columns:1fr}.panel{padding:15px}.cardTop,.review{grid-template-columns:1fr;display:grid}.actions{margin-top:4px}.tabs{overflow:auto}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div><div class="eyebrow">Pinco Operations</div><h1>运营工作台</h1><p>处理专家申请、学社举报并查看真实 PMF 数据。管理员令牌只保存在当前页面内存，刷新或关闭页面后即清除。</p></div>
+      <div class="badge">先核验，再展示</div>
+    </section>
+    <section class="login">
+      <input id="token" class="token" type="password" autocomplete="off" placeholder="输入 PINCO_ADMIN_TOKEN（不会保存）">
+      <button id="connect" class="btn primary">连接工作台</button>
+      <button id="disconnect" class="btn ghost" disabled>断开并清除</button>
+    </section>
+    <div id="notice" class="notice">请使用云托管环境变量中的管理员令牌。不要把令牌放进网址、截图或聊天记录。</div>
+    <section id="workspace" class="hidden">
+      <div class="stats">
+        <article class="panel stat"><span>技术就绪</span><strong id="ready">—</strong></article>
+        <article class="panel stat"><span>待审专家</span><strong id="expertCount">—</strong></article>
+        <article class="panel stat"><span>待处理举报</span><strong id="reportCount">—</strong></article>
+        <article class="panel stat"><span>模型与数据</span><strong id="health">—</strong></article>
+      </div>
+      <nav class="tabs" aria-label="工作台栏目">
+        <button class="tab active" data-tab="experts">专家审核</button>
+        <button class="tab" data-tab="reports">内容治理</button>
+        <button class="tab" data-tab="metrics">PMF 数据</button>
+      </nav>
+      <section class="panel">
+        <div class="panelHead"><h2 id="panelTitle">专家审核</h2><button id="refresh" class="btn ghost">刷新</button></div>
+        <div id="experts" class="list"></div>
+        <div id="reports" class="list hidden"></div>
+        <div id="metrics" class="hidden"></div>
+      </section>
+    </section>
+  </main>
+  <script>
+    (()=>{
+      let adminToken=''; let activeTab='experts'; let snapshot={applications:[],reports:[],metrics:null,readiness:null,health:null};
+      const $=id=>document.getElementById(id); const notice=$('notice');
+      const text=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value??'';if(cls)n.className=cls;return n};
+      const setNotice=(value,type='')=>{notice.textContent=value;notice.className='notice '+type};
+      async function api(path,options={}){const headers={'Content-Type':'application/json','X-Pinco-Admin-Token':adminToken,...(options.headers||{})};const response=await fetch(path,{...options,headers,cache:'no-store'});let body={};try{body=await response.json()}catch{}if(!response.ok){const d=body.detail;throw new Error(typeof d==='string'?d:(d&&d.message)||`请求失败 (${response.status})`)}return body}
+      async function load(){
+        setNotice('正在读取真实线上数据…');
+        try{
+          const [applications,reports,metrics,readiness,health]=await Promise.all([
+            api('/api/v1/admin/expert-applications'),api('/api/v1/admin/community/reports'),api('/api/v1/admin/metrics/pmf'),fetch('/api/v1/miniapp/readiness',{cache:'no-store'}).then(r=>r.json()),fetch('/health',{cache:'no-store'}).then(r=>r.json())]);
+          snapshot={applications:applications.applications||[],reports:reports.reports||[],metrics,readiness,health};
+          $('workspace').classList.remove('hidden');$('disconnect').disabled=false;render();setNotice('已连接。页面关闭或刷新后令牌会被清除。','ok');
+        }catch(error){adminToken='';$('token').value='';$('workspace').classList.add('hidden');$('disconnect').disabled=true;setNotice(error.message||'连接失败','bad')}
+      }
+      function render(){
+        const pendingExperts=snapshot.applications.filter(x=>x.status==='pending'||x.status==='changes_requested');
+        const pendingReports=snapshot.reports.filter(x=>x.status==='pending');
+        $('ready').textContent=`${snapshot.readiness.ready_count||0}/${snapshot.readiness.total_count||0}`;$('expertCount').textContent=pendingExperts.length;$('reportCount').textContent=pendingReports.length;
+        $('health').textContent=snapshot.health?.state?.online&&snapshot.health?.llm?.online?'正常':'需检查';renderExperts(pendingExperts);renderReports(pendingReports);renderMetrics(snapshot.metrics||{});
+      }
+      function renderExperts(items){const root=$('experts');root.replaceChildren();if(!items.length){root.append(text('div','当前没有待处理的专家申请。','empty'));return}items.forEach(app=>{
+        const card=text('article','', 'card');const top=text('div','', 'cardTop');const title=text('div');title.append(text('h3',`${app.real_name} · ${app.title}`),text('div',`${app.status} · ${app.created_at||''}`,'meta'));top.append(title,text('span',`¥${app.reference_price||0}/30分钟`,'chip'));card.append(top,text('p',app.intro,'copy'),text('p',`可核验经历：${app.experience_summary}`,'copy'));
+        const facts=text('div','', 'facts');(app.tags||[]).forEach(x=>facts.append(text('span',x,'chip')));(app.slots||[]).slice(0,4).forEach(x=>facts.append(text('span',x,'chip')));card.append(facts);
+        const links=text('div','', 'links');(app.proof_urls||[]).forEach(url=>{if(/^https?:\/\//.test(url)){const a=text('a',url);a.href=url;a.target='_blank';a.rel='noreferrer';links.append(a)}});card.append(links);
+        const review=text('div','', 'review');const note=document.createElement('textarea');note.placeholder='审核意见（驳回或要求修改时必填更清楚）';const actions=text('div','', 'actions');[['approved','通过','success'],['changes_requested','要求修改','warning'],['rejected','拒绝','danger']].forEach(([decision,label,cls])=>{const b=text('button',label,`btn ${cls}`);b.onclick=()=>reviewExpert(app.id,decision,note.value,b);actions.append(b)});review.append(note,actions);card.append(review);root.append(card)
+      })}
+      function renderReports(items){const root=$('reports');root.replaceChildren();if(!items.length){root.append(text('div','当前没有待处理的内容举报。','empty'));return}items.forEach(report=>{const post=report.post||{};const card=text('article','', 'card');card.append(text('h3',post.title||`帖子 ${report.post_id}`),text('div',`${post.author_name||'未知作者'} · ${post.post_type||''} · ${post.moderation_status||''}`,'meta'),text('p',post.content||'帖子正文不可用','copy'),text('p',`举报原因：${report.reason}`,'copy'));const review=text('div','', 'review');const note=document.createElement('textarea');note.placeholder='处置说明';const actions=text('div','', 'actions');[['published','保留','ghost'],['featured','精选','success'],['hidden','隐藏','danger']].forEach(([decision,label,cls])=>{const b=text('button',label,`btn ${cls}`);b.onclick=()=>moderate(post.id||report.post_id,decision,note.value,b);actions.append(b)});review.append(note,actions);card.append(review);root.append(card)})}
+      function renderMetrics(data){const root=$('metrics');root.replaceChildren();const d=data.decision_metrics||{};const pilot=d.pilot_feedback||{};const cards=[['近7天推进用户',d.weekly_job_progress_users?.value??0,'真正完成岗位、材料、练习或进度动作的人数'],['首次产出中位时间',d.first_trusted_output_minutes?.median==null?'暂无样本':`${d.first_trusted_output_minutes.median} 分钟`,'从注册到完成可信求职产出的速度'],['14天第二岗位复用',d.second_job_reuse_14d?.rate==null?'暂无样本':`${Math.round(d.second_job_reuse_14d.rate*100)}%`,'用户是否愿意把同一套闭环用于第二个岗位'],['材料可直接使用',d.material_directly_usable?.rate==null?'暂无样本':`${Math.round(d.material_directly_usable.rate*100)}%`,'用户反馈为直接使用或只需小改的占比'],['学社带动行动',d.community_action_starts?.users??0,'从学社内容启动练习、岗位或进度动作的人数'],['情感支持有帮助',d.emotional_support_helpful?.rate==null?'暂无样本':`${Math.round(d.emotional_support_helpful.rate*100)}%`,'仅统计用户明确反馈，不用打开或聊天次数替代'],['首批用户愿意继续用',pilot.return_yes_rate==null?'暂无样本':`${Math.round(pilot.return_yes_rate*100)}%`,`共创反馈 ${pilot.responses??0} 份；只统计明确选择“会”的用户`]];const grid=text('div','', 'metricGrid');cards.forEach(([label,value,desc])=>{const card=text('article','', 'metricCard');card.append(text('span',label,'muted'),text('strong',String(value)),text('small',desc));grid.append(card)});root.append(grid,text('div',data.note||'这里只展示真实数据；样本不足时不计算成功率。','metricNote'))}
+      async function reviewExpert(id,decision,note,button){if(!confirm(`确认执行“${button.textContent}”？`))return;button.disabled=true;try{await api(`/api/v1/admin/expert-applications/${encodeURIComponent(id)}/review`,{method:'POST',body:JSON.stringify({decision,review_note:note})});await load()}catch(e){setNotice(e.message,'bad');button.disabled=false}}
+      async function moderate(id,decision,note,button){if(!confirm(`确认执行“${button.textContent}”？`))return;button.disabled=true;try{await api(`/api/v1/admin/community/posts/${encodeURIComponent(id)}/moderate`,{method:'POST',body:JSON.stringify({decision,note})});await load()}catch(e){setNotice(e.message,'bad');button.disabled=false}}
+      function selectTab(tab){activeTab=tab;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));['experts','reports','metrics'].forEach(id=>$(id).classList.toggle('hidden',id!==tab));$('panelTitle').textContent={experts:'专家审核',reports:'内容治理',metrics:'PMF 数据'}[tab]}
+      $('connect').onclick=()=>{adminToken=$('token').value.trim();if(adminToken.length<32){setNotice('管理员令牌至少需要 32 位。','bad');return}$('token').value='';load()};
+      $('disconnect').onclick=()=>{adminToken='';snapshot={applications:[],reports:[],metrics:null,readiness:null,health:null};$('workspace').classList.add('hidden');$('disconnect').disabled=true;setNotice('已断开，当前页面中的管理员令牌已清除。','ok')};
+      $('refresh').onclick=load;document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>selectTab(x.dataset.tab));$('token').addEventListener('keydown',e=>{if(e.key==='Enter')$('connect').click()});window.addEventListener('pagehide',()=>{adminToken=''});
+    })();
+  </script>
+</body>
+</html>

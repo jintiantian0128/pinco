@@ -1,0 +1,879 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $page-spacing $page-padding 140rpx;
+  background: $color-bg-page;
+}
+
+.profileCard {
+  background: linear-gradient(135deg, #24173d 0%, #3b2765 100%);
+  border-radius: 32rpx;
+  padding: 36rpx 32rpx;
+  color: $color-text-white;
+  box-shadow: $shadow-card-hover;
+  display: flex;
+  align-items: flex-start;
+  gap: 22rpx;
+}
+
+.avatar {
+  width: 82rpx;
+  height: 82rpx;
+  border-radius: $radius-round;
+  background: #FDF2F8;
+  color: #EC4899;
+  font-size: 36rpx;
+  font-weight: $font-weight-bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profileMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.profileTop {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  flex-wrap: wrap;
+}
+
+.planBadge {
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.16);
+  color: $color-text-white;
+  font-size: 20rpx;
+  font-weight: $font-weight-semibold;
+}
+
+.upgradeBadge {
+  @include button-reset;
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: $color-gold;
+  color: $color-text-white;
+  font-size: 20rpx;
+  font-weight: $font-weight-semibold;
+}
+
+.nickname {
+  display: block;
+  font-size: 38rpx;
+  font-weight: $font-weight-bold;
+}
+
+.desc {
+  display: block;
+  margin-top: 14rpx;
+  font-size: $font-size-sm;
+  opacity: 0.88;
+  line-height: $line-height-loose;
+}
+
+.quotaText {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.section {
+  margin-top: 28rpx;
+}
+
+.card {
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  box-shadow: $shadow-card;
+  margin-bottom: 20rpx;
+}
+
+.cardTitle {
+  display: block;
+  font-size: 30rpx;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.cardDesc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18rpx;
+  gap: 16rpx;
+}
+
+.progressHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.progressBadge {
+  @include button-reset;
+  flex-shrink: 0;
+  height: 56rpx;
+  padding: 0 20rpx;
+  border-radius: $radius-round;
+  background: #FDF2F8;
+  color: #EC4899;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+}
+
+.funnelRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12rpx;
+  margin-top: 22rpx;
+}
+
+.funnelItem {
+  padding: 18rpx 8rpx;
+  border-radius: 18rpx;
+  background: $color-bg-page;
+  text-align: center;
+}
+
+.funnelNum {
+  display: block;
+  font-size: 34rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+}
+
+.funnelLabel {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+}
+
+.jobList {
+  margin-top: 22rpx;
+}
+
+.jobItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18rpx;
+  padding: 20rpx 0;
+  border-top: 2rpx solid $color-divider;
+}
+
+.jobMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.jobTitle {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  @include text-ellipsis;
+}
+
+.jobDesc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+}
+
+.jobSide {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.jobStatus {
+  display: block;
+  padding: 8rpx 14rpx;
+  border-radius: $radius-round;
+  background: rgba(124, 77, 255, 0.1);
+  color: $color-primary;
+  font-size: 20rpx;
+  font-weight: $font-weight-semibold;
+}
+
+.jobDate {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+}
+
+.materialRow {
+  display: flex;
+  gap: 8rpx;
+  margin-top: 12rpx;
+}
+
+.materialOn,
+.materialOff {
+  padding: 5rpx 12rpx;
+  border-radius: $radius-round;
+  font-size: 19rpx;
+}
+
+.materialOn {
+  background: rgba(0, 180, 42, 0.12);
+  color: $color-success;
+}
+
+.materialOff {
+  background: rgba(156, 163, 175, 0.12);
+  color: $color-text-tertiary;
+}
+
+.emptyProgress {
+  margin-top: 22rpx;
+  padding: 24rpx;
+  border-radius: 22rpx;
+  background: $color-bg-page;
+}
+
+.emptyTitle {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.emptyDesc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+/* ---- 我的预约 ---- */
+.bookingList {
+  margin-top: 16rpx;
+}
+
+.bookingWrap { border-bottom: 2rpx solid rgba(0, 0, 0, 0.04); padding-bottom: 16rpx; }
+.bookingWrap .bookingItem { border-bottom: none; }
+.bookingDelivery { display: block; padding: 12rpx; background: #ECFDF5; border-radius: 12rpx; color: #065F46; font-size: 22rpx; line-height: 1.5; }
+.reviewTrigger { margin-top: 12rpx; padding: 12rpx; background: #F5F3FF; border-radius: 12rpx; text-align: center; }
+.reviewTrigger Text { color: #6D28D9; font-size: 23rpx; font-weight: 600; }
+.reviewBox { margin-top: 12rpx; padding: 16rpx; background: #F9FAFB; border-radius: 14rpx; }
+.reviewLabel { font-size: 23rpx; font-weight: 600; color: $color-text-primary; }
+.scoreRow { display: flex; gap: 8rpx; margin: 10rpx 0; }
+.scoreActive, .scoreIdle { font-size: 36rpx; }
+.scoreActive { color: #F59E0B; }
+.scoreIdle { color: #D1D5DB; }
+.reviewInput { box-sizing: border-box; width: 100%; min-height: 70rpx; padding: 14rpx; background: #FFF; border-radius: 10rpx; font-size: 23rpx; }
+.reviewSubmit { margin-top: 12rpx; padding: 14rpx; background: #111827; border-radius: 10rpx; text-align: center; }
+.reviewSubmit Text { color: #FFF; font-size: 23rpx; font-weight: 600; }
+
+.bookingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 0;
+  border-bottom: 2rpx solid rgba(0, 0, 0, 0.04);
+}
+
+.bookingItem:last-child {
+  border-bottom: none;
+}
+
+.bookingMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.bookingExpert {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.bookingTopic {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
+.bookingSlot {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.bookingStatus {
+  padding: 6rpx 14rpx;
+  border-radius: $radius-round;
+  background: rgba(124, 77, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.bookingStatusText {
+  font-size: 20rpx;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.statusBadge {
+  padding: 10rpx 18rpx;
+  border-radius: $radius-round;
+  font-size: $font-size-xs;
+}
+
+.online { background: rgba(0, 180, 42, 0.14); color: $color-success; }
+.offline { background: rgba(255, 125, 0, 0.14); color: $color-warning; }
+
+.inlineButton {
+  @include button-reset;
+  min-width: 180rpx;
+  height: $button-height-sm;
+  padding: 0 24rpx;
+  border-radius: $radius-button;
+  background: $color-text-primary;
+  color: $color-text-white;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+}
+
+.actionRow {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 18rpx;
+}
+
+.checklist {
+  margin-top: 18rpx;
+}
+
+.checkItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  padding: 16rpx 0;
+  border-bottom: 2rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+}
+
+.checkMark {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: $radius-round;
+  @include flex-center;
+  font-size: 20rpx;
+  flex-shrink: 0;
+}
+
+.checkMarkReady {
+  background: rgba(0, 180, 42, 0.14);
+  color: $color-success;
+}
+
+.checkMarkPending {
+  background: rgba(255, 125, 0, 0.14);
+  color: $color-warning;
+}
+
+.checkLabel {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.checkDetail {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.runtimeList {
+  margin-top: 18rpx;
+  border-top: 2rpx solid $color-divider;
+}
+
+.runtimeRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 18rpx 0;
+  border-bottom: 2rpx solid $color-divider;
+}
+
+.runtimeLabel {
+  flex-shrink: 0;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.runtimeValue {
+  text-align: right;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  line-height: $line-height-normal;
+  word-break: break-all;
+}
+
+.todoList {
+  margin-top: 18rpx;
+}
+
+.todoText {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.pointsBadge {
+  flex-shrink: 0;
+  padding: 8rpx 16rpx;
+  border-radius: $radius-round;
+  background: #FFF7ED;
+  color: #EA580C;
+  font-size: 22rpx;
+  font-weight: $font-weight-bold;
+}
+
+.rewardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14rpx;
+  margin-top: 20rpx;
+}
+
+.rewardItem {
+  padding: 20rpx;
+  border-radius: 20rpx;
+  background: $color-bg-page;
+}
+
+.rewardIcon {
+  display: block;
+  font-size: 34rpx;
+  margin-bottom: 10rpx;
+}
+
+.rewardTitle {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.rewardDesc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.settingList {
+  margin-top: 10rpx;
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 82rpx;
+  border-bottom: 2rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.settingLabel {
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.settingArrow {
+  font-size: 40rpx;
+  line-height: 1;
+  color: $color-text-tertiary;
+}
+
+.settingDanger {
+  font-size: $font-size-xs;
+  color: #EF4444;
+  font-weight: $font-weight-semibold;
+}
+
+/* ---- 今日任务 ---- */
+.taskMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16rpx;
+}
+
+.taskCount {
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+}
+
+.taskClear {
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+  text-decoration: underline;
+}
+
+.taskList {
+  margin-top: 16rpx;
+}
+
+.taskItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  padding: 16rpx;
+  border-radius: 16rpx;
+  background: $color-bg-page;
+  margin-bottom: 12rpx;
+}
+
+.taskCheck {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: $radius-round;
+  border: 2rpx solid $color-divider;
+  background: $color-bg-card;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 4rpx;
+}
+
+.taskCheck Text {
+  font-size: 22rpx;
+  color: $color-success;
+  font-weight: $font-weight-bold;
+}
+
+.taskCheckDone {
+  background: rgba(0, 180, 42, 0.14);
+  border-color: $color-success;
+}
+
+.taskBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.taskTitle {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.taskTitleDone {
+  text-decoration: line-through;
+  color: $color-text-tertiary;
+}
+
+.taskDesc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+}
+
+.taskActionLabel {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+/* ---- Triage Modal ---- */
+.triageOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+}
+
+.triageModal {
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: $shadow-float;
+}
+
+.triageTitle {
+  display: block;
+  font-size: 34rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  text-align: center;
+}
+
+.triageSubtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.triageSection {
+  margin-bottom: 24rpx;
+}
+
+.triageLabel {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: 12rpx;
+}
+
+.stageGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12rpx;
+}
+
+.stageChip {
+  padding: 18rpx 0;
+  background: $color-bg-page;
+  border-radius: 16rpx;
+  text-align: center;
+}
+
+.stageChipActive {
+  background: $color-primary;
+}
+
+.stageChipText {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-secondary;
+}
+
+.stageChipActive .stageChipText {
+  color: $color-text-white;
+}
+
+.optionRow {
+  display: flex;
+  gap: 12rpx;
+  overflow-x: auto;
+}
+
+.optionRowWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.optionChip {
+  padding: 12rpx 24rpx;
+  background: $color-bg-page;
+  border-radius: 16rpx;
+}
+
+.optionChipActive {
+  background: rgba(124, 77, 255, 0.12);
+}
+
+.optionChipText {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  color: $color-text-secondary;
+}
+
+.optionChipActive .optionChipText {
+  color: $color-primary;
+}
+
+.pilotCard {
+  border: 2rpx solid rgba(124, 77, 255, 0.12);
+  background: linear-gradient(150deg, #FFFFFF 0%, #FCFAFF 58%, #FFF8FB 100%);
+}
+
+.pilotSaved {
+  flex-shrink: 0;
+  padding: 8rpx 14rpx;
+  border-radius: $radius-round;
+  background: rgba(0, 180, 42, 0.1);
+  color: $color-success;
+  font-size: 20rpx;
+  font-weight: $font-weight-semibold;
+}
+
+.pilotQuestion {
+  display: block;
+  margin-top: 26rpx;
+  margin-bottom: 12rpx;
+  color: $color-text-primary;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+}
+
+.pilotScoreRow {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12rpx;
+}
+
+.pilotScore {
+  height: 62rpx;
+  border-radius: 16rpx;
+  background: $color-bg-page;
+  color: $color-text-secondary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+}
+
+.pilotScoreActive {
+  background: $color-primary;
+  color: $color-text-white;
+  box-shadow: 0 8rpx 20rpx rgba(124, 77, 255, 0.2);
+}
+
+.pilotScale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8rpx;
+  color: $color-text-tertiary;
+  font-size: 20rpx;
+}
+
+.pilotInput {
+  box-sizing: border-box;
+  width: 100%;
+  height: 116rpx;
+  margin-top: 18rpx;
+  padding: 18rpx;
+  border: 2rpx solid $color-divider;
+  border-radius: 16rpx;
+  background: $color-bg-card;
+  color: $color-text-primary;
+  font-size: $font-size-sm;
+  line-height: $line-height-normal;
+}
+
+.pilotSubmit {
+  margin-top: 20rpx;
+  padding: 22rpx 0;
+  border-radius: 16rpx;
+  background: #24173D;
+  color: $color-text-white;
+  text-align: center;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+}
+
+.pilotSubmitDisabled {
+  opacity: 0.55;
+}
+
+.triageInput {
+  width: 100%;
+  min-height: 72rpx;
+  font-size: $font-size-md;
+  background: $color-bg-page;
+  border-radius: 16rpx;
+  padding: 12rpx 16rpx;
+}
+
+.triageSubmit {
+  margin-top: 8rpx;
+  padding: 24rpx 0;
+  background: $color-primary;
+  border-radius: 16rpx;
+  text-align: center;
+}
+
+.triageSubmitText {
+  font-size: $font-size-md;
+  color: $color-text-white;
+  font-weight: $font-weight-semibold;
+}
+
+.membershipGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.membershipItem {
+  padding: 18rpx 8rpx;
+  border-radius: $radius-lg;
+  background: $color-bg-page;
+  text-align: center;
+}
+
+.membershipIcon {
+  display: block;
+  font-size: 30rpx;
+  margin-bottom: 8rpx;
+}
+
+.membershipTitle {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  margin-bottom: 4rpx;
+}
+
+.membershipDesc {
+  display: block;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  color: $color-primary;
+}

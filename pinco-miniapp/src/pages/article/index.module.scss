@@ -1,0 +1,72 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $page-spacing $page-padding 120rpx;
+  background: $color-bg-page;
+}
+
+.header {
+  background: $color-bg-card;
+  border-radius: 28rpx;
+  padding: 32rpx;
+  box-shadow: $shadow-card;
+}
+
+.category {
+  display: inline-block;
+  font-size: $font-size-xs;
+  color: $color-primary;
+  background: rgba(124, 77, 255, 0.12);
+  padding: 8rpx 16rpx;
+  border-radius: $radius-round;
+}
+
+.title {
+  display: block;
+  margin-top: 18rpx;
+  font-size: 38rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  line-height: 1.4;
+}
+
+.subtitle {
+  display: block;
+  margin-top: 12rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.section {
+  background: $color-bg-card;
+  border-radius: 28rpx;
+  padding: 30rpx;
+  box-shadow: $shadow-card;
+  margin-top: 24rpx;
+}
+
+.paragraph {
+  display: block;
+  margin-bottom: 18rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.primaryButton {
+  @include button-reset;
+  margin-top: 28rpx;
+  width: 100%;
+  height: $button-height-md;
+  border-radius: $radius-button;
+  background: $color-text-primary;
+  color: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+}

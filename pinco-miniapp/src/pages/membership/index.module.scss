@@ -1,0 +1,261 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding-bottom: 180rpx;
+}
+
+.header {
+  padding: 40rpx $page-padding 20rpx;
+}
+
+.title {
+  font-size: $font-size-xxl + 4rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.subtitle {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  display: block;
+}
+
+.currentPlan {
+  margin: 0 $page-padding 20rpx;
+  padding: 24rpx;
+  background: linear-gradient(135deg, $color-primary, $color-primary-light);
+  border-radius: $radius-xl;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.currentPlanLabel {
+  font-size: $font-size-xs;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.currentPlanName {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+}
+
+.currentPlanExpire {
+  font-size: $font-size-xs;
+  color: rgba(255, 255, 255, 0.8);
+  margin-left: auto;
+}
+
+.cycleToggle {
+  display: flex;
+  margin: 0 $page-padding 20rpx;
+  background: $color-bg-card;
+  border-radius: $radius-round;
+  padding: 6rpx;
+}
+
+.cycleOption {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx;
+  border-radius: $radius-round;
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  position: relative;
+}
+
+.cycleActive {
+  background: $color-primary;
+  color: $color-text-white;
+  font-weight: $font-weight-semibold;
+}
+
+.saveTag {
+  position: absolute;
+  top: -8rpx;
+  right: 20rpx;
+  font-size: 20rpx;
+  background: $color-gold;
+  color: $color-text-white;
+  padding: 2rpx 12rpx;
+  border-radius: $radius-xs;
+}
+
+.planCards {
+  white-space: nowrap;
+  padding: 0 $page-padding;
+  margin-bottom: 32rpx;
+}
+
+.planCard {
+  @include scroll-x-item(420rpx);
+  background: $color-bg-card;
+  border-radius: $radius-xl;
+  padding: 32rpx;
+  margin-right: 24rpx;
+  border: 4rpx solid transparent;
+  position: relative;
+  box-shadow: $shadow-card;
+}
+
+.planCardSelected {
+  border-color: $color-primary;
+  box-shadow: 0 4rpx 24rpx rgba($color-primary, 0.15);
+}
+
+.planCardPremium {
+  background: linear-gradient(135deg, #FEF3C7, #FFF7ED);
+}
+
+.recommendBadge {
+  position: absolute;
+  top: 0;
+  right: 24rpx;
+  background: $color-primary;
+  color: $color-text-white;
+  font-size: $font-size-xs;
+  padding: 6rpx 16rpx;
+  border-radius: 0 0 $radius-sm $radius-sm;
+}
+
+.planName {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.planPrice {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 8rpx;
+}
+
+.planPriceAmount {
+  font-size: 56rpx;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+}
+
+.planPriceUnit {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  margin-left: 4rpx;
+}
+
+.planYearly {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.featureList {
+  margin-top: 16rpx;
+}
+
+.featureItem {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: 2;
+}
+
+.usageSection {
+  margin: 0 $page-padding;
+  background: $color-bg-card;
+  border-radius: $radius-xl;
+  padding: 28rpx;
+  box-shadow: $shadow-card;
+}
+
+.usageTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.usageItem {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.usageLabel {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  width: 140rpx;
+  flex-shrink: 0;
+}
+
+.usageBar {
+  flex: 1;
+  height: 12rpx;
+  background: $color-bg-page;
+  border-radius: 6rpx;
+  overflow: hidden;
+  margin: 0 16rpx;
+}
+
+.usageBarFill {
+  height: 100%;
+  background: $color-primary;
+  border-radius: 6rpx;
+  transition: width 0.3s;
+}
+
+.usageCount {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  flex-shrink: 0;
+}
+
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx $page-padding;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  background: $color-bg-card;
+  border-top: 2rpx solid $color-divider;
+}
+
+.priceSummary {
+  display: flex;
+  flex-direction: column;
+}
+
+.priceSummaryLabel {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
+.priceSummaryAmount {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+}
+
+.subscribeButton {
+  background: linear-gradient(135deg, $color-primary, $color-primary-light);
+  border-radius: $radius-button;
+  padding: 20rpx 56rpx;
+}
+
+.subscribeButtonText {
+  color: $color-text-white;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+}

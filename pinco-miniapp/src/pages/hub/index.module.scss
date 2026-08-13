@@ -1,0 +1,567 @@
+.page {
+  min-height: 100vh;
+  background: #FAFAFA;
+  padding-bottom: 32px;
+}
+
+.header {
+  padding: 24px 20px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1F2937;
+  line-height: 1.3;
+}
+
+.desc {
+  display: block;
+  font-size: 13px;
+  color: #6B7280;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.headerPostButton {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.headerPostButton Text {
+  font-size: 13px;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+/* ---- 搜索框 ---- */
+.searchBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 12px;
+  padding: 10px 14px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.searchIcon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.searchInput {
+  flex: 1;
+  min-height: 20px;
+  font-size: 14px;
+  color: #1F2937;
+  line-height: 1.4;
+}
+
+.searchClear {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.searchClear Text {
+  font-size: 14px;
+  color: #9CA3AF;
+}
+
+.filterBar {
+  padding: 0 20px 12px;
+  white-space: nowrap;
+}
+
+.filterBarInner {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.filterChip {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  background: #FFFFFF;
+  color: #4B5563;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.filterChipActive {
+  background: #111827;
+  color: #FFFFFF;
+  font-weight: 600;
+  border-color: #111827;
+  box-shadow: 0 2px 8px rgba(17,24,39,0.15);
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1F2937;
+  padding: 16px 20px 8px;
+}
+
+.articleCard {
+  margin: 0 16px 12px;
+  padding: 14px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.articleIconBox {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: #FDF2F8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.articleIconBox Text {
+  font-size: 22px;
+}
+
+.articleBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.articleMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.articleType {
+  font-size: 10px;
+  font-weight: 700;
+  color: #EC4899;
+  background: #FDF2F8;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.articleCategory {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6B7280;
+  background: #F3F4F6;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.articleReads {
+  font-size: 10px;
+  color: #9CA3AF;
+}
+
+/* legacy highlight hidden in the Web demo aligned card */
+.highlight {
+  display: none;
+}
+
+.articleTitle {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1F2937;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.articleSubtitle {
+  display: block;
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.postCard {
+  margin: 0 16px 12px;
+  padding: 16px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.postTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.authorBlock {
+  flex: 1;
+}
+
+.author {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.meta {
+  font-size: 11px;
+  color: #9CA3AF;
+  margin-top: 2px;
+}
+
+.summonButton {
+  padding: 5px 12px;
+  background: #FDF2F8;
+  border-radius: 12px;
+}
+
+.summonButton Text {
+  font-size: 12px;
+  color: #EC4899;
+  font-weight: 600;
+}
+
+.titleText {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1F2937;
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.contentText {
+  font-size: 13px;
+  color: #4B5563;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.actionText {
+  font-size: 12px;
+  color: #9CA3AF;
+}
+
+.actionTextActive {
+  color: #EC4899;
+  font-weight: 600;
+}
+
+.commentList {
+  border-top: 1px solid #F3F4F6;
+  padding-top: 10px;
+}
+
+.commentCard {
+  padding: 8px 0;
+}
+
+.commentAuthor {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7C3AED;
+  margin-bottom: 2px;
+}
+
+.commentText {
+  font-size: 13px;
+  color: #4B5563;
+  line-height: 1.5;
+}
+
+/* ---- 评论输入 ---- */
+.commentTrigger {
+  padding: 10px 0;
+  margin-top: 8px;
+  border-top: 1px solid #F3F4F6;
+}
+
+.commentTriggerText {
+  font-size: 13px;
+  color: #9CA3AF;
+}
+
+.commentInputBar {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #F3F4F6;
+}
+
+.commentInput {
+  width: 100%;
+  min-height: 40px;
+  font-size: 14px;
+  background: #F9FAFB;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.commentActions {
+  display: flex;
+  gap: 10px;
+}
+
+.commentCancel {
+  flex: 1;
+  padding: 10px 0;
+  background: #F3F4F6;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.commentCancel Text {
+  font-size: 13px;
+  color: #6B7280;
+}
+
+.commentSubmit {
+  flex: 1;
+  padding: 10px 0;
+  background: #7C3AED;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.commentSubmit Text {
+  font-size: 13px;
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.treeholeBadge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #059669;
+  background: #D1FAE5;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+
+.exampleBadge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6B7280;
+  background: #F3F4F6;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+
+.practiceButton {
+  margin: 2px 0 12px;
+  padding: 9px 12px;
+  background: #F5F3FF;
+  border-radius: 10px;
+}
+
+.practiceButton Text {
+  color: #6D28D9;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hugButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 48px 20px;
+}
+
+.emptyState Text {
+  font-size: 14px;
+  color: #9CA3AF;
+}
+
+/* ---- 发帖弹层 ---- */
+.postModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+}
+
+.postModal {
+  width: 90%;
+  max-height: 82vh;
+  box-sizing: border-box;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.postModalTitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1F2937;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.postModalBody {
+  flex: 1;
+  min-height: 0;
+  max-height: 62vh;
+}
+
+.typeSelector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.typeChip {
+  box-sizing: border-box;
+  width: calc(50% - 5px);
+  padding: 8px 16px;
+  background: #F3F4F6;
+  border-radius: 20px;
+  text-align: center;
+}
+
+.typeChipActive {
+  background: #FDF2F8;
+}
+
+.typeChipText {
+  font-size: 13px;
+  color: #6B7280;
+}
+
+.typeChipActive .typeChipText {
+  color: #EC4899;
+  font-weight: 600;
+}
+
+.postTitleInput {
+  box-sizing: border-box;
+  width: 100%;
+  height: 48px;
+  font-size: 15px;
+  background: #F9FAFB;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.postContentInput {
+  box-sizing: border-box;
+  width: 100%;
+  height: 156px;
+  font-size: 14px;
+  background: #F9FAFB;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.inputCount {
+  display: block;
+  margin: -10px 4px 14px 0;
+  color: #9CA3AF;
+  font-size: 11px;
+  text-align: right;
+}
+
+.postModalButtons {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+  padding-top: 12px;
+}
+
+.postModalCancel {
+  flex: 1;
+  padding: 14px 0;
+  background: #F3F4F6;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.postModalCancel Text {
+  font-size: 14px;
+  color: #6B7280;
+}
+
+.postModalConfirm {
+  flex: 1;
+  padding: 14px 0;
+  background: #EC4899;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.postModalConfirm Text {
+  font-size: 14px;
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.postModalConfirmDisabled {
+  opacity: 0.4;
+}
+
+.postSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px 8px;
+}
+
+.postButton {
+  padding: 6px 14px;
+  background: #FDF2F8;
+  border-radius: 16px;
+}
+
+.postButtonText {
+  font-size: 13px;
+  color: #EC4899;
+  font-weight: 600;
+}

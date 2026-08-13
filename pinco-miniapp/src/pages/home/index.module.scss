@@ -1,0 +1,433 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $page-spacing $page-padding 160rpx;
+  background: linear-gradient(180deg, #f4eeff 0%, $color-bg-page 100%);
+}
+
+.heroCard {
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  border-radius: 32rpx;
+  padding: 40rpx 32rpx;
+  color: $color-text-white;
+  box-shadow: $shadow-card-hover;
+}
+
+.eyebrow {
+  font-size: $font-size-xs;
+  opacity: 0.8;
+}
+
+.heroTitle {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 40rpx;
+  font-weight: $font-weight-bold;
+  line-height: 1.35;
+}
+
+.heroDesc {
+  display: block;
+  margin-top: 16rpx;
+  font-size: $font-size-sm;
+  opacity: 0.9;
+  line-height: $line-height-loose;
+}
+
+.primaryButton {
+  @include button-reset;
+  margin-top: 32rpx;
+  width: 100%;
+  height: $button-height-md;
+  border-radius: $radius-button;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2rpx solid rgba(255, 255, 255, 0.2);
+  color: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+
+  &:active {
+    opacity: 0.92;
+    transform: scale(0.98);
+  }
+}
+
+.section {
+  margin-top: 32rpx;
+}
+
+.followUpCard {
+  margin: 0 24rpx 24rpx;
+  padding: 26rpx;
+  border-radius: 22rpx;
+  background: linear-gradient(135deg, #FFF7ED, #FDF2F8);
+}
+
+.followUpEyebrow { display: block; color: #C2410C; font-size: 22rpx; font-weight: 700; }
+.followUpMessage { display: block; margin-top: 10rpx; color: #4B5563; font-size: 26rpx; line-height: 1.6; }
+.followUpActions { display: flex; gap: 12rpx; margin-top: 18rpx; }
+.followUpActions View { flex: 1; padding: 14rpx 8rpx; background: rgba(255,255,255,.86); border-radius: 12rpx; text-align: center; }
+.followUpActions Text { color: #9A3412; font-size: 22rpx; font-weight: 600; }
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.sectionTitle {
+  font-size: 32rpx;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.sectionHint {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.wechatCard {
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  box-shadow: $shadow-card;
+}
+
+.wechatTitle {
+  display: block;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.wechatDesc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.progressText {
+  display: block;
+  margin-top: 12rpx;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.readinessRow {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 18rpx;
+  flex-wrap: wrap;
+}
+
+.readinessChip {
+  padding: 10rpx 18rpx;
+  border-radius: $radius-round;
+  font-size: $font-size-xs;
+  background: $color-bg-soft;
+  color: $color-text-secondary;
+}
+
+.readinessChipReady {
+  background: rgba(0, 180, 42, 0.14);
+  color: $color-success;
+}
+
+.readinessChipPending {
+  background: rgba(255, 125, 0, 0.14);
+  color: $color-warning;
+}
+
+.warningPanel {
+  margin-top: 20rpx;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: rgba(124, 77, 255, 0.06);
+  border: 2rpx solid rgba(124, 77, 255, 0.08);
+}
+
+.warningTitle {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.warningDesc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.todoText {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.secondaryButton {
+  @include button-reset;
+  margin-top: 20rpx;
+  width: 100%;
+  min-height: $button-height-sm;
+  border-radius: $radius-button;
+  border: 2rpx solid $color-border;
+  background: $color-bg-card;
+  color: $color-text-primary;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+
+  &:active {
+    opacity: 0.92;
+    transform: scale(0.98);
+  }
+}
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20rpx;
+}
+
+.statusCard {
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  box-shadow: $shadow-card;
+}
+
+.statusLabel {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.statusValue {
+  display: block;
+  margin-top: 12rpx;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.statusDesc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+}
+
+.actionRow {
+  display: flex;
+  gap: 16rpx;
+  overflow-x: auto;
+  padding-bottom: 4rpx;
+}
+
+.actionChip {
+  flex-shrink: 0;
+  padding: 16rpx 28rpx;
+  background: $color-bg-card;
+  border-radius: $radius-round;
+  box-shadow: $shadow-card;
+  border: 2rpx solid rgba(0, 0, 0, 0.03);
+}
+
+.actionChipText {
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  font-weight: $font-weight-semibold;
+  white-space: nowrap;
+}
+
+.timelineCard {
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  padding: 12rpx 28rpx;
+  box-shadow: $shadow-card;
+}
+
+.timelineItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 20rpx;
+  padding: 24rpx 0;
+  border-bottom: 2rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.timelineDot {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: $radius-round;
+  @include flex-center;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-bold;
+  flex-shrink: 0;
+}
+
+.dotDone { background: rgba(0, 180, 42, 0.14); color: $color-success; }
+.dotActive { background: rgba(124, 77, 255, 0.14); color: $color-primary; }
+.dotPending { background: $color-bg-hover; color: $color-text-tertiary; }
+
+.timelineTitle {
+  display: block;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.timelineDesc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+}
+
+.taskList {
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: $shadow-card;
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 28rpx;
+  border-bottom: 2rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:active {
+    background: $color-bg-hover;
+  }
+}
+
+.taskEmoji {
+  font-size: 40rpx;
+  flex-shrink: 0;
+}
+
+.taskContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.taskTitle {
+  display: block;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.taskDesc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+}
+
+.taskArrow {
+  font-size: 36rpx;
+  color: $color-text-tertiary;
+  flex-shrink: 0;
+}
+
+.taskEmpty {
+  padding: 40rpx 28rpx;
+  text-align: center;
+}
+
+.taskEmptyText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.searchEntry {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  background: $color-bg-card;
+  border-radius: 48rpx;
+  padding: 20rpx 28rpx;
+  box-shadow: $shadow-card;
+  border: 2rpx solid rgba(0, 0, 0, 0.03);
+
+  &:active {
+    background: $color-bg-hover;
+  }
+}
+
+.searchEntryIcon {
+  font-size: 32rpx;
+  flex-shrink: 0;
+}
+
+.searchEntryPlaceholder {
+  flex: 1;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.searchEntryArrow {
+  font-size: 32rpx;
+  color: $color-text-tertiary;
+  flex-shrink: 0;
+}
+.moodRow {
+  display: flex;
+  gap: 10rpx;
+}
+
+.moodItem {
+  flex: 1;
+  min-width: 0;
+  padding: 18rpx 4rpx 14rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.05);
+  text-align: center;
+}
+
+.moodEmoji,
+.moodLabel,
+.moodPrivacy {
+  display: block;
+}
+
+.moodEmoji {
+  margin-bottom: 8rpx;
+  font-size: 34rpx;
+}
+
+.moodLabel {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 20rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moodPrivacy {
+  margin-top: 14rpx;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 20rpx;
+  line-height: 1.5;
+}

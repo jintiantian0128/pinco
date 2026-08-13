@@ -1,0 +1,28 @@
+@import '../../styles/variables.scss';
+
+.page { height: 100vh; box-sizing: border-box; padding: 24rpx 24rpx 80rpx; background: $color-bg-page; }
+.hero { padding: 28rpx; margin-bottom: 20rpx; border-radius: 28rpx; color: #fff; background: linear-gradient(135deg, #6d4aff, #ec4899); }
+.heroTitle, .heroDesc, .title, .desc, .itemTitle, .itemText, .materialText, .footer { display: block; }
+.heroTitle { margin-bottom: 10rpx; font-size: 38rpx; font-weight: 700; }
+.heroDesc { font-size: 24rpx; line-height: 1.6; opacity: .88; }
+.card { padding: 24rpx; margin-bottom: 20rpx; border-radius: 24rpx; background: #fff; box-shadow: 0 10rpx 30rpx rgba(31, 22, 70, .06); }
+.title { margin-bottom: 8rpx; color: $color-text-primary; font-size: 30rpx; font-weight: 700; }
+.desc { margin-bottom: 18rpx; color: $color-text-secondary; font-size: 22rpx; line-height: 1.5; }
+.input { width: 100%; box-sizing: border-box; min-height: 72rpx; padding: 16rpx 18rpx; margin: 10rpx 0; border: 1rpx solid #eceaf3; border-radius: 16rpx; background: #faf9fd; color: $color-text-primary; font-size: 24rpx; }
+.button, .secondaryButton { padding: 18rpx; margin-top: 14rpx; border-radius: 16rpx; text-align: center; font-size: 24rpx; font-weight: 600; }
+.button { color: #fff; background: $color-primary; }
+.secondaryButton { color: $color-primary; background: rgba(124, 77, 255, .1); }
+.item { padding: 20rpx 0; border-top: 1rpx solid #f0eef5; }
+.itemTitle { margin-bottom: 8rpx; color: $color-text-primary; font-size: 26rpx; font-weight: 700; }
+.itemText, .materialText { margin-top: 6rpx; color: $color-text-secondary; font-size: 22rpx; line-height: 1.55; }
+.materialText { color: $color-text-primary; }
+.footer { padding: 12rpx 0 40rpx; color: $color-text-tertiary; font-size: 20rpx; text-align: center; }
+.statusScroller { width: 100%; margin-top: 12rpx; white-space: nowrap; }
+.statusRow { display: flex; gap: 10rpx; width: max-content; }
+.statusChip { padding: 10rpx 16rpx; border-radius: 999rpx; background: #F3F4F6; }
+.statusChip Text { color: #6B7280; font-size: 21rpx; }
+.statusChipActive { background: #6D28D9; }
+.statusChipActive Text { color: #FFF; font-weight: 600; }
+.scoreSummary { display: flex; align-items: baseline; gap: 16rpx; padding: 18rpx; margin: 12rpx 0; background: #ECFDF5; border-radius: 16rpx; }
+.scoreValue { color: #047857; font-size: 46rpx; font-weight: 800; }
+.scoreDelta { color: #065F46; font-size: 23rpx; }
