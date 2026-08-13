@@ -5,6 +5,7 @@
 - 云托管内置“代码库拉取”支持 GitHub，但需要在新建版本时选择仓库和分支；不能据此假定每次 `main` push 都会自动部署。
 - 真正的 push 自动部署使用 GitHub Actions 检出代码，再调用微信官方 `@wxcloud/cli`。
 - 首次验证只提供 `workflow_dispatch` 手动触发。只有部署和公网版本验收通过后，才增加 `main` push 触发，避免未验证流水线直接覆盖生产。
+- 2026-08-13 首次 Actions 安全门禁运行 `31710521386` 符合预期：发现缺少 `WXCLOUD_PRIVATE_KEY` 和 `WXCLOUD_ENV_ID` 后立即失败，登录、dry-run 和部署均未执行；这只证明失败关闭有效，不代表部署链路已跑通。
 
 ## GitHub Actions Secrets
 

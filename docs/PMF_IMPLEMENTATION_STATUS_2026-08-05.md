@@ -27,11 +27,11 @@
 - 2026-08-11 学社页面验证：发布弹窗真实显示“干货”类型；当前 bootstrap 身份不经过额外登录即可点击“召唤学姐”，服务端 `/summon` 返回 200，帖子下出现 Pinco 学姐模型回复。召唤会写入社区数据，为避免测试污染只执行一次，不计为三次验证。
 - 隐私保护指引补齐后，微信开发者工具已完成图片上传 3 次、DOCX 上传 3 次、PDF 上传 1 次；录音→阿里云 ASR→文字回填完成 3 次。该证据只覆盖开发者工具，不替代 iOS/Android 真机。
 - 公网当前仍为 v0.6.0；`/health` 实测 DeepSeek connected、MySQL `durable=true/online=true`，管理员治理令牌也已配置。MySQL 已通过同一设备标识跨重新部署回读同一用户的持久化验收，测试账号已清理。
-- v0.7.0 GitHub 主线已合并；GitHub OAuth 已取得 `workflow` 权限。受控 GitHub Actions→云托管工作流已通过本地 shell/JSON/YAML 与健康门禁检查，但尚未推送、未触发部署。仓库仍缺微信云托管 CLI 所需的三个 Actions Secret，不能据此宣称自动部署已打通。
+- v0.7.0 GitHub 主线已合并；受控 GitHub Actions→云托管工作流也已合并并被 GitHub 识别。首次真实 Actions 运行 `31710521386` 在 Secret 门禁处按预期失败，登录、dry-run 和部署均未执行；仓库已有 `WXCLOUD_APP_ID`，仍缺 `WXCLOUD_PRIVATE_KEY` 和 `WXCLOUD_ENV_ID`，不能据此宣称自动部署已打通。
 
 ## 仍需外部条件或人工界面验收
 
-1. 在仓库 Actions Secret 中直接配置 `WXCLOUD_APP_ID`、`WXCLOUD_PRIVATE_KEY`、`WXCLOUD_ENV_ID`；先手动触发部署并通过公网 v0.7.0/DeepSeek/MySQL 健康门禁，再开启 `main` push 自动触发。
+1. 在仓库 Actions Secret 中直接配置剩余的 `WXCLOUD_PRIVATE_KEY`、`WXCLOUD_ENV_ID`；先手动触发部署并通过公网 v0.7.0/DeepSeek/MySQL 健康门禁，再开启 `main` push 自动触发。
 2. 部署 v0.7.0 后，从微信开发者工具真实验证跨会话上下文、简历记忆、模型判断关键节点、材料生成、完整面试和真实专家申请审核；不得用后端接口或空表单校验替代页面路径。
 3. iOS 与 Android 各连续三次验证录音、剪贴板、图片和文件选择；通过前保持 `ASR_DEVICE_VERIFIED=false`。
 4. 微信支付代码已完成本地自动化，但仍需要商户号、APIv3 密钥、商户私钥、平台公钥和回调地址；必须由白名单账号完成小额实付、异步回调、主动查询、关单和全额退款真机验收。验收前所有售卖开关继续关闭，不用假支付替代。
@@ -40,6 +40,6 @@
 
 ## 当前阻塞
 
-- GitHub `workflow` 权限已授权；真实部署仍被三个未配置的 Actions Secret 阻塞，这些必须由微信云托管管理员创建或确认。
+- GitHub `workflow` 权限和 AppID Secret 已就绪；真实部署仍被 `WXCLOUD_PRIVATE_KEY`、`WXCLOUD_ENV_ID` 阻塞，这些必须由微信云托管管理员创建或确认。
 - 公网仍为 v0.6.0；v0.7.0 的 Agent 上下文、职业记忆、录音交互改造和岗位词表尚未取得线上及新版微信页面证据。
 - iOS/Android 真机的录音、剪贴板和文件选择需要用户扫码配合；在真机证据取得前不得写为通过。
