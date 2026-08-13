@@ -268,9 +268,25 @@ jobs:
           echo "CloudBase did not serve the exact healthy Pinco revision with DeepSeek and durable storage within the acceptance window." >&2
           exit 1
 
+      - name: Verify public user journeys three times
+        id: public_smoke
+        if: steps.health.outcome == 'success'
+        continue-on-error: true
+        env:
+          PUBLIC_BASE_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com
+        run: |
+          for attempt in 1 2 3; do
+            echo "Public account journey $attempt/3"
+            python backend/scripts/smoke_local_session.py "$PUBLIC_BASE_URL"
+          done
+          for attempt in 1 2 3; do
+            echo "Public Agent memory journey $attempt/3"
+            python backend/scripts/smoke_public_agent.py "$PUBLIC_BASE_URL"
+          done
+
       - name: Check whether rollback is required
         id: rollback_check
-        if: always() && steps.health.outcome != 'success'
+        if: always() && (steps.health.outcome != 'success' || steps.public_smoke.outcome != 'success')
         env:
           BASELINE_RELEASE_SHA: ${{ steps.baseline.outputs.release_sha }}
           BASELINE_VERSION: ${{ steps.baseline.outputs.version }}
@@ -310,7 +326,7 @@ jobs:
 
       - name: Verify production recovery
         id: recovery
-        if: always() && steps.health.outcome != 'success'
+        if: always() && (steps.health.outcome != 'success' || steps.public_smoke.outcome != 'success')
         env:
           BASELINE_RELEASE_SHA: ${{ steps.baseline.outputs.release_sha }}
           BASELINE_VERSION: ${{ steps.baseline.outputs.version }}
@@ -346,6 +362,7 @@ jobs:
         env:
           DEPLOY_SUBMITTED: ${{ steps.deploy.outputs.submitted }}
           HEALTH_OUTCOME: ${{ steps.health.outcome }}
+          PUBLIC_SMOKE_OUTCOME: ${{ steps.public_smoke.outcome }}
         run: |
           if [ "$DEPLOY_SUBMITTED" != true ]; then
             echo "CloudBase never confirmed release submission." >&2
@@ -353,6 +370,10 @@ jobs:
           fi
           if [ "$HEALTH_OUTCOME" != success ]; then
             echo "The exact GitHub revision did not pass the public production health gate." >&2
+            exit 1
+          fi
+          if [ "$PUBLIC_SMOKE_OUTCOME" != success ]; then
+            echo "The exact GitHub revision did not pass all three public account and Agent journeys." >&2
             exit 1
           fi
           echo "The exact GitHub revision is healthy in production."
