@@ -1,0 +1,8 @@
+{
+  "type": "run",
+  "server": {
+    "port": 80,
+    "buildDir": ".",
+    "versionRemark": "github-actions"
+  }
+}

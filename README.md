@@ -16,6 +16,7 @@ Pinco 是面向 0–5 年 AI 求职者的微信小程序求职 Agent：既提供
 5. `backend/DEPLOY_CLOUDRUN.md`
 6. `docs/LEGACY_ASSET_MIGRATION_2026-08-13.md`
 7. `docs/DEPENDENCY_SECURITY_2026-08-13.md`
+8. `docs/GITHUB_CLOUDBASE_DEPLOYMENT_2026-08-13.md`
 
 可信原则：没有来源链接的岗位不称为真实岗位；模型失败不返回固定诊断；未审核专家不展示；支付只以微信服务端验签、金额核对后的结果为准；自动化构建不替代微信开发者工具、实付退款和真机验收。
 
