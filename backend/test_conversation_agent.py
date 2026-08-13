@@ -10,6 +10,38 @@ from state_store import JsonFileStateStore
 
 
 class ConversationAgentTests(unittest.TestCase):
+    def test_career_profile_is_source_of_truth_and_memory_can_be_forgotten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "profile-memory-device", "职业用户", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["career_memory"] = {
+                "target_role": {"value": "旧岗位", "confidence": 0.9, "source": "conversation"},
+                "current_company": {"value": "示例公司", "confidence": 0.9, "source": "conversation"},
+            }
+            store.save(state)
+
+            with patch.object(main, "_state_store", store):
+                updated = main.update_career_profile(main.CareerProfileRequest(
+                    user_id=user_id,
+                    target_roles=["AI产品经理"],
+                    years_experience=3,
+                    cities=["上海"],
+                    strengths=["Agent评测"],
+                ))
+                forgotten = main.forget_career_memory(main.CareerMemoryForgetRequest(
+                    user_id=user_id, key="目标岗位"
+                ))
+
+            self.assertEqual(updated["career_memory"]["target_role"]["value"], "AI产品经理")
+            self.assertEqual(updated["career_memory"]["years_experience"]["value"], "3.0")
+            self.assertIn("current_company", updated["career_memory"])
+            self.assertTrue(forgotten["removed"])
+            self.assertNotIn("target_role", forgotten["career_memory"])
+            self.assertEqual(forgotten["career_profile"]["target_roles"], [])
+            self.assertNotIn("旧岗位", main.build_agent_memory_context(store.load()["users"][user_id]))
+
     def test_profile_statement_does_not_trigger_job_search(self):
         message = [{"role": "user", "content": "请记住：我的目标岗位是AI产品经理，目标城市上海"}]
         self.assertIsNone(main.detect_search_intent(message))

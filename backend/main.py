@@ -660,6 +660,10 @@ class CareerProfileRequest(BaseModel):
     strengths: List[str] = Field(default_factory=list)
     job_search_deadline: str = Field(default="", max_length=40)
 
+class CareerMemoryForgetRequest(BaseModel):
+    user_id: str
+    key: str
+
 class EvidenceCreateRequest(BaseModel):
     user_id: str
     title: str
@@ -2683,6 +2687,7 @@ def serialize_workspace(user: Dict[str, Any]) -> Dict[str, Any]:
         "career_profile": user.get("career_profile", {
             "target_roles": [], "years_experience": 0, "cities": [], "strengths": []
         }),
+        "career_memory": deepcopy(user.get("career_memory", {})),
         "evidence": user.get("evidence", []),
         "jobs": user.get("jobs", []),
         "interview_sessions": user.get("interview_sessions", [])[:20],
@@ -2943,8 +2948,60 @@ def update_career_profile(request: CareerProfileRequest):
         if not user:
             raise HTTPException(status_code=404, detail="用户不存在")
         user["career_profile"] = profile
+        facts = user.setdefault("career_memory", {})
+        profile_memory = {
+            "target_role": "、".join(profile["target_roles"]),
+            "years_experience": str(profile["years_experience"]) if profile["years_experience"] else "",
+            "target_city": "、".join(profile["cities"]),
+            "key_skills": "、".join(profile["strengths"]),
+        }
+        for key, value in profile_memory.items():
+            if value:
+                facts[key] = {
+                    "value": value,
+                    "confidence": 1.0,
+                    "source": "career_profile",
+                    "updated_at": now_iso(),
+                }
+            else:
+                facts.pop(key, None)
+        user["career_memory"] = facts
         save_beta_state(state)
-    return {"career_profile": profile}
+    return {"career_profile": profile, "career_memory": deepcopy(facts)}
+
+
+@app.post("/api/v1/workspace/memory/forget")
+def forget_career_memory(request: CareerMemoryForgetRequest):
+    key = normalize_agent_memory_key(request.key)
+    if key not in AGENT_MEMORY_KEYS:
+        raise HTTPException(status_code=400, detail="职业记忆字段无效")
+    with _state_lock:
+        state = load_beta_state()
+        user = state.get("users", {}).get(request.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        facts = user.setdefault("career_memory", {})
+        removed = facts.pop(key, None) is not None
+        profile = user.setdefault("career_profile", {
+            "target_roles": [], "years_experience": 0, "cities": [], "strengths": []
+        })
+        profile_field = {
+            "target_role": ("target_roles", []),
+            "years_experience": ("years_experience", 0),
+            "target_city": ("cities", []),
+            "key_skills": ("strengths", []),
+        }.get(key)
+        if profile_field:
+            profile[profile_field[0]] = profile_field[1]
+            profile["updated_at"] = now_iso()
+        append_product_event_to_state(state, "workspace.memory.forgotten", request.user_id, {"key": key})
+        save_beta_state(state)
+    return {
+        "removed": removed,
+        "key": key,
+        "career_memory": deepcopy(facts),
+        "career_profile": deepcopy(profile),
+    }
 
 @app.post("/api/v1/workspace/evidence")
 def create_evidence(request: EvidenceCreateRequest):

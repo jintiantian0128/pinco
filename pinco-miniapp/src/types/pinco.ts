@@ -345,6 +345,7 @@ export interface WorkspaceJob {
 
 export interface CareerWorkspace {
   career_profile: CareerProfile
+  career_memory: Record<string, { value: string; confidence: number; source: string; updated_at?: string }>
   evidence: CareerEvidence[]
   jobs: WorkspaceJob[]
   interview_sessions: any[]

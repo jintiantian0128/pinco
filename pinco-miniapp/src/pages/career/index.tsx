@@ -8,6 +8,7 @@ import styles from './index.module.scss'
 
 const emptyWorkspace: CareerWorkspace = {
   career_profile: { target_roles: [], years_experience: 0, cities: [], strengths: [] },
+  career_memory: {},
   evidence: [],
   jobs: [],
   interview_sessions: [],
@@ -22,6 +23,14 @@ const jobStatuses = [
 
 const interviewDimensionLabels: Record<string, string> = {
   content: '内容', structure: '结构', evidence: '证据', role_fit: '岗位匹配', clarity: '表达清晰', adaptability: '临场应变',
+}
+
+const memoryLabels: Record<string, string> = {
+  target_role: '目标岗位', years_experience: '工作年限', target_city: '目标城市',
+  current_role: '当前岗位', current_company: '当前公司', key_skills: '关键技能',
+  salary_expectation: '期望薪资', job_search_stage: '求职阶段', preferred_industry: '目标行业',
+  education: '学历', graduation_year: '毕业年份', work_preference: '工作偏好',
+  interview_preference: '面试偏好',
 }
 
 const CareerPage: React.FC = () => {
@@ -81,10 +90,44 @@ const CareerPage: React.FC = () => {
         strengths: splitItems(strengths),
         job_search_deadline: jobSearchDeadline.trim(),
       })
-      setWorkspace((current) => ({ ...current, career_profile: response.career_profile }))
+      setWorkspace((current) => ({
+        ...current,
+        career_profile: response.career_profile,
+        career_memory: response.career_memory || current.career_memory,
+      }))
       Taro.showToast({ title: '目标画像已保存', icon: 'success' })
     } catch (error: any) {
       Taro.showToast({ title: error?.message || '保存失败', icon: 'none' })
+    }
+  }
+
+  const forgetMemory = async (key: string) => {
+    if (!userId) return
+    const label = memoryLabels[key] || key
+    const confirmed = await Taro.showModal({
+      title: `忘记“${label}”？`,
+      content: '删除后，学姐不会再用这条信息回答；如果它也在目标画像里，对应字段会一并清空。',
+      confirmText: '确认忘记',
+      cancelText: '保留',
+    })
+    if (!confirmed.confirm) return
+    try {
+      const response = await apiRequest<any>('/api/v1/workspace/memory/forget', 'POST', {
+        user_id: userId,
+        key,
+      })
+      setWorkspace((current) => ({
+        ...current,
+        career_memory: response.career_memory,
+        career_profile: response.career_profile,
+      }))
+      setTargetRoles(response.career_profile.target_roles.join('、'))
+      setYears(String(response.career_profile.years_experience || 0))
+      setCities(response.career_profile.cities.join('、'))
+      setStrengths(response.career_profile.strengths.join('、'))
+      Taro.showToast({ title: response.removed ? '已忘记这条信息' : '这条信息已不存在', icon: 'none' })
+    } catch (error: any) {
+      Taro.showToast({ title: error?.message || '暂时无法删除，请重试', icon: 'none' })
     }
   }
 
@@ -313,6 +356,19 @@ const CareerPage: React.FC = () => {
         <Textarea className={styles.input} value={strengths} onInput={(e) => setStrengths(e.detail.value)} placeholder="已验证的优势/技能" autoHeight />
         <Textarea className={styles.input} value={jobSearchDeadline} onInput={(e) => setJobSearchDeadline(e.detail.value)} placeholder="希望多久进入下一轮/拿到 Offer，例如：30 天内" maxlength={40} autoHeight />
         <View className={styles.button} onClick={saveProfile}><Text>保存目标画像</Text></View>
+      </View>
+
+      <View className={styles.card}>
+        <Text className={styles.title}>学姐记住的职业信息</Text>
+        <Text className={styles.desc}>只保存求职有用的非敏感信息。你可以随时查看和删除；目标画像是更高优先级的明确设置。</Text>
+        {Object.keys(workspace.career_memory || {}).length === 0 && <Text className={styles.itemText}>目前还没有职业记忆。</Text>}
+        {Object.entries(workspace.career_memory || {}).map(([key, item]) => (
+          <View key={key} className={styles.item}>
+            <Text className={styles.itemTitle}>{memoryLabels[key] || key}</Text>
+            <Text className={styles.itemText}>{item.value}</Text>
+            <View className={styles.secondaryButton} onClick={() => forgetMemory(key)}><Text>忘记这条</Text></View>
+          </View>
+        ))}
       </View>
 
       <View className={styles.card}>
