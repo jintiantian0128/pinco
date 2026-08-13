@@ -146,19 +146,28 @@ jobs:
         env:
           HEALTH_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health
         run: |
-          response="$(curl --fail --silent --show-error --max-time 45 "$HEALTH_URL")"
-          HEALTH_RESPONSE="$response" node -e '
-            const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
-            const ready = health.status === "online"
-              && typeof health.version === "string"
-              && health.version.length > 0
-              && health.llm?.online === true
-              && health.state?.durable === true
-              && health.state?.online === true;
-            if (!ready) process.exit(1);
-            process.stdout.write(`version=${health.version}\n`);
-          ' >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$response"
+          for attempt in $(seq 1 6); do
+            response="$(curl --fail --silent --show-error --max-time 45 "$HEALTH_URL" || true)"
+            if version="$(HEALTH_RESPONSE="$response" node -e '
+              const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+              const ready = health.status === "online"
+                && typeof health.version === "string"
+                && health.version.length > 0
+                && health.llm?.online === true
+                && health.state?.durable === true
+                && health.state?.online === true;
+              if (!ready) process.exit(1);
+              process.stdout.write(health.version);
+            ')"; then
+              echo "version=$version" >> "$GITHUB_OUTPUT"
+              printf '%s\n' "$response"
+              exit 0
+            fi
+            printf 'Production baseline attempt %s/6 was not healthy.\n' "$attempt"
+            sleep 10
+          done
+          echo "The existing production baseline did not become healthy within the acceptance window." >&2
+          exit 1
 
       - name: Record the rollback version
         id: rollback_target
