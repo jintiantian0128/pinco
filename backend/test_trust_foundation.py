@@ -367,6 +367,35 @@ class TrustFoundationTests(unittest.TestCase):
             persisted = next(iter(store.load()["users"].values()))["profile"]
             self.assertEqual(persisted["wechat_openid"], "private-openid-456")
 
+    def test_account_export_includes_user_owned_agent_memory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "export-memory-device", "记忆用户", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["career_memory"] = {
+                "target_role": {
+                    "value": "AI产品经理",
+                    "confidence": 0.96,
+                    "source": "conversation",
+                    "updated_at": main.now_iso(),
+                }
+            }
+            user["resume_memory"] = {
+                "filename": "resume.pdf",
+                "analysis_summary": "三年AI产品经验",
+                "text_excerpt": "负责Agent评测平台",
+                "updated_at": main.now_iso(),
+            }
+            store.save(state)
+
+            with patch.object(main, "_state_store", store):
+                exported = main.export_account(user_id)
+
+            self.assertEqual(exported["career_memory"]["target_role"]["value"], "AI产品经理")
+            self.assertEqual(exported["resume_memory"]["filename"], "resume.pdf")
+            self.assertNotIn("session_token_hash", json.dumps(exported, ensure_ascii=False))
+
     def test_unverified_payment_notification_is_rejected_without_state_change(self):
         class FakeRequest:
             headers = {"wechatpay-signature": "invalid"}

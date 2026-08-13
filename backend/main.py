@@ -2753,6 +2753,8 @@ def export_account(user_id: str):
             "export_version": 1,
             "exported_at": now_iso(),
             "profile": profile,
+            "career_memory": deepcopy(user.get("career_memory", {})),
+            "resume_memory": deepcopy(user.get("resume_memory", {})),
             "workspace": serialize_workspace(user),
             "messages": user.get("messages", []),
             "bookings": user.get("bookings", []),

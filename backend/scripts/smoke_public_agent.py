@@ -52,6 +52,11 @@ try:
     assert first.get("agent", {}).get("memory_updated") is True, first
     assert first.get("progress_suggestion") is None, first
 
+    export_status, exported = call(f"/api/v1/account/export?user_id={user_id}", token=token)
+    assert export_status == 200, (export_status, exported)
+    remembered = exported.get("career_memory") or {}
+    assert {"years_experience", "target_role", "target_city"}.issubset(remembered), remembered
+
     follow_up = "结合你已经知道的我的背景，给我一段面试自我介绍；开头明确工作年限、目标岗位和城市，不要再问我这些信息。"
     second_status, second = call(
         "/api/v1/chat",
