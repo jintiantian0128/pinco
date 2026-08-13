@@ -10,6 +10,33 @@ from state_store import JsonFileStateStore
 
 
 class ConversationAgentTests(unittest.TestCase):
+    def test_profile_statement_does_not_trigger_job_search(self):
+        message = [{"role": "user", "content": "请记住：我的目标岗位是AI产品经理，目标城市上海"}]
+        self.assertIsNone(main.detect_search_intent(message))
+        self.assertEqual(
+            main.detect_search_intent([{"role": "user", "content": "帮我搜索上海在招的AI产品经理岗位"}]),
+            "帮我搜索上海在招的AI产品经理岗位",
+        )
+
+    def test_localized_memory_keys_are_normalized(self):
+        result = main.sanitize_agent_result({
+            "response": "已经记住。",
+            "used_memory_keys": ["工作经验", "目标岗位", "所在城市"],
+            "memory_updates": [
+                {"key": "工作年限", "value": "3年", "confidence": 0.95},
+                {"key": "目标岗位", "value": "AI产品经理", "confidence": 0.95},
+                {"key": "目标城市", "value": "上海", "confidence": 0.95},
+            ],
+        })
+        self.assertEqual(
+            result["used_memory_keys"],
+            ["years_experience", "target_role", "target_city"],
+        )
+        self.assertEqual(
+            [item["key"] for item in result["memory_updates"]],
+            ["years_experience", "target_role", "target_city"],
+        )
+
     def test_agent_uses_server_history_resume_memory_and_deduplicates_progress(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)

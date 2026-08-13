@@ -12,6 +12,23 @@ from state_store import JsonFileStateStore
 
 
 class TrustFoundationTests(unittest.TestCase):
+    def test_release_fingerprint_is_validated_and_exposed_by_health(self):
+        with tempfile.TemporaryDirectory() as directory:
+            release_path = os.path.join(directory, ".pinco-release-sha")
+            with open(release_path, "w", encoding="utf-8") as release_file:
+                release_file.write("A" * 40)
+            self.assertEqual(main.read_release_sha(release_path), "a" * 40)
+            with open(release_path, "w", encoding="utf-8") as release_file:
+                release_file.write("not-a-commit")
+            self.assertIsNone(main.read_release_sha(release_path))
+
+        with patch.object(main, "PINCO_RELEASE_SHA", "b" * 40), patch.object(
+            main, "probe_llm", return_value={"online": True}
+        ), patch.object(
+            main, "build_state_health_summary", return_value={"durable": True, "online": True}
+        ):
+            self.assertEqual(main.health_check()["release_sha"], "b" * 40)
+
     def test_json_state_store_round_trip_and_atomic_shape(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "state.json")

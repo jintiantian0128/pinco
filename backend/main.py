@@ -33,7 +33,25 @@ import statistics
 # Missing model credentials leave the service explicitly unavailable. The app
 # never substitutes canned answers for a real model response.
 
-load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=False)
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def read_release_sha(path: Optional[str] = None) -> Optional[str]:
+    """Return the immutable CI release fingerprint, if this is a CI build."""
+    candidate = os.environ.get("PINCO_RELEASE_SHA", "").strip()
+    release_path = path or os.path.join(BACKEND_DIR, ".pinco-release-sha")
+    if not candidate:
+        try:
+            with open(release_path, "r", encoding="utf-8") as release_file:
+                candidate = release_file.read().strip()
+        except FileNotFoundError:
+            return None
+    return candidate.lower() if re.fullmatch(r"[0-9a-fA-F]{7,64}", candidate) else None
+
+
+PINCO_RELEASE_SHA = read_release_sha()
+
+load_dotenv(os.path.join(BACKEND_DIR, ".env"), override=False)
 
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "anthropic").strip().lower()  # mock | openai | anthropic
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
@@ -900,23 +918,25 @@ def detect_content_type(messages: list) -> str:
 
 
 def detect_search_intent(messages: list) -> Optional[str]:
-    """Detect if user is asking to search for jobs."""
+    """Return a query only when the user explicitly asks for live job search."""
     last_user_msg = ""
     for msg in reversed(messages):
         if msg.get("role") == "user":
             last_user_msg = msg.get("content", "")
             break
 
-    search_keywords = ["找工作", "搜岗位", "搜索职位", "搜一下", "搜搜", "查找", "查查", "看看有没有",
-                       "有没有", "招聘", "求职", "职位", "岗位",
-                       "机会", "投递", "内推", "社招", "校招", "实习",
-                       "岗位推荐", "职位推荐", "工作机会", "找岗位", "搜工作"]
-
-    for keyword in search_keywords:
-        if keyword in last_user_msg:
-            return last_user_msg
-
-    return None
+    normalized = re.sub(r"\s+", "", last_user_msg)
+    if not normalized or any(phrase in normalized for phrase in ["不要搜索", "不用搜索", "别搜索"]):
+        return None
+    # Merely mentioning a target role, resume or job-search profile is not a
+    # request to hit external providers. Search requires both an explicit
+    # action/question and a job object.
+    patterns = [
+        r"(?:帮我|请|能否|能不能|可以)?(?:找|搜|搜索|查找|查查|推荐).{0,16}(?:岗位|职位|工作|机会|内推|实习)",
+        r"(?:岗位|职位|工作|机会|内推|实习).{0,16}(?:有哪些|有没有|在招|招聘|推荐|帮我找|帮我搜)",
+        r"(?:哪里|哪家|哪些公司).{0,16}(?:在招|招聘|有岗位|有职位|招人)",
+    ]
+    return last_user_msg if any(re.search(pattern, normalized) for pattern in patterns) else None
 
 RESUME_ANALYSIS_PROMPT = """你是一位资深 HR 和简历优化专家。请分析以下简历文本。
 
@@ -1754,6 +1774,7 @@ def health_check():
         "status": "online",
         "model": DEFAULT_MODEL,
         "version": "0.7.0",
+        "release_sha": PINCO_RELEASE_SHA,
         "mock_mode": MOCK_MODE,
         "provider": LLM_PROVIDER,
         "llm": probe_llm(),
@@ -1888,8 +1909,57 @@ AGENT_MEMORY_KEYS = {
     "key_skills", "salary_expectation", "job_search_stage", "preferred_industry",
     "education", "graduation_year", "work_preference", "interview_preference",
 }
+AGENT_MEMORY_KEY_ALIASES = {
+    "目标岗位": "target_role", "求职目标": "target_role", "岗位": "target_role",
+    "工作年限": "years_experience", "经验年限": "years_experience", "工作经验": "years_experience",
+    "目标城市": "target_city", "所在城市": "target_city", "城市": "target_city",
+    "当前岗位": "current_role", "目前岗位": "current_role", "当前职位": "current_role",
+    "当前公司": "current_company", "目前公司": "current_company",
+    "核心技能": "key_skills", "关键技能": "key_skills",
+    "期望薪资": "salary_expectation", "薪资期望": "salary_expectation",
+    "求职阶段": "job_search_stage", "目标行业": "preferred_industry",
+    "学历": "education", "毕业年份": "graduation_year",
+    "工作偏好": "work_preference", "面试偏好": "interview_preference",
+}
 AGENT_PROGRESS_MILESTONES = {"resume_completed", "mock_interview_completed", "interview_feedback", "offer_decision"}
 AGENT_JOB_STATUSES = {"saved", "applied", "written", "interview1", "interview2", "hr", "offer", "rejected"}
+
+
+def normalize_agent_memory_key(value: Any) -> str:
+    raw = str(value or "").strip()
+    ascii_key = re.sub(r"[^a-z0-9_]", "", raw.lower())
+    if ascii_key in AGENT_MEMORY_KEYS:
+        return ascii_key
+    compact = re.sub(r"[\s：:，,。.]", "", raw)
+    return AGENT_MEMORY_KEY_ALIASES.get(compact, "")
+
+
+def should_extract_agent_memory(user_text: str) -> bool:
+    compact = re.sub(r"\s+", "", user_text or "")
+    profile_terms = [
+        "目标岗位", "工作年限", "经验年限", "目标城市", "当前岗位", "当前公司",
+        "核心技能", "期望薪资", "求职阶段", "目标行业", "毕业年份", "工作偏好",
+    ]
+    declaration_terms = ["请记住", "记住", "我的", "我是", "我有", "目前", "现在", "目标"]
+    return any(term in compact for term in profile_terms) and any(term in compact for term in declaration_terms)
+
+
+def extract_agent_memory_updates(user_text: str) -> List[Dict[str, Any]]:
+    """Use the real model as a bounded structured-memory extractor."""
+    raw = llm_chat_with_fallback(
+        [{"role": "user", "content": user_text[:3000]}],
+        temperature=0.1,
+        system_prompt=f"""你是 Pinco 的职业记忆提取器。只提取用户明确陈述、后续求职有用且非敏感的信息。
+只输出合法 JSON：{{"memory_updates":[{{"key":"target_role","value":"AI产品经理","confidence":0.95}}]}}
+key 只能从这些英文值中选择：{','.join(sorted(AGENT_MEMORY_KEYS))}。
+不要推测；电话、地址、身份证、健康、家庭信息绝不保存。没有可保存内容时输出 {{"memory_updates":[]}}。""",
+        max_tokens=600,
+    )
+    parsed = json.loads(clean_json_response(raw))
+    return sanitize_agent_result({
+        "response": "memory extraction",
+        "memory_updates": parsed.get("memory_updates") or [],
+    })["memory_updates"]
 
 
 def get_agent_user_context(user_id: Optional[str]) -> Dict[str, Any]:
@@ -1949,7 +2019,7 @@ def sanitize_agent_result(raw: Dict[str, Any]) -> Dict[str, Any]:
     for item in raw.get("memory_updates") or []:
         if not isinstance(item, dict):
             continue
-        key = re.sub(r"[^a-z0-9_]", "", str(item.get("key") or "").lower())
+        key = normalize_agent_memory_key(item.get("key"))
         value = str(item.get("value") or "").strip()
         confidence = float(item.get("confidence") or 0)
         if key in AGENT_MEMORY_KEYS and value and confidence >= 0.8:
@@ -1977,7 +2047,10 @@ def sanitize_agent_result(raw: Dict[str, Any]) -> Dict[str, Any]:
         "response": response,
         "intent": str(raw.get("intent") or "general")[:60],
         "next_action": str(raw.get("next_action") or "")[:200],
-        "used_memory_keys": [str(item)[:60] for item in (raw.get("used_memory_keys") or [])[:12]],
+        "used_memory_keys": [
+            normalize_agent_memory_key(item) or str(item)[:60]
+            for item in (raw.get("used_memory_keys") or [])[:12]
+        ],
         "memory_updates": memory_updates,
         "progress_suggestion": progress,
     }
@@ -3955,6 +4028,9 @@ async def chat(request: ChatRequest):
 只有在以下真实节点成立时才可以询问是否记录进度：完成一版简历、完成模拟面试、用户在复盘一次真实面试、比较或决策 Offer。
 普通问答、仅提到“面试”或已经提示过的同一节点，progress_suggestion 必须为 null。
 只保存后续求职有用且用户明确说出的职业信息；不保存身份证、电话、住址、健康、家庭等敏感信息。
+memory_updates 和 used_memory_keys 中的 key 必须严格使用以下英文值，不得翻译成中文：
+{','.join(sorted(AGENT_MEMORY_KEYS))}
+当用户明确说“请记住”并提供上述职业信息时，必须写入 memory_updates；口头说记住但不写入是不允许的。
 
 【已持久化的用户上下文】
 {memory_context}
@@ -3976,6 +4052,11 @@ async def chat(request: ChatRequest):
                 max_tokens=2600,
             )
             agent_result = sanitize_agent_result(json.loads(clean_json_response(repair)))
+        if not agent_result["memory_updates"] and should_extract_agent_memory(latest_user_text):
+            try:
+                agent_result["memory_updates"] = extract_agent_memory_updates(latest_user_text)
+            except Exception as memory_error:
+                print(f"[Chat Agent] memory extraction skipped after provider error: {memory_error}")
         response_text = agent_result["response"]
         # If search results exist but LLM didn't reference them, force inject
         if search_results:
