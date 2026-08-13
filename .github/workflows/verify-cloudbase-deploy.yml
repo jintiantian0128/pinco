@@ -1,6 +1,12 @@
 name: Verify CloudBase deployment
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - backend/**
+      - .github/workflows/verify-cloudbase-deploy.yml
   workflow_dispatch:
     inputs:
       confirm_deploy:
@@ -17,7 +23,7 @@ concurrency:
 
 jobs:
   verify:
-    if: github.event.inputs.confirm_deploy == 'deploy'
+    if: github.event_name == 'push' || github.event.inputs.confirm_deploy == 'deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -64,7 +70,7 @@ jobs:
         run: docker build --file backend/Dockerfile --tag "pinco-backend:${GITHUB_SHA}" backend
 
   deploy:
-    if: github.event.inputs.confirm_deploy == 'deploy'
+    if: github.event_name == 'push' || github.event.inputs.confirm_deploy == 'deploy'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
