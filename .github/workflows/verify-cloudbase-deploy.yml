@@ -34,10 +34,9 @@ jobs:
         env:
           WXCLOUD_APP_ID: ${{ secrets.WXCLOUD_APP_ID }}
           WXCLOUD_PRIVATE_KEY: ${{ secrets.WXCLOUD_PRIVATE_KEY }}
-          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
         run: |
           missing=0
-          for name in WXCLOUD_APP_ID WXCLOUD_PRIVATE_KEY WXCLOUD_ENV_ID; do
+          for name in WXCLOUD_APP_ID WXCLOUD_PRIVATE_KEY; do
             if [ -z "${!name}" ]; then
               echo "::error::$name is not configured in repository Actions secrets."
               missing=1
@@ -53,6 +52,49 @@ jobs:
           npx --yes @wxcloud/cli@2.3.3 login
           --appId "$WXCLOUD_APP_ID"
           --privateKey "$WXCLOUD_PRIVATE_KEY"
+
+      - name: Discover the CloudBase environment
+        id: cloudbase
+        run: |
+          raw="$(npx --yes @wxcloud/cli@2.3.3 env:list --json)"
+          mapfile -t env_ids < <(ENV_LIST_RAW="$raw" node -e '
+            const lines = (process.env.ENV_LIST_RAW || "").split(/\r?\n/).reverse();
+            let payload;
+            for (const line of lines) {
+              const start = line.indexOf("{\"code\"");
+              if (start < 0) continue;
+              try { payload = JSON.parse(line.slice(start)); break; } catch {}
+            }
+            for (const item of payload?.data || []) {
+              if (item.EnvId) process.stdout.write(`${item.EnvId}\n`);
+            }
+          ')
+          matches=()
+          for env_id in "${env_ids[@]}"; do
+            if service_raw="$(npx --yes @wxcloud/cli@2.3.3 service:list \
+              --envId "$env_id" \
+              --serviceName flask-jk7n \
+              --json)" && SERVICE_LIST_RAW="$service_raw" node -e '
+                const lines = (process.env.SERVICE_LIST_RAW || "").split(/\r?\n/).reverse();
+                let payload;
+                for (const line of lines) {
+                  const start = line.indexOf("{\"code\"");
+                  if (start < 0) continue;
+                  try { payload = JSON.parse(line.slice(start)); break; } catch {}
+                }
+                const found = (payload?.data || []).some(
+                  item => item.ServerName === "flask-jk7n"
+                );
+                process.exit(found ? 0 : 1);
+              '; then
+              matches+=("$env_id")
+            fi
+          done
+          if [ "${#matches[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one CloudBase environment containing flask-jk7n; found ${#matches[@]}."
+            exit 1
+          fi
+          echo "env_id=${matches[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Verify the production baseline
         id: baseline
@@ -76,7 +118,7 @@ jobs:
       - name: Record the rollback version
         id: rollback_target
         env:
-          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
+          WXCLOUD_ENV_ID: ${{ steps.cloudbase.outputs.env_id }}
         run: |
           raw="$(npx --yes @wxcloud/cli@2.3.3 version:list \
             --envId "$WXCLOUD_ENV_ID" \
@@ -100,7 +142,7 @@ jobs:
       - name: Validate deployment plan
         working-directory: backend
         env:
-          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
+          WXCLOUD_ENV_ID: ${{ steps.cloudbase.outputs.env_id }}
         run: >-
           npx --yes @wxcloud/cli@2.3.3 deploy
           --envId "$WXCLOUD_ENV_ID"
@@ -113,7 +155,7 @@ jobs:
         continue-on-error: true
         working-directory: backend
         env:
-          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
+          WXCLOUD_ENV_ID: ${{ steps.cloudbase.outputs.env_id }}
         run: >-
           npx --yes @wxcloud/cli@2.3.3 deploy
           --envId "$WXCLOUD_ENV_ID"
@@ -172,7 +214,7 @@ jobs:
       - name: Roll back the failed production release
         if: steps.rollback_check.outputs.required == 'true'
         env:
-          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
+          WXCLOUD_ENV_ID: ${{ steps.cloudbase.outputs.env_id }}
           ROLLBACK_VERSION: ${{ steps.rollback_target.outputs.version }}
         run: >-
           npx --yes @wxcloud/cli@2.3.3 run:rollback
