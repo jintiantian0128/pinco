@@ -1,0 +1,212 @@
+name: Verify CloudBase deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: Type deploy to update the flask-jk7n production service
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pinco-cloudbase-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event.inputs.confirm_deploy == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the tested main branch
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate deployment secrets
+        env:
+          WXCLOUD_APP_ID: ${{ secrets.WXCLOUD_APP_ID }}
+          WXCLOUD_PRIVATE_KEY: ${{ secrets.WXCLOUD_PRIVATE_KEY }}
+          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
+        run: |
+          missing=0
+          for name in WXCLOUD_APP_ID WXCLOUD_PRIVATE_KEY WXCLOUD_ENV_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is not configured in repository Actions secrets."
+              missing=1
+            fi
+          done
+          test "$missing" -eq 0
+
+      - name: Login to WeChat Cloud Hosting
+        env:
+          WXCLOUD_APP_ID: ${{ secrets.WXCLOUD_APP_ID }}
+          WXCLOUD_PRIVATE_KEY: ${{ secrets.WXCLOUD_PRIVATE_KEY }}
+        run: >-
+          npx --yes @wxcloud/cli@2.3.3 login
+          --appId "$WXCLOUD_APP_ID"
+          --privateKey "$WXCLOUD_PRIVATE_KEY"
+
+      - name: Verify the production baseline
+        id: baseline
+        env:
+          HEALTH_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health
+        run: |
+          response="$(curl --fail --silent --show-error --max-time 45 "$HEALTH_URL")"
+          HEALTH_RESPONSE="$response" node -e '
+            const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+            const ready = health.status === "online"
+              && typeof health.version === "string"
+              && health.version.length > 0
+              && health.llm?.online === true
+              && health.state?.durable === true
+              && health.state?.online === true;
+            if (!ready) process.exit(1);
+            process.stdout.write(`version=${health.version}\n`);
+          ' >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$response"
+
+      - name: Record the rollback version
+        id: rollback_target
+        env:
+          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
+        run: |
+          raw="$(npx --yes @wxcloud/cli@2.3.3 version:list \
+            --envId "$WXCLOUD_ENV_ID" \
+            --serviceName flask-jk7n \
+            --json)"
+          VERSION_LIST_RAW="$raw" node -e '
+            const lines = (process.env.VERSION_LIST_RAW || "").split(/\r?\n/).reverse();
+            let payload;
+            for (const line of lines) {
+              const start = line.indexOf("{\"code\"");
+              if (start < 0) continue;
+              try { payload = JSON.parse(line.slice(start)); break; } catch {}
+            }
+            const target = payload?.data?.find(
+              item => String(item.Status || "").toLowerCase() === "normal"
+            );
+            if (!target?.VersionName) process.exit(1);
+            process.stdout.write(`version=${target.VersionName}\n`);
+          ' >> "$GITHUB_OUTPUT"
+
+      - name: Validate deployment plan
+        working-directory: backend
+        env:
+          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
+        run: >-
+          npx --yes @wxcloud/cli@2.3.3 deploy
+          --envId "$WXCLOUD_ENV_ID"
+          --serviceName flask-jk7n
+          --port 80
+          --dryRun
+
+      - name: Deploy backend
+        id: deploy
+        continue-on-error: true
+        working-directory: backend
+        env:
+          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
+        run: >-
+          npx --yes @wxcloud/cli@2.3.3 deploy
+          --envId "$WXCLOUD_ENV_ID"
+          --serviceName flask-jk7n
+          --port 80
+
+      - name: Verify public health and deployed version
+        id: health
+        if: steps.deploy.outcome == 'success'
+        continue-on-error: true
+        env:
+          HEALTH_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health
+        run: |
+          for attempt in $(seq 1 12); do
+            response="$(curl --fail --silent --show-error --max-time 45 "$HEALTH_URL" || true)"
+            if HEALTH_RESPONSE="$response" node -e '
+              const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+              const ready = health.status === "online"
+                && health.version === "0.7.0"
+                && health.llm?.online === true
+                && health.state?.durable === true
+                && health.state?.online === true;
+              process.exit(ready ? 0 : 1);
+            '; then
+              printf '%s\n' "$response"
+              exit 0
+            fi
+            printf 'Attempt %s/12 has not reached the accepted production state.\n' "$attempt"
+            sleep 10
+          done
+          echo "CloudBase did not serve healthy Pinco 0.7.0 with DeepSeek and durable storage within the acceptance window." >&2
+          exit 1
+
+      - name: Check whether rollback is required
+        id: rollback_check
+        if: steps.deploy.outcome == 'failure' || steps.health.outcome == 'failure'
+        env:
+          BASELINE_VERSION: ${{ steps.baseline.outputs.version }}
+          HEALTH_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health
+        run: |
+          response="$(curl --fail --silent --show-error --max-time 45 "$HEALTH_URL" || true)"
+          if HEALTH_RESPONSE="$response" BASELINE_VERSION="$BASELINE_VERSION" node -e '
+            const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+            const restored = health.status === "online"
+              && health.version === process.env.BASELINE_VERSION
+              && health.llm?.online === true
+              && health.state?.durable === true
+              && health.state?.online === true;
+            process.exit(restored ? 0 : 1);
+          '; then
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Roll back the failed production release
+        if: steps.rollback_check.outputs.required == 'true'
+        env:
+          WXCLOUD_ENV_ID: ${{ secrets.WXCLOUD_ENV_ID }}
+          ROLLBACK_VERSION: ${{ steps.rollback_target.outputs.version }}
+        run: >-
+          npx --yes @wxcloud/cli@2.3.3 run:rollback
+          --envId "$WXCLOUD_ENV_ID"
+          --serviceName flask-jk7n
+          --version "$ROLLBACK_VERSION"
+          --noConfirm
+
+      - name: Verify production recovery
+        if: steps.deploy.outcome == 'failure' || steps.health.outcome == 'failure'
+        env:
+          BASELINE_VERSION: ${{ steps.baseline.outputs.version }}
+          HEALTH_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health
+        run: |
+          for attempt in $(seq 1 12); do
+            response="$(curl --fail --silent --show-error --max-time 45 "$HEALTH_URL" || true)"
+            if HEALTH_RESPONSE="$response" BASELINE_VERSION="$BASELINE_VERSION" node -e '
+              const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+              const restored = health.status === "online"
+                && health.version === process.env.BASELINE_VERSION
+                && health.llm?.online === true
+                && health.state?.durable === true
+                && health.state?.online === true;
+              process.exit(restored ? 0 : 1);
+            '; then
+              printf '%s\n' "$response"
+              echo "The previous production version is healthy again; the deployment remains failed." >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Automatic recovery could not restore the verified production baseline." >&2
+          exit 1
+
+      - name: Logout from WeChat Cloud Hosting
+        if: always()
+        run: npx --yes @wxcloud/cli@2.3.3 logout || true

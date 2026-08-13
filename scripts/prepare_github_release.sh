@@ -34,10 +34,12 @@ copy_tree() {
 
 for file in \
   .gitignore \
+  .github/workflows/verify-cloudbase-deploy.yml \
   README.md \
   DEVELOPMENT_ENTRYPOINT.md \
   STATUS.md \
   docs/DEPENDENCY_SECURITY_2026-08-13.md \
+  docs/GITHUB_CLOUDBASE_DEPLOYMENT_2026-08-13.md \
   docs/LEGACY_ASSET_MIGRATION_2026-08-13.md \
   docs/OPEN_SOURCE_ADOPTION_2026-08-04.md \
   docs/PMF_IMPLEMENTATION_STATUS_2026-08-05.md \
@@ -53,6 +55,7 @@ for file in \
   backend/requirements-local-asr.txt \
   backend/requirements.txt \
   backend/state_store.py \
+  backend/wxcloud.config.json \
   backend/test_admin_console.py \
   backend/test_career_taxonomy.py \
   backend/test_conversation_agent.py \
