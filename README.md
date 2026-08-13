@@ -1,101 +1,26 @@
-# AI产品经理求职助手
+# Pinco
 
-这是一个专门为AI产品经理求职者设计的工具集合，帮助您在上海寻找AI产品经理相关的工作机会。
+Pinco 是面向 0–5 年 AI 求职者的微信小程序求职 Agent：既提供简历、JD、岗位、面试练习和专家服务，也在拒信、等待和临场压力中提供可控、尊重隐私的情绪支持。
 
-## 功能特性
+当前唯一上线主线：
 
-- 🤖 **AI产品经理职位搜索**：智能搜索AI产品经理相关职位
-- 📊 **职位数据分析**：分析职位要求、技能需求等
-- 💡 **求职建议**：提供针对性的求职指导
-- 🔍 **多平台数据**：整合BOSS直聘等平台的招聘信息
+- `pinco-miniapp/`：Taro 微信小程序
+- `backend/`：FastAPI + DeepSeek-compatible LLM + 微信云托管 MySQL + 阿里云 ASR
 
-## 项目结构
+先阅读：
 
-```
-pinco_cursor/
-├── ai_product_manager_search.py    # AI产品经理职位搜索工具
-├── boss招聘信息/                    # BOSS直聘招聘数据
-│   ├── 上海/                       # 上海地区职位数据
-│   ├── 北京/                       # 北京地区职位数据
-│   ├── 深圳/                       # 深圳地区职位数据
-│   └── 杭州/                       # 杭州地区职位数据
-├── 知乎问答/                       # 知乎相关问答数据
-├── templates/                      # Web界面模板
-├── requirements.txt               # Python依赖包
-└── README.md                      # 项目说明文档
-```
+1. `DEVELOPMENT_ENTRYPOINT.md`
+2. `STATUS.md`
+3. `docs/PMF_IMPLEMENTATION_STATUS_2026-08-05.md`
+4. `docs/OPEN_SOURCE_ADOPTION_2026-08-04.md`
+5. `backend/DEPLOY_CLOUDRUN.md`
+6. `docs/LEGACY_ASSET_MIGRATION_2026-08-13.md`
+7. `docs/DEPENDENCY_SECURITY_2026-08-13.md`
 
-## 快速开始
+可信原则：没有来源链接的岗位不称为真实岗位；模型失败不返回固定诊断；未审核专家不展示；支付只以微信服务端验签、金额核对后的结果为准；自动化构建不替代微信开发者工具、实付退款和真机验收。
 
-### 1. 安装依赖
+## GitHub 主线范围
 
-```bash
-pip install -r requirements.txt
-```
+GitHub `main` 只发布当前可运行主线和必要文档。2025 年旧职位搜索原型保存在 `legacy/job-search-2025` 分支；其中仅岗位同义词和稳定的面试能力维度经过审计后适配到 `backend/career_taxonomy.py`。过期招聘 JSON、第三方内容抓取、固定模拟岗位和无法核验的公司面试断言不进入生产。
 
-### 2. 运行AI产品经理职位搜索
-
-```bash
-python3 ai_product_manager_search.py
-```
-
-### 3. 使用Web界面
-
-```bash
-python3 web_interface.py
-```
-
-## 主要工具
-
-### AI产品经理职位搜索工具
-
-`ai_product_manager_search.py` 是一个专门用于搜索AI产品经理相关职位的工具，具有以下功能：
-
-- 智能关键词匹配
-- 多维度职位筛选
-- 详细的职位信息展示
-- 个性化的求职建议
-
-### 使用方法
-
-```python
-from ai_product_manager_search import AIProductManagerJobSearch
-
-# 创建搜索实例
-searcher = AIProductManagerJobSearch()
-
-# 搜索AI产品经理职位
-jobs = searcher.search_ai_product_manager_jobs()
-
-# 显示搜索结果
-searcher.display_jobs(jobs)
-```
-
-## 数据来源
-
-- **BOSS直聘**：招聘信息数据
-- **知乎**：AI产品经理相关问答
-
-## 技术栈
-
-- **Python 3.8+**
-- **JSON数据处理**
-- **正则表达式**
-- **Web界面（可选）**
-
-## 贡献指南
-
-欢迎提交Issue和Pull Request来改进这个项目！
-
-## 许可证
-
-MIT License
-
-## 联系方式
-
-- 作者：jintiantian0128
-- 邮箱：jtt_0128@163.com
-
----
-
-**注意**：本项目仅用于学习和研究目的，请遵守相关平台的使用条款。
+发布前运行 `scripts/prepare_github_release.sh <空目录>` 生成白名单副本。脚本不会复制 `.env`、用户状态、简历、录音、日志、压缩包、依赖缓存或微信开发者工具私有配置。

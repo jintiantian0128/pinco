@@ -1,0 +1,435 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $page-spacing $page-padding 140rpx;
+  background: $color-bg-page;
+}
+
+.header {
+  margin-bottom: 28rpx;
+}
+
+.applyButton {
+  display: inline-flex;
+  margin-top: 14px;
+  padding: 9px 14px;
+  border: 1px solid #7C3AED;
+  border-radius: 999px;
+}
+
+.applyButton Text {
+  color: #6D28D9;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.emptyPanel {
+  margin: 8px 16px 20px;
+  padding: 24px 18px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.emptyTitle {
+  display: block;
+  color: #1F2937;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.emptyDesc {
+  display: block;
+  margin-top: 8px;
+  color: #6B7280;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.emptyAction {
+  display: inline-flex;
+  margin-top: 16px;
+  padding: 10px 18px;
+  background: #111827;
+  border-radius: 12px;
+}
+
+.emptyAction Text {
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.verifiedLabel {
+  display: block;
+  margin: 8px 0 4px;
+  color: #059669;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.noChargeNote {
+  display: block;
+  margin: 12px 0;
+  padding: 10px 12px;
+  color: #92400E;
+  background: #FFFBEB;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+}
+
+.desc {
+  display: block;
+  margin-top: 12rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.expertCard {
+  background: $color-bg-card;
+  border-radius: 28rpx;
+  padding: 30rpx;
+  box-shadow: $shadow-card;
+  margin-bottom: 24rpx;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.name {
+  display: block;
+  font-size: 32rpx;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.titleText {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.priceTag {
+  font-size: $font-size-xs;
+  color: $color-primary;
+  background: rgba(124, 77, 255, 0.12);
+  padding: 8rpx 16rpx;
+  border-radius: $radius-round;
+}
+
+.intro {
+  display: block;
+  margin-top: 18rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.tagsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+
+.tag {
+  padding: 10rpx 18rpx;
+  background: $color-bg-soft;
+  border-radius: $radius-round;
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
+}
+
+.bottomRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+.metrics {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.bookButton {
+  @include button-reset;
+  min-width: 180rpx;
+  height: $button-height-sm;
+  padding: 0 24rpx;
+  border-radius: $radius-button;
+  background: $color-text-primary;
+  color: $color-text-white;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+
+  &:active {
+    opacity: 0.92;
+    transform: scale(0.98);
+  }
+}
+
+/* ---- 专家详情弹层 ---- */
+.detailOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+}
+
+.detailPanel {
+  width: 90%;
+  max-height: 75vh;
+  background: $color-bg-card;
+  border-radius: 28rpx;
+  padding: 28rpx;
+  box-shadow: $shadow-float;
+}
+
+.detailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.detailName {
+  font-size: 36rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+}
+
+.detailClose {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: $color-bg-page;
+}
+
+.detailClose Text {
+  font-size: 28rpx;
+  color: $color-text-secondary;
+}
+
+.detailTitle {
+  display: block;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  margin-bottom: 8rpx;
+}
+
+.detailPrice {
+  display: block;
+  font-size: 32rpx;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+  margin-bottom: 24rpx;
+}
+
+.detailSection {
+  margin-bottom: 24rpx;
+}
+
+.detailSectionTitle {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: 12rpx;
+}
+
+.detailIntro {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.detailTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.detailTag {
+  padding: 10rpx 18rpx;
+  background: $color-bg-soft;
+  border-radius: $radius-round;
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
+}
+
+.detailMetrics {
+  display: flex;
+  gap: 24rpx;
+}
+
+.detailMetric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.detailMetricValue {
+  font-size: 32rpx;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+}
+
+.detailMetricLabel {
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+}
+
+.detailBookButton {
+  padding: 24rpx 0;
+  background: $color-primary;
+  border-radius: $radius-button;
+  text-align: center;
+  margin-top: 8rpx;
+}
+
+.detailBookButton:active {
+  opacity: 0.92;
+  transform: scale(0.98);
+}
+
+.detailBookText {
+  font-size: $font-size-md;
+  color: $color-text-white;
+  font-weight: $font-weight-semibold;
+}
+
+.paySection {
+  margin-bottom: 24rpx;
+}
+
+.payLabel {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: 12rpx;
+}
+
+.slotGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.slotChip {
+  padding: 14rpx 24rpx;
+  background: $color-bg-page;
+  border-radius: $radius-lg;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.slotChipActive {
+  background: rgba($color-primary, 0.12);
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.payInput {
+  width: 100%;
+  min-height: 72rpx;
+  font-size: $font-size-md;
+  background: $color-bg-page;
+  border-radius: $radius-lg;
+  padding: 16rpx;
+}
+
+.payPriceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-top: 2rpx solid $color-divider;
+  margin-top: 8rpx;
+}
+
+.payPriceLabel {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.payPriceInfo {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+}
+
+.payOriginalPrice {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  text-decoration: line-through;
+}
+
+.payActualPrice {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+}
+
+.payDiscountHint {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-gold;
+  margin-bottom: 16rpx;
+}
+
+.confirmRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16rpx 0;
+  border-bottom: 2rpx solid $color-divider;
+}
+
+.confirmLabel {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  flex-shrink: 0;
+}
+
+.confirmValue {
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  text-align: right;
+  max-width: 70%;
+}
+
+.confirmPrice {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+}

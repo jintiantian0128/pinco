@@ -1,0 +1,1215 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: $color-bg-page;
+}
+
+/* ---- 消息滚动区 ---- */
+.messageScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20rpx $page-padding 0;
+}
+
+/* ---- 固定顶部区域 ---- */
+.stickyHeader {
+  flex-shrink: 0;
+  padding: 16rpx $page-padding 0;
+  background: $color-bg-page;
+  border-bottom: 2rpx solid rgba(0, 0, 0, 0.04);
+}
+
+/* ---- 顶部场景 Tab 横排 ---- */
+.scenarioTabBar {
+  display: flex;
+  gap: 12rpx;
+  padding: 0 0 16rpx;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scenarioTab {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 10rpx 18rpx;
+  background: $color-bg-card;
+  border-radius: 28rpx;
+  box-shadow: $shadow-card;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.scenarioTabActive {
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+}
+
+.scenarioTabActive .scenarioTabLabel {
+  color: $color-text-white;
+}
+
+.scenarioTabIcon {
+  font-size: 24rpx;
+}
+
+.scenarioTabLabel {
+  font-size: 22rpx;
+  color: $color-text-primary;
+  font-weight: $font-weight-semibold;
+}
+
+/* ---- 对话操作栏 ---- */
+.actionBar {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 0 0 12rpx;
+  margin-bottom: 4rpx;
+}
+
+.actionBarButton {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 8rpx 14rpx;
+  background: rgba(124, 77, 255, 0.06);
+  border-radius: 20rpx;
+}
+
+.actionBarIcon {
+  font-size: 22rpx;
+}
+
+.actionBarLabel {
+  font-size: 20rpx;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.actionBarDivider {
+  width: 1rpx;
+  height: 20rpx;
+  background: $color-divider;
+}
+
+/* ---- 历史对话弹层 ---- */
+.historyOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+}
+
+.historyPanel {
+  width: 90%;
+  max-height: 70vh;
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  padding: 20rpx 0;
+  box-shadow: $shadow-float;
+  display: flex;
+  flex-direction: column;
+}
+
+.historyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24rpx 16rpx;
+  border-bottom: 2rpx solid $color-divider;
+}
+
+.historyTitle {
+  font-size: 30rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+}
+
+.historyClose {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: $color-bg-page;
+}
+
+.historyClose Text {
+  font-size: 24rpx;
+  color: $color-text-secondary;
+}
+
+.historyEmpty {
+  padding: 48rpx 24rpx;
+  text-align: center;
+}
+
+.historyEmpty Text {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.historyList {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 8rpx 24rpx;
+}
+
+.historyItem {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx 0;
+  border-bottom: 2rpx solid rgba(0, 0, 0, 0.04);
+}
+
+.historyItemMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.historyItemTitle {
+  display: block;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  font-weight: $font-weight-semibold;
+  @include text-ellipsis;
+}
+
+.historyItemMeta {
+  display: block;
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+  margin-top: 4rpx;
+}
+
+.historyItemDelete {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ---- 空状态引导 ---- */
+.welcomeWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48rpx 0;
+}
+
+.welcomeCard {
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+
+.welcomeTitle {
+  display: block;
+  font-size: 36rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+}
+
+.welcomeDesc {
+  display: block;
+  margin-top: 12rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.quickGrid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16rpx;
+  width: 100%;
+  margin-bottom: 32rpx;
+}
+
+.quickItem {
+  width: calc(50% - 8rpx);
+  min-height: 142rpx;
+  padding: 22rpx;
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  box-shadow: $shadow-card;
+  box-sizing: border-box;
+}
+
+.quickLabel {
+  display: block;
+  font-size: $font-size-sm;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.quickDesc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 21rpx;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+}
+
+.welcomeTip {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  margin-top: 24rpx;
+  text-align: center;
+  line-height: $line-height-normal;
+}
+
+/* ---- 对话中识别到求职状态后的轻量确认卡 ---- */
+.supportFeedbackCard {
+  margin: 12rpx 24rpx 20rpx 104rpx;
+  padding: 20rpx;
+  background: #FFF7ED;
+  border-radius: 18rpx;
+}
+
+.supportFeedbackTitle { display: block; color: #7C2D12; font-size: 25rpx; font-weight: 700; }
+.supportFeedbackDesc { display: block; margin-top: 8rpx; color: #9A3412; font-size: 21rpx; line-height: 1.5; }
+.supportFeedbackActions { display: flex; gap: 12rpx; margin-top: 16rpx; }
+.supportFeedbackGhost, .supportFeedbackPrimary { flex: 1; padding: 14rpx 10rpx; border-radius: 12rpx; text-align: center; }
+.supportFeedbackGhost { background: #FFEDD5; }
+.supportFeedbackPrimary { background: #EA580C; }
+.supportFeedbackGhost Text { color: #9A3412; font-size: 22rpx; }
+.supportFeedbackPrimary Text { color: #FFF; font-size: 22rpx; font-weight: 600; }
+
+.inlineConfirmCard {
+  margin: 0 0 24rpx 80rpx;
+  padding: 20rpx;
+  border-radius: 24rpx;
+  background: #fff7ed;
+  border: 2rpx solid rgba(249, 115, 22, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.confirmMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.confirmTitle {
+  display: block;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.confirmDesc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  @include text-ellipsis;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 10rpx;
+  flex-shrink: 0;
+}
+
+.confirmGhost,
+.confirmPrimary {
+  @include button-reset;
+  height: 56rpx;
+  padding: 0 20rpx;
+  border-radius: $radius-round;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+}
+
+.confirmGhost {
+  background: rgba(255, 255, 255, 0.9);
+  color: $color-text-secondary;
+}
+
+.confirmPrimary {
+  background: #f97316;
+  color: $color-text-white;
+}
+
+/* ---- 面试状态 ---- */
+.interviewBadge {
+  margin-top: 8rpx;
+  padding: 4rpx 12rpx;
+  background: rgba(124, 77, 255, 0.1);
+  border-radius: 8rpx;
+  display: inline-flex;
+}
+
+.interviewBadgeText {
+  font-size: 20rpx;
+  color: $color-primary;
+  font-weight: 600;
+}
+
+/* ---- 打字指示器 ---- */
+.typingIndicator {
+  display: flex;
+  gap: 6rpx;
+  margin-top: 8rpx;
+}
+
+.typingDot {
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background: $color-text-tertiary;
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typingDot:nth-child(1) { animation-delay: -0.32s; }
+.typingDot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* ---- 粗体文字 ---- */
+.boldText {
+  font-weight: 700;
+  color: $color-text-primary;
+}
+
+/* ---- 面试 / JD 输入栏 ---- */
+.interviewInputBar,
+.jdInputBar {
+  flex-shrink: 0;
+  padding: 16rpx 20rpx;
+  background: rgba(255, 255, 255, 0.98);
+  border-top: 2rpx solid rgba(0, 0, 0, 0.04);
+}
+
+.interviewSetupBar {
+  flex-shrink: 0;
+  max-height: 72vh;
+  box-sizing: border-box;
+  padding: 20rpx;
+  background: rgba(255, 255, 255, 0.98);
+  border-top: 2rpx solid rgba(0, 0, 0, 0.04);
+}
+
+.interviewLabel {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.interviewTextarea,
+.jdTextarea {
+  width: 100%;
+  min-height: 72rpx;
+  font-size: $font-size-md;
+  background: $color-bg-page;
+  border-radius: 16rpx;
+  padding: 12rpx 16rpx;
+  margin-bottom: 12rpx;
+}
+
+.jdTextarea {
+  min-height: 200rpx;
+}
+
+.interviewButtons {
+  display: flex;
+  gap: 16rpx;
+}
+
+.interviewCancel {
+  flex: 1;
+  padding: 16rpx 0;
+  background: $color-bg-page;
+  border-radius: $radius-button;
+  text-align: center;
+}
+
+.interviewCancel Text {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.interviewConfirm {
+  flex: 1;
+  padding: 16rpx 0;
+  background: $color-primary;
+  border-radius: $radius-button;
+  text-align: center;
+}
+
+.interviewConfirm Text {
+  font-size: $font-size-sm;
+  color: $color-text-white;
+  font-weight: $font-weight-semibold;
+}
+
+/* ---- Action Menu 弹层 ---- */
+.actionMenuOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+}
+
+.actionMenu {
+  width: 90%;
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  padding: 12rpx 0;
+  box-shadow: $shadow-float;
+}
+
+.actionMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 24rpx 32rpx;
+}
+
+.actionMenuIcon {
+  font-size: 36rpx;
+}
+
+.actionMenuText {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.actionMenuDivider {
+  height: 2rpx;
+  background: $color-divider;
+  margin: 0 32rpx;
+}
+
+.messageActionSheet {
+  width: calc(100% - 40rpx);
+  box-sizing: border-box;
+  padding: 26rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  border-radius: 28rpx 28rpx 0 0;
+  background: #FFFFFF;
+  box-shadow: 0 -12rpx 40rpx rgba(17, 24, 39, 0.12);
+}
+
+.messageActionTitle {
+  display: block;
+  margin: 0 6rpx 20rpx;
+  color: $color-text-secondary;
+  font-size: 24rpx;
+  font-weight: $font-weight-semibold;
+}
+
+.messageActionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14rpx;
+}
+
+.messageActionItem {
+  min-height: 112rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  border-radius: 18rpx;
+  background: #F9FAFB;
+  color: $color-text-primary;
+  font-size: 23rpx;
+}
+
+.messageActionIcon {
+  color: #111827;
+  font-size: 34rpx;
+  line-height: 1;
+}
+
+.textSelectionOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(17, 24, 39, 0.48);
+}
+
+.textSelectionPanel {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  border-radius: 28rpx 28rpx 0 0;
+  background: #FFFFFF;
+}
+
+.textSelectionTitle {
+  display: block;
+  color: $color-text-primary;
+  font-size: 30rpx;
+  font-weight: $font-weight-bold;
+}
+
+.textSelectionHint {
+  display: block;
+  margin: 8rpx 0 18rpx;
+  color: $color-text-tertiary;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.textSelectionArea {
+  width: 100%;
+  height: 320rpx;
+  box-sizing: border-box;
+  padding: 20rpx;
+  border: 2rpx solid #E5E7EB;
+  border-radius: 16rpx;
+  background: #F9FAFB;
+  color: $color-text-primary;
+  font-size: 26rpx;
+  line-height: 1.6;
+}
+
+.textSelectionButtons {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.textSelectionCancel,
+.textSelectionCopy {
+  flex: 1;
+  padding: 20rpx;
+  border-radius: 16rpx;
+  text-align: center;
+  font-size: 25rpx;
+}
+
+.textSelectionCancel { background: #F3F4F6; color: $color-text-secondary; }
+.textSelectionCopy { background: #111827; color: #FFFFFF; font-weight: $font-weight-semibold; }
+
+/* ---- 消息长按菜单 ---- */
+.messageMenuOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.messageMenu {
+  width: 60%;
+  background: $color-bg-card;
+  border-radius: 24rpx;
+  padding: 12rpx 0;
+  box-shadow: $shadow-float;
+}
+
+.messageMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 24rpx 32rpx;
+}
+
+.messageMenuIcon {
+  font-size: 36rpx;
+}
+
+.messageMenuText {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.messageMenuDivider {
+  height: 2rpx;
+  background: $color-divider;
+  margin: 0 32rpx;
+}
+
+/* ---- 消息气泡 ---- */
+.messageRow {
+  display: flex;
+  margin-bottom: 24rpx;
+}
+
+.messageRowUser {
+  justify-content: flex-end;
+}
+
+.avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-right: 16rpx;
+}
+
+.avatarUser {
+  order: 2;
+  margin-right: 0;
+  margin-left: 16rpx;
+  background: #EC4899;
+  color: #FFFFFF;
+}
+
+.avatarAssistant {
+  background: #F3E8FF;
+  color: #7C3AED;
+}
+
+.messageBubble {
+  padding: 20rpx 24rpx;
+  border-radius: 24rpx;
+  font-size: $font-size-sm;
+  line-height: $line-height-loose;
+  white-space: pre-wrap;
+}
+
+.bubbleAssistant {
+  background: $color-bg-card;
+  color: $color-text-primary;
+  box-shadow: $shadow-card;
+  border-top-left-radius: 8rpx;
+}
+
+.bubbleUser {
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  color: $color-text-white;
+  border-top-right-radius: 8rpx;
+}
+
+.messageContentWrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 78%;
+}
+
+.messageContent {
+  line-height: 1.6;
+}
+
+.timeText {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  opacity: 0.7;
+}
+
+/* ---- AI消息操作按钮 ---- */
+.messageActions {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 8rpx;
+  padding-left: 8rpx;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 16rpx;
+  background: rgba(124, 77, 255, 0.06);
+}
+
+.actionBtnActive {
+  background: rgba(124, 77, 255, 0.15);
+}
+
+.actionBtnIcon {
+  font-size: 20rpx;
+}
+
+.actionBtnText {
+  font-size: 18rpx;
+  color: $color-text-secondary;
+}
+
+.messageImage {
+  max-width: 100%;
+  max-height: 400rpx;
+  border-radius: 12rpx;
+  margin-top: 8rpx;
+}
+
+/* ---- 语音消息气泡 ---- */
+.voiceBubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx 24rpx;
+  background: rgba(124, 77, 255, 0.1);
+  border-radius: 24rpx;
+  margin-top: 8rpx;
+}
+
+.voiceIcon {
+  font-size: 28rpx;
+}
+
+.voiceDuration {
+  font-size: 24rpx;
+  color: $color-text-primary;
+  font-weight: $font-weight-semibold;
+}
+
+/* ---- 推荐卡片 ---- */
+.recCardWrap {
+  max-width: 78%;
+  margin-left: 16rpx;
+}
+
+.recLabel {
+  display: block;
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+  margin-bottom: 8rpx;
+  margin-left: 4rpx;
+}
+
+.recCard {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx 20rpx;
+  background: $color-bg-card;
+  border-radius: 18rpx;
+  border: 2rpx solid rgba(0, 0, 0, 0.04);
+  margin-bottom: 10rpx;
+}
+
+.recIcon {
+  font-size: 36rpx;
+  flex-shrink: 0;
+}
+
+.recBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.recTitle {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  @include text-ellipsis;
+}
+
+.recSubtitle {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+  @include text-ellipsis;
+}
+
+.recArrow {
+  font-size: 28rpx;
+  color: $color-text-tertiary;
+  flex-shrink: 0;
+}
+
+/* ---- 职位卡片 ---- */
+.jobCard {
+  padding: 18rpx 20rpx;
+  background: $color-bg-card;
+  border-radius: 18rpx;
+  border: 2rpx solid rgba(0, 0, 0, 0.04);
+  margin-bottom: 12rpx;
+  box-shadow: $shadow-card;
+}
+
+.jobCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-bottom: 6rpx;
+}
+
+.jobTitle {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  flex: 1;
+  min-width: 0;
+  @include text-ellipsis;
+}
+
+.jobSalary {
+  font-size: 20rpx;
+  color: #f97316;
+  font-weight: $font-weight-bold;
+  flex-shrink: 0;
+}
+
+.jobCompany {
+  display: block;
+  font-size: 20rpx;
+  color: $color-text-secondary;
+  margin-bottom: 8rpx;
+}
+
+.jobSummary {
+  display: block;
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+  line-height: 1.5;
+  margin-bottom: 10rpx;
+  @include text-ellipsis;
+}
+
+.jobCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.jobSource {
+  font-size: 18rpx;
+  color: $color-text-tertiary;
+}
+
+.jobActionButton {
+  padding: 6rpx 14rpx;
+  background: rgba(124, 77, 255, 0.08);
+  border-radius: 12rpx;
+  flex-shrink: 0;
+}
+
+.jobActionText {
+  font-size: 20rpx;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+/* ---- 底部输入区 ---- */
+.footer {
+  flex-shrink: 0;
+  padding: 12rpx 20rpx calc(12rpx + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.98);
+  border-top: 2rpx solid rgba(0, 0, 0, 0.04);
+}
+
+.draftTools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 10rpx 8rpx 80rpx;
+}
+
+.selectAllButton {
+  padding: 7rpx 14rpx;
+  border-radius: 14rpx;
+  background: rgba(124, 77, 255, 0.08);
+  color: $color-primary;
+  font-size: 20rpx;
+}
+
+.draftCount {
+  color: $color-text-tertiary;
+  font-size: 18rpx;
+}
+
+.inputWrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 12rpx;
+  background: $color-bg-page;
+  border-radius: 28rpx;
+  padding: 10rpx 12rpx;
+}
+
+.voiceButton {
+  @include button-reset;
+  position: relative;
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 50%;
+  background: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4rpx 10rpx rgba(17, 24, 39, 0.18);
+}
+
+.voiceAccessibleLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.voiceButtonActive {
+  background: #111827;
+  box-shadow: 0 4rpx 14rpx rgba(17, 24, 39, 0.28);
+}
+
+.voiceDot {
+  color: #FFFFFF;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.micIcon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 36rpx;
+  height: 40rpx;
+  position: relative;
+}
+
+.micBody {
+  width: 16rpx;
+  height: 24rpx;
+  border: 2rpx solid #FFFFFF;
+  background: transparent;
+  border-radius: 12rpx;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.micStem {
+  width: 22rpx;
+  height: 18rpx;
+  border: 2rpx solid #FFFFFF;
+  border-top: 0;
+  border-radius: 0 0 14rpx 14rpx;
+  position: relative;
+  top: 12rpx;
+}
+
+.micBase {
+  width: 16rpx;
+  height: 2rpx;
+  border-radius: 3rpx;
+  background: #FFFFFF;
+  position: absolute;
+  bottom: 0;
+}
+
+.recordingIndicator {
+  display: flex;
+  align-items: center;
+  gap: 3rpx;
+}
+
+.recordingWave {
+  width: 4rpx;
+  height: 16rpx;
+  background: #FFFFFF;
+  border-radius: 2rpx;
+  animation: wave 0.8s ease-in-out infinite;
+
+  &:nth-child(1) { animation-delay: 0s; height: 12rpx; }
+  &:nth-child(2) { animation-delay: 0.2s; height: 20rpx; }
+  &:nth-child(3) { animation-delay: 0.4s; height: 14rpx; }
+}
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.5); }
+}
+
+.attachButton {
+  @include button-reset;
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 50%;
+  background: #F0FDF4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.textarea {
+  flex: 1;
+  min-height: 72rpx;
+  max-height: 200rpx;
+  font-size: $font-size-md;
+  line-height: $line-height-normal;
+  padding: 14rpx 0;
+}
+
+/* ---- 录音状态提示：不覆盖页面、不拦截第二次点按或松手 ---- */
+.recordOverlay {
+  position: fixed;
+  left: 50%;
+  bottom: calc(150rpx + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 80rpx);
+  box-sizing: border-box;
+  padding: 16rpx 24rpx;
+  border-radius: 36rpx;
+  background: rgba(17, 24, 39, 0.92);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.recordIcon {
+  font-size: 28rpx;
+}
+
+.recordHint {
+  font-size: 24rpx;
+  color: #FFFFFF;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---- 微信隐私授权：同意按钮必须是 agreePrivacyAuthorization Button ---- */
+.privacyOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40rpx;
+  background: rgba(17, 24, 39, 0.52);
+}
+
+.privacyCard {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 40rpx 36rpx 32rpx;
+  border-radius: 28rpx;
+  background: #FFFFFF;
+  box-shadow: 0 24rpx 64rpx rgba(17, 24, 39, 0.2);
+}
+
+.privacyTitle {
+  display: block;
+  margin-bottom: 18rpx;
+  color: $color-text-primary;
+  font-size: 34rpx;
+  font-weight: $font-weight-bold;
+  text-align: center;
+}
+
+.privacyDescription {
+  display: block;
+  color: $color-text-secondary;
+  font-size: 26rpx;
+  line-height: 1.7;
+}
+
+.privacyActions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 32rpx;
+}
+
+.privacyDecline,
+.privacyAgree {
+  flex: 1;
+  height: 80rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  font-weight: $font-weight-semibold;
+  line-height: 80rpx;
+
+  &::after {
+    border: 0;
+  }
+}
+
+.privacyDecline {
+  color: $color-text-secondary;
+  background: #F3F4F6;
+}
+
+.privacyAgree {
+  color: #FFFFFF;
+  background: $color-primary;
+}
+.durationRow {
+  display: flex;
+  gap: 12rpx;
+  margin: 14rpx 0;
+}
+
+.durationChip {
+  flex: 1;
+  padding: 16rpx 8rpx;
+  border: 1rpx solid #E5E7EB;
+  border-radius: 16rpx;
+  color: $color-text-secondary;
+  font-size: 24rpx;
+  text-align: center;
+}
+
+.durationChipActive {
+  border-color: $color-primary;
+  background: rgba(236, 72, 153, 0.08);
+  color: $color-primary;
+}
+
+.durationHint {
+  display: block;
+  margin-bottom: 18rpx;
+  color: $color-text-secondary;
+  font-size: 22rpx;
+  line-height: 1.5;
+}

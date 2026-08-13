@@ -1,0 +1,31 @@
+@use '@/styles/variables.scss' as *;
+
+.page { min-height: 100vh; padding: 28rpx $page-padding 80rpx; background: $color-bg-page; }
+.hero { margin-bottom: 24rpx; }
+.title { display: block; font-size: 38rpx; font-weight: 700; color: $color-text-primary; }
+.desc { display: block; margin-top: 10rpx; font-size: 26rpx; color: $color-text-secondary; line-height: 1.65; }
+.card, .statusCard { margin-bottom: 22rpx; padding: 28rpx; background: #FFF; border-radius: 24rpx; box-shadow: $shadow-card; }
+.statusCard { background: #F5F3FF; }
+.warningCard { margin-bottom: 22rpx; padding: 22rpx 24rpx; border: 2rpx solid #F59E0B; border-radius: 18rpx; background: #FFFBEB; }
+.warningTitle { display: block; color: #92400E; font-size: 26rpx; font-weight: 700; }
+.warningText { display: block; margin-top: 6rpx; color: #B45309; font-size: 23rpx; line-height: 1.55; }
+.statusTitle, .sectionTitle { display: block; font-size: 30rpx; font-weight: 700; color: #4C1D95; margin-bottom: 16rpx; }
+.statusDesc, .reviewNote, .hint { display: block; font-size: 24rpx; line-height: 1.6; color: $color-text-secondary; }
+.reviewNote { margin-top: 8rpx; color: #92400E; }
+.label { display: block; margin: 18rpx 0 8rpx; font-size: 24rpx; font-weight: 600; color: $color-text-primary; }
+.input, .textarea, .longTextarea { box-sizing: border-box; width: 100%; padding: 20rpx 22rpx; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 16rpx; font-size: 26rpx; color: $color-text-primary; }
+.textarea { height: 160rpx; line-height: 1.55; }
+.longTextarea { height: 240rpx; line-height: 1.55; }
+.fieldCount { display: block; margin-top: 6rpx; color: $color-text-tertiary; font-size: 20rpx; text-align: right; }
+.primaryButton { margin-top: 24rpx; padding: 22rpx; background: #111827; border-radius: 16rpx; text-align: center; }
+.primaryButton Text, .primarySmall Text { color: #FFF; font-size: 26rpx; font-weight: 700; }
+.listTitle { display: block; margin: 30rpx 4rpx 16rpx; font-size: 30rpx; font-weight: 700; color: $color-text-primary; }
+.bookingTitle { display: block; font-size: 28rpx; font-weight: 700; color: $color-text-primary; }
+.bookingMeta { display: block; margin-top: 8rpx; color: #7C3AED; font-size: 24rpx; }
+.bookingDesc, .delivery { display: block; margin-top: 12rpx; color: $color-text-secondary; font-size: 24rpx; line-height: 1.6; }
+.delivery { padding: 16rpx; background: #ECFDF5; border-radius: 12rpx; color: #065F46; }
+.actionRow { display: flex; gap: 16rpx; margin-top: 20rpx; }
+.secondaryButton, .primarySmall { flex: 1; padding: 18rpx; border-radius: 14rpx; text-align: center; }
+.secondaryButton { background: #F3F4F6; }
+.secondaryButton Text { color: #4B5563; font-size: 25rpx; }
+.primarySmall { background: #111827; }

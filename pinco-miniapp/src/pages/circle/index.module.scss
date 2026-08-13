@@ -1,0 +1,134 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $page-spacing $page-padding 140rpx;
+  background: $color-bg-page;
+}
+
+.header {
+  margin-bottom: 28rpx;
+}
+
+.title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+}
+
+.desc {
+  display: block;
+  margin-top: 12rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.postCard {
+  background: $color-bg-card;
+  border-radius: 28rpx;
+  padding: 28rpx;
+  box-shadow: $shadow-card;
+  margin-bottom: 24rpx;
+}
+
+.postTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.authorBlock {
+  flex: 1;
+  min-width: 0;
+}
+
+.author {
+  display: block;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.meta {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.summonButton {
+  @include button-reset;
+  min-width: 184rpx;
+  height: 68rpx;
+  padding: 0 24rpx;
+  border-radius: $radius-round;
+  background: rgba(124, 77, 255, 0.12);
+  color: $color-primary;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.titleText {
+  display: block;
+  margin-top: 22rpx;
+  font-size: 32rpx;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  line-height: 1.4;
+}
+
+.contentText {
+  display: block;
+  margin-top: 14rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  margin-top: 22rpx;
+  padding-top: 22rpx;
+  border-top: 2rpx solid $color-divider;
+}
+
+.actionText {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.commentList {
+  margin-top: 24rpx;
+}
+
+.commentCard {
+  background: $color-bg-soft;
+  border-radius: 22rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+}
+
+.commentAuthor {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.commentText {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
