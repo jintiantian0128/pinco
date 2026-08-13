@@ -65,6 +65,8 @@ class TrustFoundationTests(unittest.TestCase):
         valid_png = b"\x89PNG\r\n\x1a\n" + b"payload"
         with patch.object(main, "get_uploaded_file", new=AsyncMock(return_value=("screenshot.png", valid_png, {"user_id": "u1"}))), patch.object(
             main, "user_session_is_valid", return_value=True
+        ), patch.object(
+            main, "get_image_ocr_config_issue", return_value="图片文字识别尚未启用"
         ):
             result = asyncio.run(main.upload_image(request))
         self.assertFalse(result["stored"])
