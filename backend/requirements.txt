@@ -14,3 +14,7 @@ baidusearch>=1.0.3
 aliyun-python-sdk-core==2.15.1
 pymongo>=4.8.0
 PyMySQL>=1.1.1
+# Local-only Chinese/English OCR. The small ONNX models are bundled in the
+# wheel, so user images are not sent to a new external OCR service.
+rapidocr==3.9.2
+onnxruntime>=1.17.0,<2.0.0

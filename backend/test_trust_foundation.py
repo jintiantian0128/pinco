@@ -61,13 +61,57 @@ class TrustFoundationTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 502)
 
     def test_image_validation_receipt_has_no_fake_remote_url(self):
-        request = object()
+        request = type("RequestStub", (), {"headers": {"x-pinco-session": "token"}})()
         valid_png = b"\x89PNG\r\n\x1a\n" + b"payload"
-        with patch.object(main, "get_uploaded_file", new=AsyncMock(return_value=("screenshot.png", valid_png, {}))):
+        with patch.object(main, "get_uploaded_file", new=AsyncMock(return_value=("screenshot.png", valid_png, {"user_id": "u1"}))), patch.object(
+            main, "user_session_is_valid", return_value=True
+        ):
             result = asyncio.run(main.upload_image(request))
         self.assertFalse(result["stored"])
         self.assertFalse(result["analysis_available"])
         self.assertNotIn("url", result)
+
+    def test_image_ocr_returns_reviewable_text_without_retaining_original(self):
+        request = type("RequestStub", (), {"headers": {"x-pinco-session": "token"}})()
+        valid_png = b"\x89PNG\r\n\x1a\n" + b"payload"
+        with patch.object(main, "get_uploaded_file", new=AsyncMock(return_value=("jd.png", valid_png, {"user_id": "u1"}))), patch.object(
+            main, "user_session_is_valid", return_value=True
+        ), patch.object(
+            main, "get_image_ocr_config_issue", return_value=None
+        ), patch.object(
+            main, "extract_text_from_image", return_value="AI 产品经理\n3 年工作经验\n上海"
+        ):
+            result = asyncio.run(main.upload_image(request))
+        self.assertTrue(result["analysis_available"])
+        self.assertEqual(result["extracted_text"], "AI 产品经理\n3 年工作经验\n上海")
+        self.assertFalse(result["stored"])
+        self.assertFalse(result["content_retained"])
+        self.assertNotIn("url", result)
+
+    def test_image_ocr_failure_is_explicit(self):
+        request = type("RequestStub", (), {"headers": {"x-pinco-session": "token"}})()
+        valid_jpeg = b"\xff\xd8\xff" + b"payload"
+        with patch.object(main, "get_uploaded_file", new=AsyncMock(return_value=("resume.jpg", valid_jpeg, {"user_id": "u1"}))), patch.object(
+            main, "user_session_is_valid", return_value=True
+        ), patch.object(
+            main, "get_image_ocr_config_issue", return_value=None
+        ), patch.object(
+            main, "extract_text_from_image", side_effect=RuntimeError("engine unavailable")
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(main.upload_image(request))
+        self.assertEqual(raised.exception.status_code, 502)
+        self.assertEqual(raised.exception.detail["code"], "IMAGE_OCR_FAILED")
+
+    def test_image_ocr_requires_a_valid_user_session(self):
+        request = type("RequestStub", (), {"headers": {"x-pinco-session": "expired"}})()
+        valid_png = b"\x89PNG\r\n\x1a\n" + b"payload"
+        with patch.object(main, "get_uploaded_file", new=AsyncMock(return_value=("jd.png", valid_png, {"user_id": "u1"}))), patch.object(
+            main, "user_session_is_valid", return_value=False
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(main.upload_image(request))
+        self.assertEqual(raised.exception.status_code, 401)
 
     def test_membership_is_not_activated_without_payment(self):
         with self.assertRaises(HTTPException) as raised:

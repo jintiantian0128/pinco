@@ -225,7 +225,7 @@ jobs:
           WXCLOUD_ENV_ID: ${{ steps.cloudbase.outputs.env_id }}
         run: |
           set +e
-          npx --yes @wxcloud/cli@2.3.3 deploy \
+          timeout --signal=TERM 12m npx --yes @wxcloud/cli@2.3.3 deploy \
             --envId "$WXCLOUD_ENV_ID" \
             --serviceName flask-jk7n \
             --port 80 2>&1 | tee "$RUNNER_TEMP/wxcloud-deploy.log"
@@ -241,6 +241,8 @@ jobs:
 
           if [ "$submitted" != true ]; then
             echo "::error::CloudBase did not confirm that a new version was submitted."
+          elif [ "$cli_exit_code" -eq 124 ]; then
+            echo "::warning::CloudBase accepted the release, but its CLI exceeded the 12-minute polling limit. Public health is the authoritative deployment gate."
           elif [ "$cli_exit_code" -ne 0 ]; then
             echo "::warning::CloudBase accepted the release, but its CLI could not finish polling build logs. Public health is the authoritative deployment gate."
           fi
@@ -288,6 +290,10 @@ jobs:
           for attempt in 1 2 3; do
             echo "Public Agent memory journey $attempt/3"
             python backend/scripts/smoke_public_agent.py "$PUBLIC_BASE_URL"
+          done
+          for attempt in 1 2 3; do
+            echo "Public local OCR journey $attempt/3"
+            python backend/scripts/smoke_public_image_ocr.py "$PUBLIC_BASE_URL"
           done
 
       - name: Check whether rollback is required
@@ -379,7 +385,7 @@ jobs:
             exit 1
           fi
           if [ "$PUBLIC_SMOKE_OUTCOME" != success ]; then
-            echo "The exact GitHub revision did not pass all three public account and Agent journeys." >&2
+            echo "The exact GitHub revision did not pass all three public account, Agent, and local OCR journeys." >&2
             exit 1
           fi
           echo "The exact GitHub revision is healthy in production."

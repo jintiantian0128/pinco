@@ -12,6 +12,7 @@
 | 微信支付 | [微信支付商户官方文档](https://pay.wechatpay.cn/doc/v3/merchant/4012791897) + [wechatpayv3](https://github.com/minibear2021/wechatpayv3) | 官方协议 + MIT 第三方 Python 传输封装；依赖固定为 2.0.2 | 适配 JSAPI 下单、RSA 调起签名、平台公钥验签、AES-GCM 解密、主动查询/关单/退款；Pinco 自己负责服务端定价、金额核对、用户归属、幂等履约和开关 | 不信任客户端支付成功；不把商户私钥打包；不在实付与退款验收前公开售卖 |
 | 岗位来源质量 | [Google JobPosting 官方内容政策](https://developers.google.com/search/docs/appearance/structured-data/job-posting) + [Schema.org JobPosting](https://schema.org/JobPosting) | Google 要求单一真实职位、完整描述、招聘主体、地点/远程范围、发布时间，并排除新闻/广告/过期职位；Schema.org 定义标准字段 | 不复制爬虫；将其适配为保守的来源摘要门禁：必须有招聘主体、职位信号和 HTTP(S) 来源，过滤新闻/科普/榜单，只称“带来源候选”并要求打开确认有效期 | 搜索摘要不能证明仍在招聘；不把“URL 可打开”写成“真实在招”，不补写薪资、公司、职责或有效期 |
 | 云端数据 | 微信云托管自带 MySQL | 当前环境已自动提供内网地址和账号；无需额外购买 MongoDB 或配置 VPC | 后端使用 MySQL 状态仓库并通过重新部署后的同记录回读；本地仍允许 JSON 便于开发测试 | 不再把容器内 JSON 描述为云端持久化；未完成线上回读时不宣称跨设备/重启可用 |
+| 图片文字识别 | [RapidOCR](https://github.com/RapidAI/RapidOCR) + PaddleOCR ONNX 模型 | Apache-2.0 工程代码；官方说明默认中英文、离线部署，small 模型随 wheel 提供 | 使用 ONNX Runtime 在 Pinco 容器内瞬时识别 JPG/PNG；结果先填入输入框由用户审阅，原图不持久化 | 不把图片发送给新增 OCR 云服务；不自动把识别文字发送给对话模型；不声称能理解非文字画面 |
 
 ## 首批内测的实现顺序
 

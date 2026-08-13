@@ -28,6 +28,7 @@ import subprocess
 import secrets
 import base64
 import statistics
+import importlib.util
 
 # --- Configuration ---
 # Missing model credentials leave the service explicitly unavailable. The app
@@ -75,6 +76,8 @@ ALIYUN_NLS_ENDPOINT = os.environ.get(
 BING_SEARCH_KEY = os.environ.get("BING_SEARCH_KEY")
 JSEARCH_API_KEY = os.environ.get("JSEARCH_API_KEY")
 JSEARCH_BASE_URL = "https://jsearch.p.rapidapi.com"
+IMAGE_OCR_PROVIDER = os.environ.get("IMAGE_OCR_PROVIDER", "local").strip().lower()
+IMAGE_OCR_DEVICE_VERIFIED = os.environ.get("IMAGE_OCR_DEVICE_VERIFIED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 # WeChat Pay is opt-in and fail-closed. Public sales require both the feature
 # switch and a completed live pay + callback + refund verification. Before that,
@@ -104,6 +107,8 @@ _aliyun_nls_token_cache = {"id": "", "expires_at": 0}
 _aliyun_nls_token_lock = Lock()
 _wechat_pay_client = None
 _wechat_pay_client_lock = Lock()
+_local_ocr_engine = None
+_local_ocr_engine_lock = Lock()
 
 def get_active_llm_base_url() -> Optional[str]:
     if LLM_PROVIDER == "anthropic":
@@ -1602,6 +1607,45 @@ def build_state_health_summary() -> Dict[str, Any]:
             "detail": str(error),
         }
 
+
+def get_image_ocr_config_issue() -> Optional[str]:
+    if IMAGE_OCR_PROVIDER in {"", "disabled", "none"}:
+        return "图片文字识别尚未启用"
+    if IMAGE_OCR_PROVIDER != "local":
+        return f"不支持的 IMAGE_OCR_PROVIDER：{IMAGE_OCR_PROVIDER}"
+    missing = [name for name in ("rapidocr", "onnxruntime") if importlib.util.find_spec(name) is None]
+    if missing:
+        return f"本地 OCR 运行依赖缺失：{', '.join(missing)}"
+    return None
+
+
+def get_local_ocr_engine():
+    global _local_ocr_engine
+    if _local_ocr_engine is None:
+        with _local_ocr_engine_lock:
+            if _local_ocr_engine is None:
+                from rapidocr import RapidOCR
+                _local_ocr_engine = RapidOCR()
+    return _local_ocr_engine
+
+
+def extract_text_from_image(content: bytes) -> str:
+    """Run OCR inside the Pinco container; no image bytes leave the backend."""
+    config_issue = get_image_ocr_config_issue()
+    if config_issue:
+        raise RuntimeError(config_issue)
+    import cv2
+    import numpy as np
+
+    image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError("图片无法解码")
+    engine = get_local_ocr_engine()
+    with _local_ocr_engine_lock:
+        result = engine(image)
+    texts = getattr(result, "txts", None) or []
+    return "\n".join(str(text).strip() for text in texts if str(text).strip())[:12000]
+
 def build_miniapp_readiness() -> Dict[str, Any]:
     service_health = build_service_health_summary()
     state_health = build_state_health_summary()
@@ -1619,6 +1663,9 @@ def build_miniapp_readiness() -> Dict[str, Any]:
         or (ASR_PROVIDER == "local" and ENABLE_LOCAL_WHISPER)
     )
     asr_ready = asr_configured and ASR_DEVICE_VERIFIED
+    image_ocr_issue = get_image_ocr_config_issue()
+    image_ocr_configured = image_ocr_issue is None
+    image_ocr_ready = image_ocr_configured and IMAGE_OCR_DEVICE_VERIFIED
     items = [
         {
             "key": "appid",
@@ -1660,6 +1707,19 @@ def build_miniapp_readiness() -> Dict[str, Any]:
                 else "凭证已配置，尚未完成开发者工具与 iOS/Android 各三次实录验证"
                 if asr_configured
                 else f"ASR_PROVIDER={ASR_PROVIDER}，凭证或运行能力不完整"
+            ),
+            "blocking": True,
+        },
+        {
+            "key": "image_ocr",
+            "label": "图片文字识别",
+            "ready": image_ocr_ready,
+            "detail": (
+                "已完成微信端连续上传验证"
+                if image_ocr_ready
+                else "本地 OCR 已安装，尚未完成微信开发者工具与真机各三次上传验证"
+                if image_ocr_configured
+                else image_ocr_issue
             ),
             "blocking": True,
         },
@@ -1709,6 +1769,10 @@ def build_miniapp_readiness() -> Dict[str, Any]:
         next_steps.append("补齐 ASR_PROVIDER 对应凭证。")
     elif not ASR_DEVICE_VERIFIED:
         next_steps.append("用开发者工具、iOS 和 Android 的真实录音格式各连续转写三次；通过后再设置 ASR_DEVICE_VERIFIED=true。")
+    if not image_ocr_configured:
+        next_steps.append("安装容器内本地 OCR 运行依赖；原图只在 Pinco 后端内存中瞬时处理。")
+    elif not IMAGE_OCR_DEVICE_VERIFIED:
+        next_steps.append("用开发者工具、iOS 和 Android 各连续上传三张含文字图片；通过后再设置 IMAGE_OCR_DEVICE_VERIFIED=true。")
     if not PINCO_ADMIN_TOKEN or len(PINCO_ADMIN_TOKEN) < 32:
         next_steps.append("配置至少 32 位 PINCO_ADMIN_TOKEN，启用专家和学社内容人工审核。")
     if payment_issue:
@@ -4387,9 +4451,16 @@ async def upload_resume(request: Request):
 
 @app.post("/api/v1/image/upload")
 async def upload_image(request: Request):
-    """Validate a real image upload without pretending it was stored or understood."""
+    """Validate an image and locally extract printed text without retaining it."""
     try:
-        filename, content, _ = await get_uploaded_file(request)
+        filename, content, metadata = await get_uploaded_file(request)
+        user_id = str(metadata.get("user_id") or "").strip()
+        supplied = request.headers.get("x-pinco-session", "")
+        if not user_id or not user_session_is_valid(user_id, supplied):
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "SESSION_REQUIRED", "message": "用户会话已过期，请重新进入小程序"},
+            )
         # 验证图片格式
         image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
         if not filename.lower().endswith(image_extensions):
@@ -4405,14 +4476,49 @@ async def upload_image(request: Request):
             raise HTTPException(status_code=400, detail="图片内容与扩展名不匹配或文件已损坏")
         upload_id = f"image-{hashlib.sha256(content).hexdigest()[:16]}"
 
-        return {
+        result = {
             "upload_id": upload_id,
             "filename": filename,
             "size": len(content),
             "uploaded_at": int(time.time()),
             "stored": False,
+            "content_retained": False,
             "analysis_available": False,
-            "message": "图片已通过完整性校验；当前模型不支持读取画面，图片只在本次微信页面本地预览。",
+            "ocr_provider": IMAGE_OCR_PROVIDER,
+        }
+        if not filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+            return {
+                **result,
+                "message": "图片已通过完整性校验；GIF/WebP 暂不支持文字识别，原图未保存。",
+            }
+        config_issue = get_image_ocr_config_issue()
+        if config_issue:
+            return {
+                **result,
+                "message": f"图片已通过完整性校验；{config_issue}，原图只在本次微信页面本地预览。",
+            }
+        try:
+            extracted_text = await asyncio.to_thread(extract_text_from_image, content)
+        except Exception as error:
+            print(f"[Image OCR] Error: {type(error).__name__}: {str(error)[:300]}")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "IMAGE_OCR_FAILED",
+                    "message": "图片文字识别暂时失败，请重试或直接粘贴文字。",
+                },
+            )
+        if not extracted_text:
+            return {
+                **result,
+                "message": "图片已识别，但没有检测到清晰文字；原图未保存，也不会让模型猜测画面。",
+            }
+        return {
+            **result,
+            "analysis_available": True,
+            "extracted_text": extracted_text,
+            "extracted_characters": len(extracted_text),
+            "message": "图片文字已在 Pinco 服务内识别，可交给学姐分析；原图未保存。",
         }
     except HTTPException:
         raise

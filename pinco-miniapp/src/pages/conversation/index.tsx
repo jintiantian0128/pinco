@@ -85,6 +85,7 @@ const ConversationPage: React.FC = () => {
   const [interviewSourcePostId, setInterviewSourcePostId] = useState('')
   const [interviewJdText, setInterviewJdText] = useState('')
   const messages = usePincoStore((state) => state.messages)
+  const userProfile = usePincoStore((state) => state.userProfile)
   const conversationMeta = usePincoStore((state) => state.conversationMeta)
   const isSending = usePincoStore((state) => state.isSending)
   const isStreaming = usePincoStore((state) => state.isStreaming)
@@ -442,16 +443,25 @@ const ConversationPage: React.FC = () => {
 
       // Upload image to backend via base64 + callContainer
       Taro.showLoading({ title: '上传中...' })
-      const data = await apiUploadFile<any>('/api/v1/image/upload', uploadPath, uploadPath.split('/').pop() || 'image.jpg', { type: 'image' })
+      const data = await apiUploadFile<any>('/api/v1/image/upload', uploadPath, uploadPath.split('/').pop() || 'image.jpg', {
+        type: 'image',
+        user_id: userProfile?.user_id || '',
+      })
       Taro.hideLoading()
-      Taro.showToast({ title: data.message || '图片已校验', icon: 'none', duration: 3000 })
-      // 当前 DeepSeek 对话模型不接收视觉输入；保留微信本地预览，并把
-      // 能力边界写进消息，禁止模型根据文件名猜测图片内容。
-      await sendMessage(
-        `我上传了一张图片「${data.filename || filePath.split('/').pop() || '图片'}」。系统只完成了文件完整性校验，当前模型没有读取画面的能力。请不要猜测或描述图片内容；请告诉我怎样把其中的文字粘贴出来，再继续做 JD、简历或面试分析。`,
-        'image',
-        { mediaUrl: filePath, fileName: data.filename }
-      )
+      const extractedText = String(data.extracted_text || '').trim()
+      if (data.analysis_available && extractedText) {
+        // 先让用户审阅识别结果，再由用户主动点击发送。图片内容不会在
+        // 未确认时自动进入外部模型请求。
+        setDraft((current) => [current.trim(), extractedText].filter(Boolean).join('\n\n').slice(0, 6000))
+        setDraftFocused(true)
+        Taro.showToast({
+          title: extractedText.length > 6000 ? '已填入前 6000 字，请确认后发送' : '图片文字已填入输入框，请确认后发送',
+          icon: 'none',
+          duration: 3500
+        })
+      } else {
+        Taro.showToast({ title: data.message || '没有识别到可用文字', icon: 'none', duration: 3000 })
+      }
     } catch (e: any) {
       Taro.hideLoading()
       const errMsg = e?.errMsg || e?.message || ''
@@ -494,30 +504,42 @@ const ConversationPage: React.FC = () => {
     if (typeof wx.getPrivacySetting !== 'function') return true
 
     return new Promise<boolean>((resolve) => {
+      let settled = false
+      const finish = (authorized: boolean) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        resolve(authorized)
+      }
+      const timeout = setTimeout(() => {
+        console.warn('[Privacy] voice authorization timed out')
+        Taro.showToast({ title: '授权响应超时，请重新点击录音', icon: 'none', duration: 2500 })
+        finish(false)
+      }, 8000)
       wx.getPrivacySetting({
         success: (setting: { needAuthorization?: boolean }) => {
           if (!setting.needAuthorization) {
-            resolve(true)
+            finish(true)
             return
           }
           if (typeof wx.requirePrivacyAuthorize !== 'function') {
             Taro.showToast({ title: '请先同意隐私保护指引后使用录音', icon: 'none', duration: 2500 })
-            resolve(false)
+            finish(false)
             return
           }
           wx.requirePrivacyAuthorize({
-            success: () => resolve(true),
+            success: () => finish(true),
             fail: (error: any) => {
               console.warn('[Privacy] voice authorization declined', error)
               Taro.showToast({ title: '未同意隐私保护指引，无法录音', icon: 'none', duration: 2500 })
-              resolve(false)
+              finish(false)
             }
           })
         },
         fail: (error: any) => {
           // 获取隐私状态失败时不应把按钮卡住，继续让 RecorderManager 给出实际错误。
           console.warn('[Privacy] getPrivacySetting failed', error)
-          resolve(true)
+          finish(true)
         }
       })
     })
@@ -664,10 +686,10 @@ const ConversationPage: React.FC = () => {
     if (isRecordingRef.current) return
     if (!recordPressActiveRef.current && !tapRecordingModeRef.current) {
       recordStartPendingRef.current = false
-      Taro.showToast({ title: '已同意，请再次按住录音', icon: 'none', duration: 2000 })
+      Taro.showToast({ title: '已同意，请再次点击录音', icon: 'none', duration: 2000 })
       return
     }
-    setRecordHint(voiceMessageMode ? '正在录音，松开发送语音消息' : '正在录音，松开发送')
+    setRecordHint(voiceMessageMode ? '正在录音，再点一次发送语音消息' : '正在录音，再点一次发送')
     isRecordingRef.current = true
     try {
       recorderManager.start({
@@ -860,10 +882,10 @@ const ConversationPage: React.FC = () => {
   const privacyDescription = useMemo(() => {
     const referrer = privacyReferrer.toLowerCase()
     if (referrer.includes('record') || referrer.includes('privacyauthorize')) {
-      return '仅当你主动按住麦克风时，Pinco 才会使用录音能力，用于把语音转换为文字。'
+      return '仅当你主动点击麦克风时，Pinco 才会使用录音能力，用于把语音转换为文字；再次点击即结束。'
     }
     if (referrer.includes('chooseimage') || referrer.includes('choosemedia')) {
-      return '仅当你主动选择或拍摄图片时，Pinco 才会读取这张图片，用于上传求职截图或简历图片。'
+      return '仅当你主动选择或拍摄图片时，Pinco 才会把图片发送到自己的后端做本地文字识别。原图不保存，识别文字会先填入输入框，由你确认后再发送给学姐。'
     }
     if (referrer.includes('choosemessagefile')) {
       return '仅当你主动选择文件时，Pinco 才会读取所选的 PDF 或 DOCX，用于简历诊断。'
@@ -1375,7 +1397,7 @@ const ConversationPage: React.FC = () => {
         {draft.length > 0 && (
           <View className={styles.draftTools}>
             <View className={styles.selectAllButton} onClick={handleSelectAllDraft}><Text>全选输入内容</Text></View>
-            <Text className={styles.draftCount}>{draft.length}/500</Text>
+            <Text className={styles.draftCount}>{draft.length}/6000</Text>
           </View>
         )}
         <View className={styles.inputWrap}>
@@ -1396,7 +1418,7 @@ const ConversationPage: React.FC = () => {
             }}
             onConfirm={() => handleSend()}
             confirmType="send"
-            maxlength={500}
+            maxlength={6000}
             placeholder='把你现在最卡的一件事发给学姐'
             autoHeight
             showConfirmBar={false}
