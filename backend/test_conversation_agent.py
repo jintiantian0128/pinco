@@ -69,6 +69,25 @@ class ConversationAgentTests(unittest.TestCase):
             ["years_experience", "target_role", "target_city"],
         )
 
+    def test_used_memory_keys_are_recovered_when_model_omits_metadata(self):
+        result = main.sanitize_agent_result({
+            "response": "面试官好，我有3年经验，目前在上海，目标是AI产品经理。",
+            "used_memory_keys": [],
+        })
+        user = {
+            "career_memory": {
+                "years_experience": {"value": "3.0", "confidence": 0.95},
+                "target_role": {"value": "AI产品经理", "confidence": 0.95},
+                "target_city": {"value": "上海", "confidence": 0.95},
+                "current_company": {"value": "未在回答出现的公司", "confidence": 0.95},
+            }
+        }
+
+        used = main.reconcile_agent_used_memory_keys(result, user, result["response"])
+
+        self.assertEqual(used, ["years_experience", "target_role", "target_city"])
+        self.assertNotIn("current_company", used)
+
     def test_agent_uses_server_history_resume_memory_and_deduplicates_progress(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)

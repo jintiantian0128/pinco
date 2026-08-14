@@ -2126,6 +2126,63 @@ def sanitize_agent_result(raw: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def reconcile_agent_used_memory_keys(
+    agent_result: Dict[str, Any],
+    user: Dict[str, Any],
+    response_text: str,
+) -> List[str]:
+    """Recover truthful memory-use metadata when the model omits it.
+
+    The model is still responsible for deciding how to use context. This helper only
+    marks a key when its persisted value is visibly present in the final answer, so
+    telemetry and user-facing memory controls do not depend on perfect JSON metadata.
+    """
+    used: List[str] = []
+    for item in agent_result.get("used_memory_keys") or []:
+        normalized = normalize_agent_memory_key(item) or str(item or "").strip()[:60]
+        if normalized and normalized not in used:
+            used.append(normalized)
+
+    response_compact = re.sub(r"[\s，,。.!！?？:：;；、]", "", response_text or "").lower()
+    facts = user.get("career_memory") or {}
+    profile = user.get("career_profile") or {}
+    profile_fallbacks = {
+        "target_role": profile.get("target_roles") or [],
+        "years_experience": profile.get("years_experience"),
+        "target_city": profile.get("cities") or [],
+        "key_skills": profile.get("strengths") or [],
+    }
+
+    candidate_keys = list(facts.keys()) + list(profile_fallbacks.keys())
+    for key in dict.fromkeys(candidate_keys):
+        if key not in AGENT_MEMORY_KEYS:
+            continue
+        fact = facts.get(key)
+        value = fact.get("value") if isinstance(fact, dict) else fact
+        if value in (None, "", []):
+            value = profile_fallbacks.get(key)
+        values = value if isinstance(value, list) else [value]
+        matched = False
+        for candidate in values:
+            raw_value = str(candidate or "").strip()
+            if not raw_value:
+                continue
+            compact_value = re.sub(r"[\s，,。.!！?？:：;；、]", "", raw_value).lower()
+            if compact_value and compact_value in response_compact:
+                matched = True
+                break
+            if key == "years_experience":
+                number_match = re.search(r"\d+(?:\.\d+)?", raw_value)
+                if number_match:
+                    years = number_match.group(0).removesuffix(".0")
+                    if re.search(rf"(?<!\d){re.escape(years)}(?:\.0)?(?:年|years?)", response_text, re.IGNORECASE):
+                        matched = True
+                        break
+        if matched and key not in used:
+            used.append(key)
+    return used[:12]
+
+
 def persist_chat_turn(
     user_id: Optional[str],
     user_text: str,
@@ -4184,6 +4241,11 @@ memory_updates 和 used_memory_keys 中的 key 必须严格使用以下英文值
             except Exception as memory_error:
                 print(f"[Chat Agent] memory extraction skipped after provider error: {memory_error}")
         response_text = agent_result["response"]
+        agent_result["used_memory_keys"] = reconcile_agent_used_memory_keys(
+            agent_result,
+            user_snapshot,
+            response_text,
+        )
         # If search results exist but LLM didn't reference them, force inject
         if search_results:
             has_reference = any(
