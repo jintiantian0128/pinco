@@ -88,6 +88,9 @@ assert.match(hub, /className=\{styles\.postContentInput\}[\s\S]*fixed/, 'The fix
 assert.doesNotMatch(hub, /navigateTo\([\s\S]{0,120}pages\/conversation\/index/, 'Community actions must not use navigateTo for a tab page')
 assert.match(hub, /switchTab\(\{ url: '\/pages\/conversation\/index'/, 'Community practice must switch to the conversation tab')
 assert.match(article, /switchTab\(\{ url: '\/pages\/conversation\/index'/, 'Article practice must switch to the conversation tab')
+assert.match(article, /<Button[\s\S]{0,220}onClick=\{startArticlePractice\}/, 'Article practice entry must be a native accessible button')
+assert.match(article, /未能打开练习，请重试/, 'Article practice navigation failures must be visible to the user')
+assert.match(article, /const practiceTask = seedConversation[\s\S]{0,220}await Taro\.switchTab[\s\S]{0,160}await practiceTask/, 'Article practice must start before switching away from a page whose navigation promise may not resume')
 assert.match(article, /seedConversation\('garden'/, 'Article practice must seed a real exercise after switching tabs')
 
 assert.match(expertCenter, /Promise\.allSettled/, 'Expert status and workspace loading must not take down the whole page together')

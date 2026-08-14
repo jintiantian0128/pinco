@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { Text, View } from '@tarojs/components'
+import { Button, Text, View } from '@tarojs/components'
 import Taro, { useLoad, useShareAppMessage } from '@tarojs/taro'
 import styles from './index.module.scss'
 import { gardenArticles } from '@/data/articles'
@@ -24,8 +24,17 @@ const ArticlePage: React.FC = () => {
 
   const startArticlePractice = async () => {
     const prompt = `学姐，我刚看完《${article.title}》。请把文章观点转成一个 5 分钟求职练习：先告诉我练习目标，再一次只给一个问题，等我回答后再反馈，不要虚构我的经历。`
-    await Taro.switchTab({ url: '/pages/conversation/index' })
-    await seedConversation('garden', prompt, '把文章变成一次练习')
+    try {
+      // 先同步启动全局 store 任务，再切 tab。部分微信基础库虽然已经完成
+      // switchTab，却不会继续 resolve 原页面里的 Promise；若把 seed 放在 await
+      // 之后，用户会看到页面跳转成功但练习永远没有创建。
+      const practiceTask = seedConversation('garden', prompt, '把文章变成一次练习')
+      await Taro.switchTab({ url: '/pages/conversation/index' })
+      await practiceTask
+    } catch (error) {
+      console.error('[Article] failed to start practice', error)
+      Taro.showToast({ title: '未能打开练习，请重试', icon: 'none' })
+    }
   }
 
   return (
@@ -40,9 +49,9 @@ const ArticlePage: React.FC = () => {
         {article.content.map((paragraph) => (
           <Text key={paragraph} className={styles.paragraph}>{paragraph}</Text>
         ))}
-        <View className={styles.primaryButton} onClick={startArticlePractice}>
+        <Button className={styles.primaryButton} onClick={startArticlePractice} ariaLabel="带着文章去实战">
           <Text>带着文章去实战</Text>
-        </View>
+        </Button>
       </View>
     </View>
   )
