@@ -7,7 +7,8 @@
 - `main` 的 `backend/**` 或本工作流发生变更时已经自动触发；仍保留 `workflow_dispatch` 供受控重跑。两种入口使用同一套测试、版本指纹、用户旅程和回滚门禁。
 - 2026-08-13 运行 `31712741669` 的干净环境预检、CLI 登录、环境发现、基线、回滚版本和 dry-run 均通过，云托管也确认创建了 `flask-jk7n-023`。之后官方 CLI 因构建日志主题返回 `ResourceNotFound.TopicNotExist` 而错误退出，但云端异步构建继续完成，公网随后实际切到健康的 v0.7.0。此前工作流把这次成功提交误判为失败；修订版不再把日志轮询结果当作上线结果。
 - 修订版会把 GitHub commit SHA 写入容器，公网 `/health.release_sha` 必须与本次 Actions 的 SHA 完全一致。只有精确提交、DeepSeek 和 MySQL 同时健康才算成功；版本号相同但仍是旧容器不会被放行。
-- 自动触发首次运行 `31716621109` 已确认由 `push` 事件启动，干净环境后端测试、关键前端检查、微信构建和 Docker 构建全部通过；云托管部署阶段仍在执行，尚不能记为整链路通过。
+- 运行 `31720393869` 曾把提交 `73466cf` 成功部署并通过精确版本健康检查，但真实 Agent 旅程发现回答使用了职业记忆、模型却漏报 `used_memory_keys`。流水线因此正确失败，且因新版本本身健康而没有错误回滚；这证明功能门禁不会把“容器已上线”误写成“产品已通过”。
+- 2026-08-14 自动触发运行 [`31773770914`](https://github.com/jintiantian0128/pinco/actions/runs/31773770914) 已整链路绿色通过：验证作业、云托管发布、精确提交健康检查、三轮账号闭环、三轮真实 Agent 记忆/历史恢复和三轮容器内 OCR 全部成功，未触发回滚。公网 `/health.release_sha` 为 `c203c9f4dff8117342de30935580124d1a8cecca`，DeepSeek `connected`，MySQL `durable=true/online=true`。
 
 ## GitHub Actions Secrets
 
