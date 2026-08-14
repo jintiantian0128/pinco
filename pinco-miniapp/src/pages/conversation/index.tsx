@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Image, ScrollView, Text, Textarea, View } from '@tarojs/components'
-import Taro, { useLoad } from '@tarojs/taro'
+import Taro, { useDidHide, useDidShow, useLoad } from '@tarojs/taro'
 import classnames from 'classnames'
 import styles from './index.module.scss'
 import { usePincoStore } from '@/store/usePincoStore'
@@ -255,9 +255,16 @@ const ConversationPage: React.FC = () => {
 
   const handleSelectAllDraft = () => {
     if (!draft) return
-    setDraftFocused(false)
-    setDraftSelection({ start: 0, end: draft.length })
-    setTimeout(() => setDraftFocused(true), 30)
+    const end = draft.length
+    // 不先设为 false：微信会把随后的 blur 事件排在定时器之后，导致输入框
+    // 再次失焦、selectionStart/End 只删掉最后一个字符。保持 focus，并在按钮
+    // 点击完成后再写一次区间，开发者工具和真机都能稳定选中全文。
+    setDraftFocused(true)
+    setDraftSelection({ start: 0, end })
+    setTimeout(() => {
+      setDraftFocused(true)
+      setDraftSelection({ start: 0, end })
+    }, 120)
   }
 
   const handleOpenTextSelection = (message: MessageItem) => {
@@ -494,10 +501,60 @@ const ConversationPage: React.FC = () => {
   const tapRecordingModeRef = useRef(false)
   const lastVoiceTouchEndAtRef = useRef(0)
   const voiceMessageModeRef = useRef(false)
+  const recordLifecycleActiveRef = useRef(true)
+  const recordRouteWatchRef = useRef<any>(null)
+
+  const clearRecordRouteWatch = () => {
+    if (!recordRouteWatchRef.current) return
+    clearInterval(recordRouteWatchRef.current)
+    recordRouteWatchRef.current = null
+  }
+
+  const isConversationRouteActive = () => {
+    const pages = Taro.getCurrentPages?.() || []
+    const currentPage: any = pages[pages.length - 1]
+    const currentRoute = String(currentPage?.route || currentPage?.__route__ || '')
+      .replace(/^\//, '')
+    // Some test runtimes do not expose page routes. Only reject a known different route.
+    return !currentRoute || currentRoute === 'pages/conversation/index'
+  }
+
+  const discardAndStopRecording = (reason: string) => {
+    clearRecordRouteWatch()
+    if (recordTimeoutRef.current) {
+      clearTimeout(recordTimeoutRef.current)
+      recordTimeoutRef.current = null
+    }
+    const shouldStopRecorder = nativeRecorderStartedRef.current
+      || isRecordingRef.current
+      || recordStartPendingRef.current
+    discardRecordingRef.current = true
+    isRecordingRef.current = false
+    recordStartPendingRef.current = false
+    nativeRecorderStartedRef.current = false
+    recordPressActiveRef.current = false
+    tapRecordingModeRef.current = false
+    setIsRecording(false)
+    setRecordHint('')
+    if (shouldStopRecorder && recorderManager) {
+      try { recorderManager.stop() } catch (error) { console.warn(`[Voice] ${reason} stop failed`, error) }
+    }
+  }
 
   useEffect(() => {
     voiceMessageModeRef.current = voiceMessageMode
   }, [voiceMessageMode])
+
+  useDidShow(() => {
+    recordLifecycleActiveRef.current = true
+  })
+
+  useDidHide(() => {
+    // Tab 页切换只会触发 hide，不会卸载组件。若不在这里停止，录音会在
+    // 学社/专家/我的页面后台继续，用户回到会话后就会看到一个失联的录音态。
+    recordLifecycleActiveRef.current = false
+    discardAndStopRecording('page hide')
+  })
 
   const ensurePrivacyAuthorized = async () => {
     if (process.env.TARO_ENV !== 'weapp' || typeof wx === 'undefined') return true
@@ -547,8 +604,14 @@ const ConversationPage: React.FC = () => {
 
   useEffect(() => {
     if (!recorderManager) return
+    recordLifecycleActiveRef.current = true
 
     recorderManager.onStart(() => {
+      if (!recordLifecycleActiveRef.current || !isConversationRouteActive()) {
+        discardRecordingRef.current = true
+        try { recorderManager.stop() } catch {}
+        return
+      }
       recordStartPendingRef.current = false
       nativeRecorderStartedRef.current = true
       // 微信的 onStart 可能晚于 touchend。短按已经切换到点按录音模式时，
@@ -566,6 +629,15 @@ const ConversationPage: React.FC = () => {
       discardRecordingRef.current = false
       isRecordingRef.current = true
       setIsRecording(true)
+      clearRecordRouteWatch()
+      // 部分基础库/开发者工具不会可靠触发 tab 页的 onHide。录音期间额外观察
+      // 当前路由，确保离开会话页后 250ms 内停止并丢弃，避免后台录音卡死页面。
+      recordRouteWatchRef.current = setInterval(() => {
+        if (!isConversationRouteActive()) {
+          recordLifecycleActiveRef.current = false
+          discardAndStopRecording('route change')
+        }
+      }, 250)
     })
 
     recorderManager.onError((err) => {
@@ -575,6 +647,7 @@ const ConversationPage: React.FC = () => {
       nativeRecorderStartedRef.current = false
       recordPressActiveRef.current = false
       tapRecordingModeRef.current = false
+      clearRecordRouteWatch()
       setIsRecording(false)
       setRecordHint('')
       if (recordTimeoutRef.current) {
@@ -592,6 +665,7 @@ const ConversationPage: React.FC = () => {
       nativeRecorderStartedRef.current = false
       recordPressActiveRef.current = false
       tapRecordingModeRef.current = false
+      clearRecordRouteWatch()
       setIsRecording(false)
       setRecordHint('')
       if (recordTimeoutRef.current) {
@@ -637,9 +711,26 @@ const ConversationPage: React.FC = () => {
     })
 
     return () => {
+      recordLifecycleActiveRef.current = false
+      clearRecordRouteWatch()
       if (recordTimeoutRef.current) {
         clearTimeout(recordTimeoutRef.current)
         recordTimeoutRef.current = null
+      }
+      // RecorderManager 是微信全局单例，页面卸载或热更新时若只移除回调，
+      // 原生录音会继续运行，而新页面已丢失对应状态，最终表现为按钮/页面卡住。
+      // 卸载录音一律丢弃，不上传残留的环境声音。
+      const shouldStopRecorder = nativeRecorderStartedRef.current
+        || isRecordingRef.current
+        || recordStartPendingRef.current
+      discardRecordingRef.current = true
+      isRecordingRef.current = false
+      recordStartPendingRef.current = false
+      nativeRecorderStartedRef.current = false
+      recordPressActiveRef.current = false
+      tapRecordingModeRef.current = false
+      if (shouldStopRecorder) {
+        try { recorderManager.stop() } catch (error) { console.warn('[Voice] cleanup stop failed', error) }
       }
       // RecorderManager 是全局单例。页面卸载时必须移除回调，
       // 否则再次进入会重复上传并把页面留在录音态。
@@ -676,6 +767,12 @@ const ConversationPage: React.FC = () => {
     nativeRecorderStartedRef.current = false
     discardRecordingRef.current = false
     const authorized = await ensurePrivacyAuthorized()
+    if (!recordLifecycleActiveRef.current) {
+      recordStartPendingRef.current = false
+      recordPressActiveRef.current = false
+      tapRecordingModeRef.current = false
+      return
+    }
     // 用户在隐私弹窗期间松开，或授权被拒绝时，绝不能再启动录音。
     if (!authorized) {
       recordStartPendingRef.current = false
