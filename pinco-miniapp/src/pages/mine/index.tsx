@@ -5,7 +5,7 @@ import classnames from 'classnames'
 import styles from './index.module.scss'
 import { usePincoStore } from '@/store/usePincoStore'
 import { buildWechatSetupChecklist } from '@/utils/wechat'
-import { BookingItem, ContributionStatus, TriageStage } from '@/types/pinco'
+import { BookingItem, ContributionStatus, ConversationScenario, TriageStage } from '@/types/pinco'
 import { apiRequest } from '@/services/api'
 import {
   closePaymentOrder,
@@ -51,6 +51,8 @@ const MinePage: React.FC = () => {
   const clearDoneTasks = usePincoStore((state) => state.clearDoneTasks)
   const addTodayTasks = usePincoStore((state) => state.addTodayTasks)
   const generateTasksFromTriage = usePincoStore((state) => state.generateTasksFromTriage)
+  const openConversation = usePincoStore((state) => state.openConversation)
+  const seedConversation = usePincoStore((state) => state.seedConversation)
   const clearMessages = usePincoStore((state) => state.clearMessages)
   const membership = usePincoStore((state) => state.membership)
   const cancelBookingOrder = usePincoStore((state) => state.cancelBookingOrder)
@@ -358,19 +360,23 @@ const MinePage: React.FC = () => {
     Taro.showToast({ title: '已生成今日任务', icon: 'success' })
   }
 
+  const openConversationTab = async (scenario: ConversationScenario = 'general', prompt?: string) => {
+    openConversation(scenario)
+    Taro.switchTab({ url: '/pages/conversation/index' })
+    if (prompt) seedConversation(scenario, prompt)
+  }
+
   const handleTaskAction = (task: typeof todayTasks[0]) => {
     if (task.action === 'open_jd') {
-      Taro.navigateTo({ url: '/pages/conversation/index?scenario=jd' })
+      openConversationTab('jd')
     } else if (task.action === 'open_resume') {
-      Taro.navigateTo({ url: '/pages/conversation/index?scenario=resume' })
+      openConversationTab('resume')
     } else if (task.action === 'open_interview') {
-      Taro.navigateTo({ url: '/pages/conversation/index?scenario=interview' })
+      openConversationTab('interview')
     } else if (task.action === 'view_progress') {
       Taro.pageScrollTo({ selector: '.job-section', duration: 300 })
     } else if (task.action === 'send_chat' && task.prompt) {
-      Taro.navigateTo({
-        url: `/pages/conversation/index?scenario=${task.scenario || 'general'}&prompt=${encodeURIComponent(task.prompt)}`
-      })
+      openConversationTab(task.scenario || 'general', task.prompt)
     }
   }
 
@@ -483,7 +489,7 @@ const MinePage: React.FC = () => {
               <Text className={styles.cardTitle}>求职进度</Text>
               <Text className={styles.cardDesc}>从对话里自动提取，用户确认后沉淀到这里。不是再造Excel，是让AI顺手帮你记。</Text>
             </View>
-            <View className={styles.progressBadge} onClick={() => Taro.navigateTo({ url: '/pages/conversation/index?scenario=general&prompt=' + encodeURIComponent('帮我整理现在所有求职进度，并建议今天最该推进的三个动作。') })}>
+            <View className={styles.progressBadge} onClick={() => openConversationTab('general', '帮我整理现在所有求职进度，并建议今天最该推进的三个动作。')}>
               <Text>AI建议</Text>
             </View>
           </View>
@@ -508,7 +514,7 @@ const MinePage: React.FC = () => {
           {jobProgress.length ? (
             <View className={styles.jobList}>
               {jobProgress.slice(0, 5).map((job) => (
-                <View key={job.id} className={styles.jobItem} onClick={() => Taro.navigateTo({ url: '/pages/conversation/index?scenario=general&prompt=' + encodeURIComponent(`基于我的求职记录：${job.company} ${job.position} 当前${job.statusLabel}，帮我判断下一步。`) })}>
+                <View key={job.id} className={styles.jobItem} onClick={() => openConversationTab('general', `基于我的求职记录：${job.company} ${job.position} 当前${job.statusLabel}，帮我判断下一步。`)}>
                   <View className={styles.jobMain}>
                     <Text className={styles.jobTitle}>{job.company} · {job.position}</Text>
                     <Text className={styles.jobDesc}>{job.nextAction}</Text>
@@ -526,7 +532,7 @@ const MinePage: React.FC = () => {
               ))}
             </View>
           ) : (
-            <View className={styles.emptyProgress} onClick={() => Taro.navigateTo({ url: '/pages/conversation/index?scenario=general&prompt=' + encodeURIComponent('我想开始记录求职进度，请问我公司、岗位和当前状态。') })}>
+            <View className={styles.emptyProgress} onClick={() => openConversationTab('general', '我想开始记录求职进度，请问我公司、岗位和当前状态。')}>
               <Text className={styles.emptyTitle}>还没有进度记录</Text>
               <Text className={styles.emptyDesc}>完成简历、模拟面试、真实面试复盘或 Offer 决策时，Pinco 会结合上下文判断是否该询问你记录进度，不会在普通问答中反复弹出。</Text>
             </View>
@@ -760,11 +766,11 @@ const MinePage: React.FC = () => {
         <View className={styles.card}>
           <Text className={styles.cardTitle}>设置</Text>
           <View className={styles.settingList}>
-            <View className={styles.settingRow} onClick={() => Taro.navigateTo({ url: '/pages/conversation/index?scenario=resume&prompt=' + encodeURIComponent('帮我查看最近的简历诊断历史，并总结下一步优化重点。') })}>
+            <View className={styles.settingRow} onClick={() => openConversationTab('resume', '帮我查看最近的简历诊断历史，并总结下一步优化重点。')}>
               <Text className={styles.settingLabel}>诊断历史</Text>
               <Text className={styles.settingArrow}>›</Text>
             </View>
-            <View className={styles.settingRow} onClick={() => Taro.navigateTo({ url: '/pages/conversation/index?scenario=general&prompt=' + encodeURIComponent('帮我解释当前模型配置，并告诉我怎样获得更稳定的回复。') })}>
+            <View className={styles.settingRow} onClick={() => openConversationTab('general', '帮我解释当前模型配置，并告诉我怎样获得更稳定的回复。')}>
               <Text className={styles.settingLabel}>模型配置</Text>
               <Text className={styles.settingArrow}>›</Text>
             </View>

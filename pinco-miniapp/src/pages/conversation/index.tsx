@@ -347,7 +347,7 @@ const ConversationPage: React.FC = () => {
       return
     }
     if (item.kind === 'progress') {
-      Taro.switchTab({ url: '/pages/mine/index' })
+      Taro.navigateTo({ url: '/pages/career/index' })
       return
     }
     if (item.kind === 'review') {
@@ -967,7 +967,7 @@ const ConversationPage: React.FC = () => {
         icon: '🔍',
         title: '搜岗位',
         subtitle: '发现匹配你的真实职位',
-        action: () => Taro.switchTab({ url: '/pages/job-search/index' }),
+        action: () => Taro.navigateTo({ url: '/pages/job-search/index' }),
       })
     }
 

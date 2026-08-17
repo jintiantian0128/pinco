@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { Input, ScrollView, Text, Textarea, View } from '@tarojs/components'
 import Taro, { useDidShow, usePullDownRefresh, useShareAppMessage } from '@tarojs/taro'
 import classnames from 'classnames'
@@ -25,7 +25,7 @@ const filterOptions: { key: FilterTab; label: string }[] = [
   { key: 'article', label: '📖 精选' },
   { key: 'treehole', label: '🌰 树洞' },
   { key: 'help', label: '❓ 问答' },
-  { key: 'share', label: '📚 干货' },
+  { key: 'share', label: '💡 干货' },
   { key: 'success', label: '🎉 上岸' },
 ]
 
@@ -33,8 +33,6 @@ const HubPage: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all')
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [showPostModal, setShowPostModal] = useState(false)
-  const [newPostTitle, setNewPostTitle] = useState('')
-  const [newPostContent, setNewPostContent] = useState('')
   const [newPostType, setNewPostType] = useState<PostType>('treehole')
   const [searchQuery, setSearchQuery] = useState('')
   const [commentingPostId, setCommentingPostId] = useState<string | null>(null)
@@ -44,11 +42,34 @@ const HubPage: React.FC = () => {
   const [selectedJobId, setSelectedJobId] = useState('')
   const [experienceRound, setExperienceRound] = useState('')
   const [experienceDate, setExperienceDate] = useState('')
+  const [postModalKey, setPostModalKey] = useState(0)
+  const newPostTitleRef = useRef('')
+  const newPostContentRef = useRef('')
   const userProfile = usePincoStore((state) => state.userProfile)
   const jobProgress = usePincoStore((state) => state.jobProgress)
   const openConversation = usePincoStore((state) => state.openConversation)
   const seedConversation = usePincoStore((state) => state.seedConversation)
   const startInterview = usePincoStore((state) => state.startInterview)
+
+  const resetPostModal = () => {
+    newPostTitleRef.current = ''
+    newPostContentRef.current = ''
+    setNewPostType('treehole')
+    setSelectedJobId('')
+    setExperienceRound('')
+    setExperienceDate('')
+    setPostModalKey((key) => key + 1)
+  }
+
+  const openPostModal = () => {
+    resetPostModal()
+    setShowPostModal(true)
+  }
+
+  const closePostModal = () => {
+    setShowPostModal(false)
+    resetPostModal()
+  }
 
   const loadPosts = async () => {
     if (!userProfile) {
@@ -81,7 +102,9 @@ const HubPage: React.FC = () => {
   }))
 
   const publishPost = async () => {
-    if (!newPostTitle.trim() || !newPostContent.trim()) {
+    const title = newPostTitleRef.current.trim()
+    const content = newPostContentRef.current.trim()
+    if (!title || !content) {
       Taro.showToast({ title: '标题和内容都不能为空', icon: 'none' })
       return
     }
@@ -94,21 +117,15 @@ const HubPage: React.FC = () => {
     try {
       const result = await createCommunityPost({
         user_id: userProfile.user_id,
-        title: newPostTitle.trim(),
-        content: newPostContent.trim(),
+        title,
+        content,
         post_type: newPostType,
         job_id: selectedJobId || undefined,
         interview_round: experienceRound.trim(),
         experience_date: experienceDate.trim(),
       })
       setPosts((prev) => [result.post, ...prev])
-      setNewPostTitle('')
-      setNewPostContent('')
-      setNewPostType('treehole')
-      setSelectedJobId('')
-      setExperienceRound('')
-      setExperienceDate('')
-      setShowPostModal(false)
+      closePostModal()
       Taro.showToast({ title: '已发布到学社', icon: 'success' })
     } catch (error) {
       console.error('[Hub] publish failed', error)
@@ -363,7 +380,7 @@ const HubPage: React.FC = () => {
           <Text className={styles.title}>学社</Text>
           <Text className={styles.desc}>{gardenArticles.length} 篇干货 · {posts.length} 条讨论</Text>
         </View>
-        <View className={styles.headerPostButton} onClick={() => setShowPostModal(true)}>
+        <View className={styles.headerPostButton} onClick={openPostModal}>
           <Text>✎ 发布</Text>
         </View>
       </View>
@@ -430,7 +447,7 @@ const HubPage: React.FC = () => {
         <>
           <View className={styles.postSectionHeader}>
             <Text className={styles.sectionTitle}>社区动态</Text>
-            <View className={styles.postButton} onClick={() => setShowPostModal(true)}>
+            <View className={styles.postButton} onClick={openPostModal}>
               <Text className={styles.postButtonText}>+ 发布</Text>
             </View>
           </View>
@@ -446,7 +463,7 @@ const HubPage: React.FC = () => {
 
       {/* 发帖弹层 */}
       {showPostModal && (
-        <View className={styles.postModalOverlay} onClick={() => setShowPostModal(false)}>
+        <View className={styles.postModalOverlay} onClick={closePostModal}>
           <View className={styles.postModal} onClick={(e) => e.stopPropagation()}>
             <Text className={styles.postModalTitle}>发布新帖</Text>
 
@@ -459,31 +476,31 @@ const HubPage: React.FC = () => {
                   onClick={() => setNewPostType(t)}
                 >
                   <Text className={styles.typeChipText}>
-                    {t === 'treehole' ? '🌰 树洞' : t === 'help' ? '❓ 问答' : t === 'share' ? '📚 干货' : '🎉 上岸'}
+                    {t === 'treehole' ? '🌰 树洞' : t === 'help' ? '❓ 问答' : t === 'share' ? '💡 干货' : '🎉 上岸'}
                   </Text>
                 </View>
               ))}
             </View>
 
             <Input
+              key={`post-title-${postModalKey}`}
               className={styles.postTitleInput}
-              value={newPostTitle}
-              onInput={(e) => setNewPostTitle(e.detail.value)}
+              onInput={(e) => { newPostTitleRef.current = e.detail.value }}
               placeholder="标题"
               maxlength={100}
             />
             <Textarea
+              key={`post-content-${postModalKey}`}
               className={styles.postContentInput}
-              value={newPostContent}
-              onInput={(e) => setNewPostContent(e.detail.value)}
-              placeholder={newPostType === 'treehole' ? '这里很安全，想说就说...' : newPostType === 'help' ? '详细描述你的问题，大家一起来帮你...' : newPostType === 'share' ? '分享你的经验或心得...' : '恭喜上岸！分享你的成功经验，给学弟学妹们一点鼓励...'}
+              onInput={(e) => { newPostContentRef.current = e.detail.value }}
+              placeholder={newPostType === 'treehole' ? '这里很安全，想说就说...' : newPostType === 'help' ? '详细描述你的问题，大家一起来帮你...' : newPostType === 'share' ? '分享你的求职干货、面试技巧...' : '恭喜上岸！分享你的成功经验，给学弟学妹们一点鼓励...'}
               maxlength={1000}
               fixed
               cursorSpacing={24}
               disableDefaultPadding
               showConfirmBar={false}
             />
-            <Text className={styles.inputCount}>{newPostContent.length}/1000</Text>
+            <Text className={styles.inputCount}>最多 1000 字</Text>
 
             {jobProgress.length > 0 && (
               <View>
@@ -510,11 +527,11 @@ const HubPage: React.FC = () => {
             </ScrollView>
 
             <View className={styles.postModalButtons}>
-              <View className={styles.postModalCancel} onClick={() => setShowPostModal(false)}>
+              <View className={styles.postModalCancel} onClick={closePostModal}>
                 <Text>取消</Text>
               </View>
               <View
-                className={classnames(styles.postModalConfirm, (!newPostTitle.trim() || !newPostContent.trim() || isPublishing) && styles.postModalConfirmDisabled)}
+                className={classnames(styles.postModalConfirm, isPublishing && styles.postModalConfirmDisabled)}
                 onClick={publishPost}
               >
                 <Text>{isPublishing ? '发布中…' : '发布'}</Text>

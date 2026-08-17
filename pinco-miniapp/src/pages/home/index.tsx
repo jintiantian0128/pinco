@@ -14,6 +14,7 @@ const HomePage: React.FC = () => {
   const todayTasks = usePincoStore((state) => state.todayTasks)
   const jobProgress = usePincoStore((state) => state.jobProgress)
   const openConversation = usePincoStore((state) => state.openConversation)
+  const seedConversation = usePincoStore((state) => state.seedConversation)
   const refreshServiceHealth = usePincoStore((state) => state.refreshServiceHealth)
   const checkInEmotion = usePincoStore((state) => state.checkInEmotion)
   const supportDueFollowUps = usePincoStore((state) => state.supportDueFollowUps)
@@ -35,7 +36,13 @@ const HomePage: React.FC = () => {
 
   const enterConversation = (scenario: ConversationScenario = 'general', subtitle = '继续和学姐往下聊') => {
     openConversation(scenario, subtitle)
-    Taro.navigateTo({ url: `/pages/conversation/index?scenario=${scenario}` })
+    Taro.switchTab({ url: '/pages/conversation/index' })
+  }
+
+  const enterConversationWithPrompt = (scenario: ConversationScenario, subtitle: string, prompt: string) => {
+    openConversation(scenario, subtitle)
+    Taro.switchTab({ url: '/pages/conversation/index' })
+    seedConversation(scenario, prompt, subtitle)
   }
 
   const handleMoodCheckIn = async (intensity: 1 | 2 | 3 | 4 | 5) => {
@@ -43,7 +50,8 @@ const HomePage: React.FC = () => {
     setCheckingMood(true)
     try {
       await checkInEmotion(intensity)
-      Taro.navigateTo({ url: '/pages/conversation/index?scenario=emotion' })
+      openConversation('emotion', '先接住状态，再决定今天做什么')
+      Taro.switchTab({ url: '/pages/conversation/index' })
     } catch (error: any) {
       Taro.showToast({ title: error?.message || '状态打卡失败，请稍后再试', icon: 'none' })
     } finally {
@@ -62,7 +70,8 @@ const HomePage: React.FC = () => {
     setCheckingMood(true)
     try {
       await respondSupportFollowUp(checkInId, intensity, actionResult.confirm)
-      Taro.navigateTo({ url: '/pages/conversation/index?scenario=emotion' })
+      openConversation('emotion', '继续昨天的小行动回访')
+      Taro.switchTab({ url: '/pages/conversation/index' })
     } catch (error: any) {
       Taro.showToast({ title: error?.message || '回访回应失败，请稍后再试', icon: 'none' })
     } finally {
@@ -141,7 +150,7 @@ const HomePage: React.FC = () => {
             <View key={task.id} className={styles.taskItem} onClick={() => {
               if (task.action === 'chat') {
                 openConversation(task.scenario || 'general', task.title)
-                Taro.navigateTo({ url: `/pages/conversation/index?scenario=${task.scenario || 'general'}` })
+                Taro.switchTab({ url: '/pages/conversation/index' })
               } else if (task.action === 'booking') {
                 Taro.switchTab({ url: '/pages/experts/index' })
               } else if (task.action === 'circle') {
@@ -185,10 +194,7 @@ const HomePage: React.FC = () => {
               key={item.id}
               className={styles.actionChip}
               onClick={() => {
-                openConversation(item.scenario, item.subtitle)
-                Taro.navigateTo({
-                  url: `/pages/conversation/index?scenario=${item.scenario}&prompt=${encodeURIComponent(item.prompt)}`
-                })
+                enterConversationWithPrompt(item.scenario, item.subtitle, item.prompt)
               }}
             >
               <Text className={styles.actionChipText}>{item.title}</Text>

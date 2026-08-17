@@ -23,6 +23,8 @@ const JobSearchPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
   const userId = usePincoStore((state) => state.userProfile?.user_id)
+  const openConversation = usePincoStore((state) => state.openConversation)
+  const jdAnalyze = usePincoStore((state) => state.jdAnalyze)
 
   const saveJob = async (job: JobSearchResult) => {
     if (!userId || !job.url) return
@@ -201,9 +203,9 @@ const JobSearchPage: React.FC = () => {
                 )}
                 <View className={styles.jdButton} onClick={() => {
                   const jdContent = `${job.title} - ${job.company}\n地点: ${job.location}\n${job.summary}`
-                  Taro.navigateTo({
-                    url: '/pages/conversation/index?scenario=jd&jd_text=' + encodeURIComponent(jdContent)
-                  })
+                  openConversation('jd', '拆岗位要求、面试重点和薪资信号')
+                  Taro.switchTab({ url: '/pages/conversation/index' })
+                  jdAnalyze(jdContent)
                 }}>
                   <Text className={styles.jdButtonText}>解读JD</Text>
                 </View>

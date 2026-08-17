@@ -35,6 +35,9 @@ const memoryLabels: Record<string, string> = {
 
 const CareerPage: React.FC = () => {
   const userId = usePincoStore((state) => state.userProfile?.user_id)
+  const openConversation = usePincoStore((state) => state.openConversation)
+  const seedConversation = usePincoStore((state) => state.seedConversation)
+  const startInterview = usePincoStore((state) => state.startInterview)
   const [workspace, setWorkspace] = useState<CareerWorkspace>(emptyWorkspace)
   const [loading, setLoading] = useState(false)
   const [targetRoles, setTargetRoles] = useState('')
@@ -210,7 +213,9 @@ const CareerPage: React.FC = () => {
           cancelText: '先不用',
         })
         if (result.confirm) {
-          Taro.navigateTo({ url: `/pages/conversation/index?scenario=emotion&prompt=${encodeURIComponent(action.prompt)}` })
+          openConversation('emotion', '先接住状态，再决定是否复盘')
+          Taro.switchTab({ url: '/pages/conversation/index' })
+          seedConversation('emotion', action.prompt, '先接住状态，再决定是否复盘')
         }
       } else {
         Taro.showToast({ title: '进度已同步云端', icon: 'none' })
@@ -287,14 +292,13 @@ const CareerPage: React.FC = () => {
   }
 
   const practiceAgain = (position: string, job?: WorkspaceJob) => {
-    const params = [
-      'scenario=interview',
-      'duration=10',
-      `position=${encodeURIComponent(position)}`,
-      job?.id ? `job_id=${encodeURIComponent(job.id)}` : '',
-      job?.company ? `company=${encodeURIComponent(job.company)}` : '',
-    ].filter(Boolean).join('&')
-    Taro.navigateTo({ url: `/pages/conversation/index?${params}` })
+    openConversation('interview', '围绕真实岗位做 10 分钟练习')
+    Taro.switchTab({ url: '/pages/conversation/index' })
+    startInterview(position, 10, {
+      company: job?.company,
+      jobId: job?.id,
+      jdText: job?.jd_text,
+    })
   }
 
   const toggleLearningDay = async (day: number, completed: boolean) => {

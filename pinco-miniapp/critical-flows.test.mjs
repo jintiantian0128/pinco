@@ -27,7 +27,7 @@ for (const type of requiredPostTypes) {
   assert.match(hub, new RegExp(`'${type}'`), `Hub publish UI must include ${type}`)
 }
 
-assert.match(hub, /📚 干货/, 'Publish modal must show 干货')
+assert.match(hub, /干货/, 'Publish modal must show 干货')
 assert.match(hub, /🎉 上岸/, 'Publish modal must show 上岸')
 assert.match(hub, /postContentInput[\s\S]*关联岗位（可选[\s\S]*postModalButtons/, 'Job binding must be selectable inside the publish modal')
 assert.doesNotMatch(hub, /commentInput[\s\S]{0,1800}关联岗位（可选/, 'Comment composer must not contain the post-level job selector')
@@ -85,6 +85,11 @@ assert.match(conversationStyles, /\.recordOverlay[\s\S]*pointer-events:\s*none/,
 
 assert.match(hub, /<Input[\s\S]*className=\{styles\.postTitleInput\}/, 'Publish titles must use a stable single-line input')
 assert.match(hub, /className=\{styles\.postContentInput\}[\s\S]*fixed/, 'The fixed publish modal must mark its textarea as fixed')
+assert.match(hub, /newPostTitleRef[\s\S]*newPostContentRef/, 'Publish fields must keep native drafts in refs')
+assert.match(hub, /onInput=\{\(e\) => \{ newPostTitleRef\.current = e\.detail\.value \}\}/, 'Title input must not re-render the modal on each character')
+assert.match(hub, /onInput=\{\(e\) => \{ newPostContentRef\.current = e\.detail\.value \}\}/, 'Content input must not re-render the modal on each character')
+assert.doesNotMatch(hub, /className=\{styles\.post(?:Title|Content)Input\}[\s\S]{0,120}\bvalue=\{newPost/, 'Publish fields must not force stale controlled values into native inputs')
+assert.match(hub, /post_type:\s*newPostType/, 'Publish must send the backend-compatible post type')
 assert.doesNotMatch(hub, /navigateTo\([\s\S]{0,120}pages\/conversation\/index/, 'Community actions must not use navigateTo for a tab page')
 assert.match(hub, /switchTab\(\{ url: '\/pages\/conversation\/index'/, 'Community practice must switch to the conversation tab')
 assert.match(article, /switchTab\(\{ url: '\/pages\/conversation\/index'/, 'Article practice must switch to the conversation tab')
@@ -159,5 +164,16 @@ assert.match(expertCenter, /用户已授权的会前摘要/, 'Experts must see t
 assert.match(expertCenter, /用户下一步行动，每行一条/, 'Expert delivery must capture an actionable follow-up list')
 assert.match(mine, /下一步 \{index \+ 1\}/, 'Buyers must receive expert next actions')
 assert.match(jobSearch, /保存岗位/, 'Verified search results must flow into the job workspace')
+assert.doesNotMatch(home, /navigateTo\([\s\S]{0,140}pages\/conversation\/index/, 'Home must not navigateTo the conversation tab')
+assert.match(home, /switchTab\(\{ url: '\/pages\/conversation\/index'/, 'Home must switch to the conversation tab')
+assert.match(home, /enterConversationWithPrompt[\s\S]{0,320}seedConversation/, 'Home quick actions must preserve their prompt across tab switching')
+assert.doesNotMatch(career, /navigateTo\([\s\S]{0,140}pages\/conversation\/index/, 'Career workspace must not navigateTo the conversation tab')
+assert.match(career, /practiceAgain[\s\S]{0,520}startInterview/, 'Career workspace practice must start a structured interview after tab switching')
+assert.doesNotMatch(jobSearch, /navigateTo\([\s\S]{0,140}pages\/conversation\/index/, 'Job search must not navigateTo the conversation tab')
+assert.match(jobSearch, /switchTab\(\{ url: '\/pages\/conversation\/index'[\s\S]{0,180}jdAnalyze\(jdContent\)/, 'Job search must preserve the selected JD when entering chat')
+assert.doesNotMatch(mine, /navigateTo\([\s\S]{0,140}pages\/conversation\/index/, 'Mine must not navigateTo the conversation tab')
+assert.match(mine, /openConversationTab[\s\S]{0,260}switchTab[\s\S]{0,180}seedConversation/, 'Mine must hand prompts to the conversation store when switching tabs')
+assert.match(conversation, /item\.kind === 'progress'[\s\S]{0,140}navigateTo\(\{ url: '\/pages\/career\/index'/, 'Conversation progress recommendations must open the non-tab career page')
+assert.match(conversation, /搜岗位[\s\S]{0,240}navigateTo\(\{ url: '\/pages\/job-search\/index'/, 'Conversation job recommendations must open the non-tab search page')
 
 console.log('critical-flows static checks passed')
