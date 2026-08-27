@@ -1,0 +1,31 @@
+pinco-miniapp/critical-flows.test.mjs
+  s_8a81bfe0d57b23::t_d3468cc1762743 30
+pinco-miniapp/src/pages/hub/index.tsx
+  s_8a81bfe0d57b23::t_483df7aa06bc45 383
+  s_8a81bfe0d57b23::t_f43cff22d56cbf 496
+  s_8a81bfe0d57b23::t_3f0a76db81ab73 486,488,493
+  s_8a81bfe0d57b23::t_4ab7d1d5de56ce 530
+  s_8a81bfe0d57b23::t_57972eef7796c1 450
+  s_8a81bfe0d57b23::t_20f9b69edb0045 28
+  s_8a81bfe0d57b23::t_6bd015280e858b 45
+  s_8a81bfe0d57b23::t_c72f365f43abb9 466
+  s_8a81bfe0d57b23::t_167b2705593225 479
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ab0848e6fd5b7405ce2da89f3a54d81360621410",
+  "prompts": {},
+  "sessions": {
+    "s_8a81bfe0d57b23": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "69cd0600e390029e00fad92c",
+        "model": "DeepSeek-V4-Pro__dev"
+      },
+      "human_author": "jintiantian0128 <jtt_0128@163.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
