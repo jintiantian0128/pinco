@@ -4,7 +4,7 @@ import Taro, { useDidHide, useDidShow, useLoad } from '@tarojs/taro'
 import classnames from 'classnames'
 import styles from './index.module.scss'
 import { usePincoStore } from '@/store/usePincoStore'
-import { ConversationScenario, JobProgressItem, MessageItem } from '@/types/pinco'
+import { ConversationScenario, JobProgressItem, MessageItem, MessageQuickAction } from '@/types/pinco'
 import { getApiBaseUrl, apiUploadFile } from '@/services/api'
 import { buildConversationTitle } from '@/utils/format'
 
@@ -21,11 +21,11 @@ const promptMap: Record<ConversationScenario, string> = {
 type ChatAction = { label: string; prompt?: string; kind?: 'prompt' | 'resume' | 'jd' | 'interview' | 'progress' | 'bind' | 'review' | 'search' }
 
 const quickStartCards: Array<{ title: string; desc: string; scenario: ConversationScenario; kind?: ChatAction['kind']; prompt: string }> = [
-  { title: '简历诊断', desc: '上传/粘贴简历，直接看怎么改', scenario: 'resume', kind: 'resume', prompt: promptMap.resume },
-  { title: 'JD 解读', desc: '拆岗位要求、面试重点和薪资信号', scenario: 'jd', kind: 'jd', prompt: promptMap.jd },
-  { title: '模拟面试', desc: '按目标岗位追问并给复盘', scenario: 'interview', kind: 'interview', prompt: promptMap.interview },
-  { title: '搜岗位', desc: '只返回带可打开来源链接的结果', scenario: 'general', kind: 'search', prompt: '' },
-  { title: '求职进度', desc: '把投递、面试、复盘沉淀下来', scenario: 'general', kind: 'progress', prompt: '帮我整理现在的求职进度，并告诉我今天最该推进哪一步。' }
+  { title: '简历卡住了', desc: '上传文件，或先粘一段项目经历', scenario: 'resume', kind: 'resume', prompt: promptMap.resume },
+  { title: '看不懂 JD', desc: '粘贴岗位描述，只拆真实要求', scenario: 'jd', kind: 'jd', prompt: promptMap.jd },
+  { title: '马上面试', desc: '按岗位热身，不替你编答案', scenario: 'interview', kind: 'interview', prompt: promptMap.interview },
+  { title: '想找岗位', desc: '先搜有来源链接的机会', scenario: 'general', kind: 'search', prompt: '' },
+  { title: '进度很乱', desc: '把投递、面试、复盘顺手记下', scenario: 'general', kind: 'progress', prompt: '帮我整理现在的求职进度，并告诉我今天最该推进哪一步。' }
 ]
 
 const scenarioTabs: Array<{ label: string; scenario: ConversationScenario; icon: string; isSearch?: boolean }> = [
@@ -291,6 +291,27 @@ const ConversationPage: React.FC = () => {
     }
   }
 
+  const handleMessageQuickAction = async (action: MessageQuickAction) => {
+    if (isSending) return
+    if (action.kind === 'retry_chat' && action.prompt) {
+      await sendMessage(action.prompt)
+      return
+    }
+    if (action.kind === 'retry_jd' && action.jdText) {
+      await jdAnalyze(action.jdText)
+      return
+    }
+    if (action.kind === 'retry_interview' && action.position) {
+      await startInterview(action.position, action.durationMinutes || 10, action.setup || {})
+      return
+    }
+    if (action.kind === 'paste_resume') {
+      setDraft(action.prompt || '')
+      setDraftFocused(true)
+      setTimeout(() => setDraftFocused(true), 80)
+    }
+  }
+
   const handleSend = async () => {
     if (!draft.trim()) return
     const value = draft
@@ -310,13 +331,15 @@ const ConversationPage: React.FC = () => {
         const kwMatch = value.match(jobKeywords)
         query = kwMatch ? kwMatch[0] : '产品经理'
       }
-      await searchJobs(query, cityMatch?.[0])
+      const searchStatus = await searchJobs(query, cityMatch?.[0])
       const results = usePincoStore.getState().jobSearchResults
-      if (results.length > 0) {
+      if (searchStatus.ok && results.length > 0) {
         const jobLines = results.slice(0, 6).map((j, i) =>
           `${i + 1}. 【${j.source || j.platform || '网络'}】${j.title} - ${j.company} · ${j.location}${j.salary ? ' · ' + j.salary : ''}\n   ${j.summary}\n   来源链接：${j.url}`
         ).join('\n')
         searchContext = `\n\n[系统提示：以下是检索接口刚返回的 ${results.length} 条带可打开来源链接的岗位结果。只能依据链接和摘要推荐，不要扩写公司、薪资或招聘状态：]\n${jobLines}`
+      } else if (!searchStatus.ok) {
+        searchContext = `\n\n[系统提示：本次岗位搜索接口不可用，错误摘要：${searchStatus.errorMessage || '未知错误'}。请不要编造具体岗位、公司、薪资或招聘状态；先基于用户目标给出可执行的搜索关键词、筛选标准和下一步操作，并提醒用户稍后可从“搜岗位”重新检索。]`
       }
     }
 
@@ -1057,7 +1080,7 @@ const ConversationPage: React.FC = () => {
                 </View>
               ))}
             </View>
-            <Text className={styles.welcomeTip}>也可以直接把求职状态告诉我，比如“昨天投了字节 AI 产品岗”。</Text>
+            <Text className={styles.welcomeTip}>你也可以直接说现状，比如“昨天投了字节 AI 产品岗，今天不知道该补投还是准备面试”。</Text>
           </View>
         )}
 
@@ -1129,6 +1152,19 @@ const ConversationPage: React.FC = () => {
                     <Text className={styles.actionBtnIcon}>↗️</Text>
                     <Text className={styles.actionBtnText}>分享</Text>
                   </View>
+                </View>
+              )}
+              {message.role === 'assistant' && message.quickActions?.length && !isStreaming && (
+                <View className={styles.quickActionRow}>
+                  {message.quickActions.map((action) => (
+                    <View
+                      key={`${message.id}-${action.kind}-${action.label}`}
+                      className={classnames(styles.quickActionButton, isSending && styles.quickActionButtonDisabled)}
+                      onClick={() => handleMessageQuickAction(action)}
+                    >
+                      <Text className={styles.quickActionText}>{isSending ? '处理中...' : action.label}</Text>
+                    </View>
+                  ))}
                 </View>
               )}
             </View>

@@ -48,6 +48,7 @@ const MinePage: React.FC = () => {
   const jobProgress = usePincoStore((state) => state.jobProgress)
   const todayTasks = usePincoStore((state) => state.todayTasks)
   const toggleTodayTask = usePincoStore((state) => state.toggleTodayTask)
+  const buildTaskCompletionPrompt = usePincoStore((state) => state.buildTaskCompletionPrompt)
   const clearDoneTasks = usePincoStore((state) => state.clearDoneTasks)
   const addTodayTasks = usePincoStore((state) => state.addTodayTasks)
   const generateTasksFromTriage = usePincoStore((state) => state.generateTasksFromTriage)
@@ -380,6 +381,21 @@ const MinePage: React.FC = () => {
     }
   }
 
+  const handleTaskCheck = async (task: typeof todayTasks[0]) => {
+    const willComplete = !task.done
+    toggleTodayTask(task.id)
+    if (!willComplete) return
+    const result = await Taro.showModal({
+      title: '完成后要不要让学姐接一下？',
+      content: 'Pinco 会基于这条任务做复盘，并判断是否需要顺手沉淀到求职进度或证据库。',
+      confirmText: '让学姐接',
+      cancelText: '先不用',
+    })
+    if (result.confirm) {
+      openConversationTab(task.scenario || 'general', buildTaskCompletionPrompt(task))
+    }
+  }
+
   usePullDownRefresh(() => {
     Promise.all([refreshServiceHealth(), refreshBookings(), loadContribution()]).finally(() => Taro.stopPullDownRefresh())
   })
@@ -449,19 +465,30 @@ const MinePage: React.FC = () => {
                 <View key={task.id} className={styles.taskItem}>
                   <View
                     className={classnames(styles.taskCheck, task.done && styles.taskCheckDone)}
-                    onClick={() => toggleTodayTask(task.id)}
+                    onClick={() => handleTaskCheck(task)}
                   >
                     <Text>{task.done ? '✓' : ''}</Text>
                   </View>
                   <View className={styles.taskBody} onClick={() => handleTaskAction(task)}>
                     <Text className={classnames(styles.taskTitle, task.done && styles.taskTitleDone)}>{task.title}</Text>
                     <Text className={styles.taskDesc}>{task.desc}</Text>
-                    {task.action && (
+                    {task.action && !task.done && (
                       <Text className={styles.taskActionLabel}>
                         {task.action === 'open_jd' ? '去解读JD' :
                          task.action === 'open_resume' ? '去诊断简历' :
                          task.action === 'open_interview' ? '开始面试' :
                          task.action === 'view_progress' ? '看进度' : '找学姐做'} →
+                      </Text>
+                    )}
+                    {task.done && (
+                      <Text
+                        className={styles.taskActionLabel}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openConversationTab(task.scenario || 'general', buildTaskCompletionPrompt(task))
+                        }}
+                      >
+                        让学姐复盘下一步 →
                       </Text>
                     )}
                   </View>
