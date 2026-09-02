@@ -80,7 +80,7 @@ const ExpertsPage: React.FC = () => {
     <View className={styles.page}>
       <View className={styles.header}>
         <Text className={styles.title}>专家市场</Text>
-        <Text className={styles.desc}>真人专家会明确标注“平台已审核”；内测需求画像只用于先收集问题并匹配真人，不会扣款。</Text>
+        <Text className={styles.desc}>1.0 免费公测只收集预约意向。真人专家会明确标注“平台已审核”，暂不开放商业化服务。</Text>
         <View className={styles.applyButton} onClick={() => Taro.navigateTo({ url: '/pages/expert-center/index' })}>
           <Text>申请成为专家 / 专家工作台</Text>
         </View>
@@ -103,7 +103,7 @@ const ExpertsPage: React.FC = () => {
               <Text className={styles.name}>{expert.name}</Text>
               <Text className={styles.titleText}>{expert.title}</Text>
             </View>
-            <Text className={styles.priceTag}>参考 ¥{expert.price} / 30min</Text>
+            <Text className={styles.priceTag}>免费公测预约</Text>
           </View>
           <Text className={styles.verifiedLabel}>✓ {expert.verificationStatus}</Text>
           <Text className={styles.intro}>{expert.intro}</Text>
@@ -134,7 +134,7 @@ const ExpertsPage: React.FC = () => {
               <View className={styles.detailClose} onClick={close}><Text>✕</Text></View>
             </View>
             <Text className={styles.detailTitle}>{selectedExpert.title}</Text>
-            <Text className={styles.detailPrice}>参考 ¥{selectedExpert.price} / 30分钟 · 内测不扣款</Text>
+            <Text className={styles.detailPrice}>1.0 免费公测预约</Text>
             <View className={styles.detailSection}>
               <Text className={styles.detailSectionTitle}>{selectedExpert.isDemo ? '内测需求说明' : '平台审核资料'}</Text>
               <Text className={styles.detailIntro}>{selectedExpert.intro}</Text>
@@ -226,7 +226,7 @@ const ExpertsPage: React.FC = () => {
                 </View>
               </View>
             )}
-            <Text className={styles.noChargeNote}>{selectedExpert.isDemo ? '当前没有指定的真人专家接单。本次只收集需求并尝试匹配，不会发起支付。' : '本次只提交意向，不会发起微信支付。专家确认后再通知下一步。'}</Text>
+            <Text className={styles.noChargeNote}>{selectedExpert.isDemo ? '当前没有指定的真人专家接单。本次只收集需求并尝试匹配。' : '本次只提交免费预约意向，专家确认后再通知下一步。'}</Text>
             <View className={styles.detailBookButton} onClick={submitBooking}>
               <Text className={styles.detailBookText}>{loading ? '提交中…' : '提交预约意向（不扣款）'}</Text>
             </View>

@@ -45,6 +45,38 @@ const HomePage: React.FC = () => {
     seedConversation(scenario, prompt, subtitle)
   }
 
+  const handleTodayTaskAction = (task: typeof todayTasks[0]) => {
+    if (task.action === 'booking') {
+      Taro.switchTab({ url: '/pages/experts/index' })
+      return
+    }
+    if (task.action === 'circle') {
+      Taro.navigateTo({ url: '/pages/circle/index' })
+      return
+    }
+    if (task.action === 'view_progress') {
+      Taro.navigateTo({ url: '/pages/career/index' })
+      return
+    }
+    if (task.action === 'open_interview') {
+      enterConversation('interview', '围绕今日任务练一轮')
+      return
+    }
+    if (task.action === 'open_jd') {
+      enterConversation('jd', '围绕今日任务拆 JD')
+      return
+    }
+    if (task.action === 'open_resume') {
+      enterConversation('resume', '围绕今日任务改简历')
+      return
+    }
+    if ((task.action === 'send_chat' || task.action === 'chat') && task.prompt) {
+      enterConversationWithPrompt(task.scenario || 'general', task.title, task.prompt)
+      return
+    }
+    enterConversation(task.scenario || 'general', task.title)
+  }
+
   const handleMoodCheckIn = async (intensity: 1 | 2 | 3 | 4 | 5) => {
     if (checkingMood) return
     setCheckingMood(true)
@@ -147,16 +179,7 @@ const HomePage: React.FC = () => {
         </View>
         <View className={styles.taskList}>
           {undoneTasks.length > 0 ? undoneTasks.map((task) => (
-            <View key={task.id} className={styles.taskItem} onClick={() => {
-              if (task.action === 'chat') {
-                openConversation(task.scenario || 'general', task.title)
-                Taro.switchTab({ url: '/pages/conversation/index' })
-              } else if (task.action === 'booking') {
-                Taro.switchTab({ url: '/pages/experts/index' })
-              } else if (task.action === 'circle') {
-                Taro.navigateTo({ url: '/pages/circle/index' })
-              }
-            }}>
+            <View key={task.id} className={styles.taskItem} onClick={() => handleTodayTaskAction(task)}>
               <Text className={styles.taskEmoji}>{task.emoji}</Text>
               <View className={styles.taskContent}>
                 <Text className={styles.taskTitle}>{task.title}</Text>

@@ -16,6 +16,7 @@ import {
   ServiceTimelineItem,
   SupportFollowUp,
   TodayTask,
+  TodayTaskSource,
   TriageStage,
   UserMembership,
   UserProfile,
@@ -33,6 +34,8 @@ import {
   setApiSessionToken,
 } from '@/services/api'
 import { trackProductEvent } from '@/services/analytics'
+
+declare const wx: any
 
 interface ConversationMeta {
   title: string
@@ -62,7 +65,7 @@ interface PincoState {
   membership: UserMembership | null
   supportDueFollowUps: SupportFollowUp[]
   supportFeedbackCheckInId: string | null
-  searchJobs: (query: string, city?: string) => Promise<void>
+  searchJobs: (query: string, city?: string) => Promise<{ ok: boolean; errorMessage?: string }>
   checkInEmotion: (intensity: 1 | 2 | 3 | 4 | 5, eventType?: string, note?: string) => Promise<any>
   submitSupportFeedback: (helpful: boolean, understoodScore: 1 | 2 | 3 | 4 | 5) => Promise<void>
   respondSupportFollowUp: (checkInId: string, intensity: 1 | 2 | 3 | 4 | 5, microActionCompleted: boolean) => Promise<void>
@@ -96,6 +99,7 @@ interface PincoState {
   loadTodayTasks: () => void
   saveTodayTasks: () => void
   toggleTodayTask: (id: string) => void
+  buildTaskCompletionPrompt: (task: TodayTask) => string
   clearDoneTasks: () => void
   generateTasksFromTriage: (stage: TriageStage, role: string, time: string, materials: string[], anxiety: string) => TodayTask[]
   addTodayTasks: (tasks: TodayTask[]) => void
@@ -296,13 +300,34 @@ export const usePincoStore = create<PincoState>((set, get) => ({
   },
 
   toggleTodayTask: (id) => {
-    const next = get().todayTasks.map((item) => item.id === id ? { ...item, done: !item.done } : item)
+    const next = get().todayTasks.map((item) => item.id === id
+      ? { ...item, done: !item.done, completedAt: !item.done ? Date.now() : undefined }
+      : item)
     set({ todayTasks: next })
     try {
       Taro.setStorageSync(TASKS_STORAGE_KEY, JSON.stringify(next))
     } catch (e) {
       console.error('[Store] save today tasks failed', e)
     }
+  },
+
+  buildTaskCompletionPrompt: (task) => {
+    const sourceLabel: Record<TodayTaskSource, string> = {
+      triage: '今日规划',
+      job_progress: '求职进度',
+      resume: '简历优化',
+      jd: 'JD 解读',
+      interview: '面试练习',
+    }
+    const actionHint = task.prompt
+      ? `这条任务原本的行动提示是：${task.prompt}`
+      : '如果还缺关键信息，请只问我 1 个最必要的问题。'
+    return [
+      `我刚完成了一个${sourceLabel[task.source] || '求职'}任务：${task.title}。`,
+      `任务说明：${task.desc}`,
+      actionHint,
+      '请不要表扬或泛泛鼓励。帮我做三件事：1）判断这一步是否足够推进求职；2）指出下一步最小动作；3）如果适合沉淀到求职进度或证据库，请告诉我该记录什么。'
+    ].join('\n')
   },
 
   clearDoneTasks: () => {
@@ -544,6 +569,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
             content: '这次回答没有完成评分，我已经保留你的原回答，也没有生成固定点评。请稍后点“重试本题”。',
             type: 'interview',
             createdAt: Date.now(),
+            quickActions: [
+              { label: '给我救场框架', kind: 'retry_chat', prompt: '我刚才这题回答评分失败了。先不要推进下一题，请根据我上一条回答给一个三步救场框架。' },
+            ],
           }],
           isStreaming: false,
           streamingContent: '',
@@ -785,6 +813,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
               content: assistantContent,
               type: type === 'interview' ? 'interview' : 'text',
               createdAt: Date.now(),
+              quickActions: [
+                { label: isRateLimited ? '稍后重试上一问' : '重试上一问', kind: 'retry_chat', prompt: trimmed },
+              ],
             }
           ],
           serviceHealth: {
@@ -947,6 +978,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
             content: `模拟面试没有启动成功，我没有生成本地固定题冒充真实面试。\n\n你的目标岗位「${position}」已保留，请检查模型服务后点击重试。`,
             type: 'interview',
             createdAt: Date.now(),
+            quickActions: [
+              { label: '重新开始面试', kind: 'retry_interview', position, durationMinutes, setup },
+            ],
           }
         ],
       })
@@ -1031,6 +1065,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           content: `📄 **我暂时没法直接解析这个文件，但会话不中断。**\n\n你可以把简历里的「个人摘要 / 项目经历 / 实习经历」直接粘贴过来，我会继续按这个格式帮你改：\n\n- 原文问题\n- 优化版\n- 为什么这样改\n- 还能补哪些量化数据\n\n先粘一段最想改的项目经历就行。`,
           type: 'resume',
           createdAt: Date.now(),
+          quickActions: [
+            { label: '粘贴简历片段', kind: 'paste_resume', prompt: '请帮我优化这段简历经历，按“原文问题 / 优化版 / 为什么这样改 / 还能补哪些量化数据”的格式反馈：\n\n' },
+          ],
         }],
       })
       get().saveMessages()
@@ -1089,6 +1126,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           content: 'JD 解读没有完成，我没有用通用模板冒充针对这份岗位的分析。\n\n完整 JD 已保留在会话中；模型服务恢复后，请点击“重新分析 JD”。',
           type: 'jd',
           createdAt: Date.now(),
+          quickActions: [
+            { label: '重新分析 JD', kind: 'retry_jd', jdText },
+          ],
         }],
       })
       get().saveMessages()
@@ -1185,7 +1225,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           cancelText: '先不用',
         })
         if (result.confirm) {
-          Taro.navigateTo({ url: `/pages/conversation/index?scenario=emotion&prompt=${encodeURIComponent(action.prompt)}` })
+          get().openConversation('emotion', '先接住状态，再决定是否复盘')
+          Taro.switchTab({ url: '/pages/conversation/index' })
+          get().seedConversation('emotion', action.prompt, '先接住状态，再决定是否复盘')
         }
       } else {
         Taro.showToast({ title: '进度已同步云端', icon: 'none' })
@@ -1317,15 +1359,19 @@ export const usePincoStore = create<PincoState>((set, get) => ({
   },
 
   searchJobs: async (query, city) => {
+    set({ jobSearchResults: [] })
     try {
       Taro.showLoading({ title: '正在搜索...' })
       const result = await apiSearchJobs({ query, city, limit: 8 })
       set({ jobSearchResults: result.jobs })
-      Taro.hideLoading()
+      return { ok: true }
     } catch (error) {
       console.error('[Store] search jobs failed', error)
+      const errorMessage = String((error as any)?.message || (error as any)?.errMsg || '搜索失败，请稍后重试')
+      Taro.showToast({ title: errorMessage, icon: 'none' })
+      return { ok: false, errorMessage }
+    } finally {
       Taro.hideLoading()
-      Taro.showToast({ title: '搜索失败，请稍后重试', icon: 'none' })
     }
   },
 
@@ -1436,6 +1482,32 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     }
   }
 }))
+
+// Developer Tools only: inject non-persistent synthetic tasks for repeatable UI regression.
+// Trial and production builds never expose this hook.
+try {
+  const envVersion = typeof wx !== 'undefined'
+    ? wx.getAccountInfoSync?.()?.miniProgram?.envVersion
+    : ''
+  if (envVersion === 'develop') {
+    wx.__pincoSetTodayTasksForTest = (tasks: TodayTask[]) => {
+      const safeTasks = Array.isArray(tasks)
+        ? tasks.filter((task) => task?.id && task?.title && task?.desc).slice(0, 5)
+        : []
+      usePincoStore.setState({ todayTasks: safeTasks })
+      return safeTasks.length
+    }
+    wx.__pincoSetMessagesForTest = (messages: MessageItem[]) => {
+      const safeMessages = Array.isArray(messages)
+        ? messages.filter((message) => message?.id && ['user', 'assistant'].includes(message?.role)).slice(0, 5)
+        : []
+      usePincoStore.setState({ messages: safeMessages, isSending: false, isStreaming: false, streamingContent: '' })
+      return safeMessages.length
+    }
+  }
+} catch (error) {
+  console.warn('[Tasks] devtools test hook unavailable', error)
+}
 
 // 云托管容器重启或会话过期时，当前页面不能要求用户手动清缓存。
 // API 层会等待这次恢复完成，并用新身份把原请求安全地重试一次。

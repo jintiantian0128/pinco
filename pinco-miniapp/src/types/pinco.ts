@@ -2,6 +2,27 @@ export type ConversationScenario = 'general' | 'resume' | 'interview' | 'emotion
 
 export type MessageType = 'text' | 'analysis' | 'interview' | 'jd' | 'resume' | 'image' | 'voice'
 
+export type MessageQuickActionKind = 'retry_chat' | 'retry_jd' | 'retry_interview' | 'paste_resume'
+
+export interface MessageQuickAction {
+  label: string
+  kind: MessageQuickActionKind
+  prompt?: string
+  jdText?: string
+  position?: string
+  durationMinutes?: 5 | 10 | 20 | 30
+  setup?: {
+    company?: string
+    interviewRound?: string
+    interviewDate?: string
+    anxietyFocus?: string
+    practiceStyle?: 'warmup' | 'real' | 'pressure'
+    jobId?: string
+    sourcePostId?: string
+    jdText?: string
+  }
+}
+
 export interface MessageItem {
   id: string
   role: 'user' | 'assistant'
@@ -12,6 +33,7 @@ export interface MessageItem {
   duration?: number
   createdAt: number
   feedback?: 'like' | 'dislike' | null
+  quickActions?: MessageQuickAction[]
 }
 
 export interface InterviewState {
@@ -78,6 +100,7 @@ export interface TodayTask {
   emoji?: string
   prompt?: string
   createdAt: number
+  completedAt?: number
 }
 
 export interface ServiceTimelineItem {
