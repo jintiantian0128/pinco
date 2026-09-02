@@ -11,7 +11,6 @@ export default {
     'pages/job-search/index',
     'pages/career/index',
     'pages/expert-center/index',
-    'pages/membership/index',
     'pages/webview/index'
   ],
   window: {

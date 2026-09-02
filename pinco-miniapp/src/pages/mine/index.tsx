@@ -8,11 +8,7 @@ import { buildWechatSetupChecklist } from '@/utils/wechat'
 import { BookingItem, ContributionStatus, ConversationScenario, TriageStage } from '@/types/pinco'
 import { apiRequest } from '@/services/api'
 import {
-  closePaymentOrder,
   fetchContributionStatus,
-  fetchPaymentOrder,
-  payExpert,
-  refundPaymentOrder,
   reviewExpertBooking,
 } from '@/services/pinco'
 
@@ -76,7 +72,6 @@ const MinePage: React.FC = () => {
   const [reviewBookingId, setReviewBookingId] = useState('')
   const [reviewScore, setReviewScore] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
-  const [paymentBookingId, setPaymentBookingId] = useState('')
   const [contribution, setContribution] = useState<ContributionStatus | null>(null)
   const [professionalValueScore, setProfessionalValueScore] = useState(0)
   const [emotionalValueScore, setEmotionalValueScore] = useState(0)
@@ -114,123 +109,18 @@ const MinePage: React.FC = () => {
 
   const cancelBooking = async (booking: BookingItem) => {
     if (!userProfile?.user_id) return
-    if (booking.payment_status === 'paid' && booking.payment_order_id) {
-      const confirmed = await Taro.showModal({
-        title: '取消并申请全额退款',
-        content: '服务尚未完成，可申请原路全额退款。退款只以微信支付服务端确认结果为准。',
-        confirmText: '申请退款',
-      })
-      if (!confirmed.confirm) return
-      try {
-        const result = await refundPaymentOrder(booking.payment_order_id, userProfile.user_id, '用户取消未开始的专家预约')
-        await refreshBookings()
-        Taro.showModal({ title: '退款已受理', content: result.message, showCancel: false })
-      } catch (error: any) {
-        console.error('[Mine] refund booking failed', error)
-        Taro.showModal({ title: '退款未完成', content: error?.message || '预约仍保留，请勿重复申请并联系平台核对。', showCancel: false })
-      }
-      return
-    }
-    if (booking.payment_status === 'unpaid' && booking.payment_order_id) {
-      try {
-        const closed = await closePaymentOrder(booking.payment_order_id, userProfile.user_id)
-        if (closed.status === 'paid') {
-          await refreshBookings()
-          Taro.showModal({ title: '支付已确认', content: '该订单实际已经支付，若仍要取消请重新点击并申请退款。', showCancel: false })
-          return
-        }
-      } catch (error: any) {
-        Taro.showModal({ title: '暂时不能取消', content: error?.message || '支付订单状态尚未核清，请不要重复支付。', showCancel: false })
-        return
-      }
-    }
     const confirmed = await Taro.showModal({
       title: '取消预约意向',
-      content: '当前没有扣款。取消后若专家已确认，时段会重新释放。',
+      content: '1.0 公测仅收集免费预约意向。取消后若专家已确认，时段会重新释放。',
       confirmText: '确认取消',
     })
     if (!confirmed.confirm) return
     try {
       await cancelBookingOrder(booking.id)
-      Taro.showToast({ title: '已取消，未发生扣款', icon: 'none' })
+      Taro.showToast({ title: '预约意向已取消', icon: 'none' })
     } catch (error) {
       console.error('[Mine] cancel booking failed', error)
       Taro.showToast({ title: '取消失败，请刷新重试', icon: 'none' })
-    }
-  }
-
-  const payForBooking = async (booking: BookingItem) => {
-    if (!userProfile?.user_id || paymentBookingId) return
-    const confirmed = await Taro.showModal({
-      title: '支付专家服务',
-      content: `专家已确认接单。微信收银台会展示服务端计算的最终金额，参考价 ¥${booking.reference_price || 0}。`,
-      confirmText: '核对并支付',
-    })
-    if (!confirmed.confirm) return
-    setPaymentBookingId(booking.id)
-    try {
-      const order = await payExpert({
-        user_id: userProfile.user_id,
-        expert_id: booking.expertId,
-        booking_id: booking.id,
-        request_id: `expert-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-      })
-      try {
-        await Taro.requestPayment(order.payment_params)
-      } catch (paymentError: any) {
-        const message = String(paymentError?.errMsg || paymentError?.message || '')
-        if (message.includes('cancel')) {
-          try {
-            const closed = await closePaymentOrder(order.order_id, userProfile.user_id)
-            await refreshBookings()
-            Taro.showToast({ title: closed.status === 'paid' ? '支付已由服务端确认' : '已取消支付，订单已关闭', icon: 'none' })
-          } catch (closeError) {
-            console.error('[Mine] close expert order failed', closeError)
-            Taro.showModal({ title: '订单状态待核对', content: '请不要重复支付，先查看微信支付记录并稍后刷新。', showCancel: false })
-          }
-          return
-        }
-        throw paymentError
-      }
-      const status = await fetchPaymentOrder(order.order_id, userProfile.user_id, true)
-      await refreshBookings()
-      Taro.showModal({
-        title: status.status === 'paid' && status.fulfilled ? '支付成功' : '支付结果确认中',
-        content: status.status === 'paid' && status.fulfilled ? '微信支付服务端已确认，预约进入待服务状态。' : `${status.message}，请勿重复支付。`,
-        showCancel: false,
-      })
-    } catch (error: any) {
-      console.error('[Mine] expert payment failed', error)
-      Taro.showModal({ title: '支付未完成', content: error?.message || '请先核对微信支付记录，再决定是否重试。', showCancel: false })
-    } finally {
-      setPaymentBookingId('')
-    }
-  }
-
-  const reconcileExpertPayment = async (booking: BookingItem) => {
-    if (!userProfile?.user_id || !booking.payment_order_id || paymentBookingId) return
-    setPaymentBookingId(booking.id)
-    try {
-      const status = await fetchPaymentOrder(booking.payment_order_id, userProfile.user_id, true)
-      if (status.status === 'paid' && status.fulfilled) {
-        await refreshBookings()
-        Taro.showModal({ title: '支付已确认', content: '微信支付服务端已确认，预约进入待服务状态。', showCancel: false })
-        return
-      }
-      const decision = await Taro.showModal({
-        title: '支付尚未确认',
-        content: `${status.message}。为避免重复支付，可以先安全关闭原订单，再重新发起。`,
-        confirmText: '关闭原订单',
-      })
-      if (decision.confirm) {
-        const closed = await closePaymentOrder(booking.payment_order_id, userProfile.user_id)
-        await refreshBookings()
-        Taro.showToast({ title: closed.status === 'paid' ? '支付已确认' : '原订单已关闭，可重新支付', icon: 'none' })
-      }
-    } catch (error: any) {
-      Taro.showModal({ title: '订单状态待核对', content: error?.message || '请不要重复支付，稍后再试。', showCancel: false })
-    } finally {
-      setPaymentBookingId('')
     }
   }
 
@@ -421,15 +311,10 @@ const MinePage: React.FC = () => {
         <View className={styles.profileMain}>
           <View className={styles.profileTop}>
             <Text className={styles.nickname}>{userProfile?.nickname || 'Pinco 新手'}</Text>
-            <Text className={styles.planBadge}>{membership?.plan_name || 'Free Plan'}</Text>
-            {(!membership || membership.plan_id === 'free') && (
-              <View className={styles.upgradeBadge} onClick={() => Taro.navigateTo({ url: '/pages/membership/index' })}>
-                <Text>升级会员</Text>
-              </View>
-            )}
+            <Text className={styles.planBadge}>1.0 免费公测</Text>
           </View>
           <Text className={styles.desc}>今天也不用一个人硬扛。Pinco 会帮你记录进度、拆 JD、改简历和复盘面试。</Text>
-          <Text className={styles.quotaText}>当前方案：{membership?.plan_name || '免费版'} · 用量以服务端实际记录为准</Text>
+          <Text className={styles.quotaText}>1.0 免费公测，暂不开放商业化功能</Text>
         </View>
       </View>
 
@@ -598,14 +483,8 @@ const MinePage: React.FC = () => {
                   </View>
                   {booking.delivery_summary && <Text className={styles.bookingDelivery}>交付摘要：{booking.delivery_summary}</Text>}
                   {(booking.next_actions || []).map((item, index) => <Text key={`next-${index}`} className={styles.bookingDelivery}>下一步 {index + 1}：{item}</Text>)}
-                  {booking.status_code === 'confirmed' && booking.payment_status === 'payment_required' && (
-                    <View className={styles.reviewTrigger} onClick={() => payForBooking(booking)}><Text>{paymentBookingId === booking.id ? '正在创建安全订单…' : '微信支付专家服务'}</Text></View>
-                  )}
-                  {booking.status_code === 'confirmed' && booking.payment_status === 'unpaid' && (
-                    <View className={styles.reviewTrigger} onClick={() => reconcileExpertPayment(booking)}><Text>{paymentBookingId === booking.id ? '正在核对…' : '核对待支付订单'}</Text></View>
-                  )}
                   {['intent_submitted', 'confirmed'].includes(booking.status_code || '') && booking.payment_status !== 'refund_processing' && (
-                    <View className={styles.reviewTrigger} onClick={() => cancelBooking(booking)}><Text>{booking.payment_status === 'paid' ? '取消并申请退款' : booking.payment_status === 'unpaid' ? '关闭支付订单并取消' : '取消预约（未扣款）'}</Text></View>
+                    <View className={styles.reviewTrigger} onClick={() => cancelBooking(booking)}><Text>取消预约意向</Text></View>
                   )}
                   {booking.status_code === 'completed' && !booking.review_id && reviewBookingId !== booking.id && (
                     <View className={styles.reviewTrigger} onClick={() => setReviewBookingId(booking.id)}><Text>评价这次真实服务</Text></View>
@@ -648,14 +527,9 @@ const MinePage: React.FC = () => {
         <View className={styles.card}>
           <View className={styles.progressHeader}>
             <View>
-              <Text className={styles.cardTitle}>会员权益</Text>
-              <Text className={styles.cardDesc}>当前会员等级享有的专属权益</Text>
+              <Text className={styles.cardTitle}>公测用量</Text>
+              <Text className={styles.cardDesc}>1.0 免费公测期间的功能使用记录，不提供付费升级</Text>
             </View>
-            {(!membership || membership.plan_id === 'free') && (
-              <View className={styles.progressBadge} onClick={() => Taro.navigateTo({ url: '/pages/membership/index' })}>
-                <Text>升级</Text>
-              </View>
-            )}
           </View>
           <View className={styles.membershipGrid}>
             <View className={styles.membershipItem}>
@@ -672,11 +546,6 @@ const MinePage: React.FC = () => {
               <Text className={styles.membershipIcon}>🎤</Text>
               <Text className={styles.membershipTitle}>模拟面试</Text>
               <Text className={styles.membershipDesc}>{membership ? `${membership.interview_used}/${membership.interview_limit === -1 ? '∞' : membership.interview_limit}` : '等待同步'}</Text>
-            </View>
-            <View className={styles.membershipItem}>
-              <Text className={styles.membershipIcon}>🎯</Text>
-              <Text className={styles.membershipTitle}>专家折扣</Text>
-              <Text className={styles.membershipDesc}>{membership && membership.expert_discount < 1 ? `${Math.round(membership.expert_discount * 100)}%` : '无'}</Text>
             </View>
           </View>
         </View>
