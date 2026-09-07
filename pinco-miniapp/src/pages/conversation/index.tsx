@@ -5,7 +5,8 @@ import classnames from 'classnames'
 import styles from './index.module.scss'
 import { usePincoStore } from '@/store/usePincoStore'
 import { ConversationScenario, JobProgressItem, MessageItem, MessageQuickAction } from '@/types/pinco'
-import { getApiBaseUrl, apiUploadFile } from '@/services/api'
+import { getApiBaseUrl, apiRequest, apiUploadFile } from '@/services/api'
+import { trackProductEvent } from '@/services/analytics'
 import { buildConversationTitle } from '@/utils/format'
 
 const promptMap: Record<ConversationScenario, string> = {
@@ -18,15 +19,41 @@ const promptMap: Record<ConversationScenario, string> = {
   jd: '请帮我解读这段岗位描述，提取核心要求、面试重点和谈薪建议。'
 }
 
-type ChatAction = { label: string; prompt?: string; kind?: 'prompt' | 'resume' | 'jd' | 'interview' | 'progress' | 'bind' | 'review' | 'search' }
+type ChatAction = { label: string; prompt?: string; kind?: 'prompt' | 'resume' | 'jd' | 'interview' | 'progress' | 'bind' | 'review' | 'search' | 'evidence_new' | 'evidence_direction' | 'target_job' }
 
 const quickStartCards: Array<{ title: string; desc: string; scenario: ConversationScenario; kind?: ChatAction['kind']; prompt: string }> = [
-  { title: '简历卡住了', desc: '上传文件，或先粘一段项目经历', scenario: 'resume', kind: 'resume', prompt: promptMap.resume },
-  { title: '看不懂 JD', desc: '粘贴岗位描述，只拆真实要求', scenario: 'jd', kind: 'jd', prompt: promptMap.jd },
-  { title: '马上面试', desc: '按岗位热身，不替你编答案', scenario: 'interview', kind: 'interview', prompt: promptMap.interview },
-  { title: '想找岗位', desc: '先搜有来源链接的机会', scenario: 'general', kind: 'search', prompt: '' },
-  { title: '进度很乱', desc: '把投递、面试、复盘顺手记下', scenario: 'general', kind: 'progress', prompt: '帮我整理现在的求职进度，并告诉我今天最该推进哪一步。' }
+  { title: '我还没有简历', desc: '口述一段经历，先生成可信证据', scenario: 'resume', kind: 'evidence_new', prompt: '' },
+  { title: '我有一份旧简历', desc: '上传 PDF / DOCX，再提炼真实证据', scenario: 'resume', kind: 'resume', prompt: '' },
+  { title: '我不知道投什么', desc: '从经历判断方向，再搜索真实岗位', scenario: 'general', kind: 'evidence_direction', prompt: '' },
+  { title: '我已有目标岗位', desc: '粘贴 JD，或先搜索岗位', scenario: 'jd', kind: 'target_job', prompt: '' },
 ]
+
+type EvidenceDraft = {
+  title: string
+  situation: string
+  action: string
+  result: string
+  metrics: string
+  skills: string[]
+  confidence_questions: string[]
+}
+
+type RoleDirection = {
+  role: string
+  fit: 'high' | 'medium' | 'explore'
+  reason: string
+  existing_evidence: string
+  largest_gap: string
+  search_query: string
+}
+
+type EvidenceDraftResponse = {
+  draft: EvidenceDraft
+  resume_bullet: string
+  role_directions: RoleDirection[]
+  source_boundary: string
+  expert_knowledge?: { version?: string; cards_used?: string[] }
+}
 
 const scenarioTabs: Array<{ label: string; scenario: ConversationScenario; icon: string; isSearch?: boolean }> = [
   { label: '简历诊断', scenario: 'resume', icon: '📄' },
@@ -126,6 +153,29 @@ const ConversationPage: React.FC = () => {
   const [selectionRange, setSelectionRange] = useState({ start: 0, end: 0 })
   const [draftFocused, setDraftFocused] = useState(false)
   const [draftSelection, setDraftSelection] = useState({ start: -1, end: -1 })
+  const [showEvidenceBuilder, setShowEvidenceBuilder] = useState(false)
+  const [evidenceNarrative, setEvidenceNarrative] = useState('')
+  const [evidenceDraft, setEvidenceDraft] = useState<EvidenceDraft | null>(null)
+  const [evidenceResumeBullet, setEvidenceResumeBullet] = useState('')
+  const [roleDirections, setRoleDirections] = useState<RoleDirection[]>([])
+  const [evidenceBoundary, setEvidenceBoundary] = useState('')
+  const [evidenceKnowledgeVersion, setEvidenceKnowledgeVersion] = useState('')
+  const [evidenceIncludeResume, setEvidenceIncludeResume] = useState(false)
+  const [evidenceBusy, setEvidenceBusy] = useState(false)
+  const [evidenceSaved, setEvidenceSaved] = useState(false)
+
+  const openEvidenceBuilder = (includeResumeMemory: boolean, source: string) => {
+    setShowEvidenceBuilder(true)
+    setEvidenceNarrative('')
+    setEvidenceIncludeResume(includeResumeMemory)
+    setEvidenceDraft(null)
+    setEvidenceResumeBullet('')
+    setRoleDirections([])
+    setEvidenceBoundary('')
+    setEvidenceKnowledgeVersion('')
+    setEvidenceSaved(false)
+    trackProductEvent('activation.entry.selected', userProfile?.user_id, { source })
+  }
 
   useEffect(() => {
     loadConversationHistory()
@@ -309,6 +359,10 @@ const ConversationPage: React.FC = () => {
       setDraft(action.prompt || '')
       setDraftFocused(true)
       setTimeout(() => setDraftFocused(true), 80)
+      return
+    }
+    if (action.kind === 'build_evidence') {
+      openEvidenceBuilder(true, 'resume_upload_success')
     }
   }
 
@@ -352,7 +406,108 @@ const ConversationPage: React.FC = () => {
   const [showJDInput, setShowJDInput] = useState(false)
   const [jdInputText, setJdInputText] = useState('')
 
+  const generateEvidenceDraft = async () => {
+    if (evidenceBusy) return
+    const narrative = evidenceNarrative.trim()
+    if (narrative.length < 20) {
+      Taro.showToast({ title: '再多说一点：背景、你做了什么、结果怎样', icon: 'none', duration: 2500 })
+      return
+    }
+    if (!userProfile?.user_id) {
+      Taro.showToast({ title: '用户信息还没准备好，请稍后重试', icon: 'none' })
+      return
+    }
+    setEvidenceBusy(true)
+    setEvidenceSaved(false)
+    trackProductEvent('activation.evidence_draft.started', userProfile.user_id, {
+      include_resume_memory: evidenceIncludeResume,
+    })
+    try {
+      const response = await apiRequest<EvidenceDraftResponse>('/api/v1/workspace/evidence/draft', 'POST', {
+        user_id: userProfile.user_id,
+        narrative,
+        include_resume_memory: evidenceIncludeResume,
+      })
+      setEvidenceDraft(response.draft)
+      setEvidenceResumeBullet(response.resume_bullet || '')
+      setRoleDirections(response.role_directions || [])
+      setEvidenceBoundary(response.source_boundary || '这是待确认草稿，确认后才会保存。')
+      setEvidenceKnowledgeVersion(response.expert_knowledge?.version || '')
+      trackProductEvent('activation.evidence_draft.succeeded', userProfile.user_id, {
+        direction_count: response.role_directions?.length || 0,
+        knowledge_version: response.expert_knowledge?.version || '',
+      })
+    } catch (error: any) {
+      console.error('[Evidence] draft failed', error)
+      trackProductEvent('activation.evidence_draft.failed', userProfile.user_id)
+      Taro.showToast({ title: error?.message || '证据草稿生成失败，请重试', icon: 'none', duration: 3000 })
+    } finally {
+      setEvidenceBusy(false)
+    }
+  }
+
+  const updateEvidenceField = (key: 'title' | 'situation' | 'action' | 'result' | 'metrics', value: string) => {
+    setEvidenceDraft((current) => current ? { ...current, [key]: value } : current)
+    setEvidenceSaved(false)
+  }
+
+  const confirmEvidenceDraft = async () => {
+    if (!evidenceDraft || !userProfile?.user_id || evidenceSaved || evidenceBusy) return
+    if (evidenceDraft.title.trim().length < 2 || evidenceDraft.action.trim().length < 5 || evidenceDraft.result.trim().length < 2) {
+      Taro.showToast({ title: '请先补齐标题、你的动作和结果', icon: 'none' })
+      return
+    }
+    setEvidenceBusy(true)
+    try {
+      await apiRequest('/api/v1/workspace/evidence', 'POST', {
+        user_id: userProfile.user_id,
+        title: evidenceDraft.title.trim(),
+        situation: evidenceDraft.situation.trim(),
+        action: evidenceDraft.action.trim(),
+        result: evidenceDraft.result.trim(),
+        metrics: evidenceDraft.metrics.trim(),
+        skills: evidenceDraft.skills,
+      })
+      setEvidenceSaved(true)
+      Taro.showToast({ title: '已存入职业证据库', icon: 'success' })
+    } catch (error: any) {
+      Taro.showToast({ title: error?.message || '保存失败，请重试', icon: 'none', duration: 2500 })
+    } finally {
+      setEvidenceBusy(false)
+    }
+  }
+
+  const searchRoleDirection = (direction: RoleDirection) => {
+    trackProductEvent('activation.role_direction.selected', userProfile?.user_id, {
+      role: direction.role,
+      fit: direction.fit,
+    })
+    const query = encodeURIComponent(direction.search_query || direction.role)
+    Taro.navigateTo({ url: `/pages/job-search/index?q=${query}` })
+  }
+
   const handleChatAction = async (item: { label?: string; prompt?: string; kind?: ChatAction['kind'] }) => {
+    if (item.kind === 'evidence_new') {
+      openEvidenceBuilder(false, 'no_resume')
+      return
+    }
+    if (item.kind === 'evidence_direction') {
+      openEvidenceBuilder(true, 'unknown_direction')
+      return
+    }
+    if (item.kind === 'target_job') {
+      try {
+        const result = await Taro.showActionSheet({ itemList: ['粘贴我已有的 JD', '搜索真实岗位'] })
+        trackProductEvent('activation.entry.selected', userProfile?.user_id, {
+          source: result.tapIndex === 0 ? 'target_job_paste_jd' : 'target_job_search',
+        })
+        if (result.tapIndex === 0) setShowJDInput(true)
+        if (result.tapIndex === 1) Taro.navigateTo({ url: '/pages/job-search/index' })
+      } catch (error: any) {
+        if (!String(error?.errMsg || '').includes('cancel')) console.warn('[GoldenPath] target job choice failed', error)
+      }
+      return
+    }
     if (item.kind === 'search') {
       Taro.navigateTo({ url: '/pages/job-search/index' })
       return
@@ -524,6 +679,7 @@ const ConversationPage: React.FC = () => {
   const tapRecordingModeRef = useRef(false)
   const lastVoiceTouchEndAtRef = useRef(0)
   const voiceMessageModeRef = useRef(false)
+  const voiceCaptureTargetRef = useRef<'composer' | 'evidence'>('composer')
   const recordLifecycleActiveRef = useRef(true)
   const recordRouteWatchRef = useRef<any>(null)
 
@@ -673,6 +829,7 @@ const ConversationPage: React.FC = () => {
       clearRecordRouteWatch()
       setIsRecording(false)
       setRecordHint('')
+      voiceCaptureTargetRef.current = 'composer'
       if (recordTimeoutRef.current) {
         clearTimeout(recordTimeoutRef.current)
         recordTimeoutRef.current = null
@@ -697,9 +854,11 @@ const ConversationPage: React.FC = () => {
       }
       if (shouldDiscard) {
         console.info('[Voice] discarded recording released during authorization')
+        voiceCaptureTargetRef.current = 'composer'
         return
       }
       if (!res.tempFilePath) {
+        voiceCaptureTargetRef.current = 'composer'
         Taro.showToast({ title: '录音失败，请重试', icon: 'none' })
         return
       }
@@ -710,6 +869,12 @@ const ConversationPage: React.FC = () => {
           setVoiceMessageMode(false)
           if (data.text) {
             await sendMessage(data.text, 'voice')
+          } else {
+            Taro.showToast({ title: '没听清，再说一次', icon: 'none' })
+          }
+        } else if (voiceCaptureTargetRef.current === 'evidence') {
+          if (data.text) {
+            setEvidenceNarrative((previous) => [previous.trim(), String(data.text).trim()].filter(Boolean).join('\n'))
           } else {
             Taro.showToast({ title: '没听清，再说一次', icon: 'none' })
           }
@@ -729,6 +894,7 @@ const ConversationPage: React.FC = () => {
         }
         Taro.showToast({ title: '语音识别失败：' + (errMsg || '网络异常'), icon: 'none', duration: 3000 })
       } finally {
+        voiceCaptureTargetRef.current = 'composer'
         Taro.hideToast()
       }
     })
@@ -884,10 +1050,13 @@ const ConversationPage: React.FC = () => {
     }
   }
 
-  const handleVoiceClick = async () => {
+  const handleVoiceClick = async (target: 'composer' | 'evidence' = 'composer') => {
     // 真机 touchend 后通常还会合成 click；这一次 click 必须忽略，
     // 否则刚松手结束的录音会被意外重新启动。
     if (Date.now() - lastVoiceTouchEndAtRef.current < 500) return
+    if (!isRecordingRef.current && !recordStartPendingRef.current) {
+      voiceCaptureTargetRef.current = target
+    }
     if (isRecordingRef.current) {
       tapRecordingModeRef.current = true
       stopRecord()
@@ -899,6 +1068,14 @@ const ConversationPage: React.FC = () => {
       recordPressActiveRef.current = true
       setRecordHint('正在录音，再点一次发送')
     }
+  }
+
+  const closeEvidenceBuilder = () => {
+    if (voiceCaptureTargetRef.current === 'evidence') {
+      discardAndStopRecording('evidence builder closed')
+      voiceCaptureTargetRef.current = 'composer'
+    }
+    setShowEvidenceBuilder(false)
   }
 
   const renderMessageContent = (content: string) => {
@@ -1080,7 +1257,121 @@ const ConversationPage: React.FC = () => {
                 </View>
               ))}
             </View>
-            <Text className={styles.welcomeTip}>你也可以直接说现状，比如“昨天投了字节 AI 产品岗，今天不知道该补投还是准备面试”。</Text>
+            <Text className={styles.welcomeTip}>没有新简历或目标 JD 也能开始。先把真实经历说清楚，Pinco 再帮你找方向和岗位。</Text>
+          </View>
+        )}
+
+        {showEvidenceBuilder && (
+          <View className={styles.evidenceBuilder}>
+            <View className={styles.evidenceHeader}>
+              <View className={styles.evidenceHeaderMain}>
+                <Text className={styles.evidenceTitle}>先把经历变成可信证据</Text>
+                <Text className={styles.evidenceSubtitle}>不用会写简历。说清背景、你的动作和结果，学姐先整理草稿，你确认后才保存。</Text>
+              </View>
+              <View className={styles.evidenceClose} onClick={closeEvidenceBuilder}><Text>×</Text></View>
+            </View>
+
+            {!evidenceDraft && (
+              <>
+                <Textarea
+                  className={styles.evidenceNarrative}
+                  value={evidenceNarrative}
+                  onInput={(event) => setEvidenceNarrative(event.detail.value)}
+                  placeholder='例如：我负责一款 AI 助手的留存问题，访谈了 12 位用户，把首次任务从 5 步改成 3 步，次周留存提高了……没有数字也可以先说。'
+                  maxlength={6000}
+                  autoHeight
+                  showConfirmBar={false}
+                />
+                <View className={styles.evidenceSourceRow} onClick={() => setEvidenceIncludeResume((current) => !current)}>
+                  <View className={classnames(styles.evidenceCheckbox, evidenceIncludeResume && styles.evidenceCheckboxActive)}>
+                    <Text>{evidenceIncludeResume ? '✓' : ''}</Text>
+                  </View>
+                  <Text>同时参考我之前上传的旧简历（只做提炼，不会编造）</Text>
+                </View>
+                <View className={styles.evidencePrimaryRow}>
+                  <Button
+                    className={classnames(styles.evidenceVoiceButton, isRecording && voiceCaptureTargetRef.current === 'evidence' && styles.evidenceVoiceButtonActive)}
+                    onClick={() => handleVoiceClick('evidence')}
+                  >
+                    <Text>{isRecording && voiceCaptureTargetRef.current === 'evidence' ? '再点一次结束' : '用语音讲经历'}</Text>
+                  </Button>
+                  <View
+                    className={classnames(styles.evidenceGenerateButton, evidenceBusy && styles.evidenceButtonDisabled)}
+                    onClick={generateEvidenceDraft}
+                  >
+                    <Text>{evidenceBusy ? '正在整理…' : '生成待确认草稿'}</Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {evidenceDraft && (
+              <>
+                <View className={styles.evidenceBoundary}>
+                  <Text>{evidenceBoundary}</Text>
+                </View>
+                <Text className={styles.evidenceFieldLabel}>证据标题</Text>
+                <Textarea className={styles.evidenceField} value={evidenceDraft.title} onInput={(event) => updateEvidenceField('title', event.detail.value)} maxlength={100} autoHeight showConfirmBar={false} />
+                <Text className={styles.evidenceFieldLabel}>当时的问题与背景</Text>
+                <Textarea className={styles.evidenceField} value={evidenceDraft.situation} onInput={(event) => updateEvidenceField('situation', event.detail.value)} maxlength={1200} autoHeight showConfirmBar={false} />
+                <Text className={styles.evidenceFieldLabel}>你亲自做了什么</Text>
+                <Textarea className={styles.evidenceField} value={evidenceDraft.action} onInput={(event) => updateEvidenceField('action', event.detail.value)} maxlength={2000} autoHeight showConfirmBar={false} />
+                <Text className={styles.evidenceFieldLabel}>结果与可验证信息</Text>
+                <Textarea className={styles.evidenceField} value={evidenceDraft.result} onInput={(event) => updateEvidenceField('result', event.detail.value)} maxlength={1200} autoHeight showConfirmBar={false} />
+                <Text className={styles.evidenceFieldLabel}>数字 / 作品 / 证明（没有可以留空）</Text>
+                <Textarea className={styles.evidenceField} value={evidenceDraft.metrics} onInput={(event) => updateEvidenceField('metrics', event.detail.value)} maxlength={500} autoHeight showConfirmBar={false} />
+
+                {evidenceDraft.skills.length > 0 && (
+                  <View className={styles.evidenceSkills}>
+                    {evidenceDraft.skills.map((skill) => <Text key={skill}>{skill}</Text>)}
+                  </View>
+                )}
+                {evidenceDraft.confidence_questions.length > 0 && (
+                  <View className={styles.evidenceQuestions}>
+                    <Text className={styles.evidenceSectionTitle}>还值得补的关键事实</Text>
+                    {evidenceDraft.confidence_questions.map((question, index) => (
+                      <Text key={`${index}-${question}`}>{index + 1}. {question}</Text>
+                    ))}
+                  </View>
+                )}
+                {evidenceResumeBullet && (
+                  <View className={styles.resumeBulletCard}>
+                    <Text className={styles.evidenceSectionTitle}>可继续修改的简历表达</Text>
+                    <Text>{evidenceResumeBullet}</Text>
+                  </View>
+                )}
+
+                <View className={styles.evidenceConfirmRow}>
+                  <View className={styles.evidenceSecondaryButton} onClick={() => { setEvidenceDraft(null); setEvidenceSaved(false) }}><Text>重新描述</Text></View>
+                  <View
+                    className={classnames(styles.evidenceGenerateButton, (evidenceBusy || evidenceSaved) && styles.evidenceButtonDisabled)}
+                    onClick={confirmEvidenceDraft}
+                  >
+                    <Text>{evidenceSaved ? '已存入证据库' : evidenceBusy ? '保存中…' : '确认并保存'}</Text>
+                  </View>
+                </View>
+
+                {roleDirections.length > 0 && (
+                  <View className={styles.roleDirectionSection}>
+                    <Text className={styles.evidenceSectionTitle}>基于这条证据，可先探索</Text>
+                    <Text className={styles.directionDisclaimer}>这是探索方向，不是录用概率；搜索结果需打开来源确认有效期。</Text>
+                    {roleDirections.map((direction) => (
+                      <View key={`${direction.role}-${direction.search_query}`} className={styles.roleDirectionCard}>
+                        <View className={styles.roleDirectionTop}>
+                          <Text className={styles.roleDirectionName}>{direction.role}</Text>
+                          <Text className={styles.roleDirectionFit}>{direction.fit === 'high' ? '证据较强' : direction.fit === 'medium' ? '可以尝试' : '值得探索'}</Text>
+                        </View>
+                        <Text className={styles.roleDirectionReason}>{direction.reason}</Text>
+                        <Text className={styles.roleDirectionGap}>现有证据：{direction.existing_evidence || '待补充'}</Text>
+                        <Text className={styles.roleDirectionGap}>最大缺口：{direction.largest_gap || '待验证'}</Text>
+                        <View className={styles.roleSearchButton} onClick={() => searchRoleDirection(direction)}><Text>搜索这个方向的岗位</Text></View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {evidenceKnowledgeVersion && <Text className={styles.evidenceKnowledgeNote}>判断依据：Pinco AI 产品专家知识 {evidenceKnowledgeVersion}；用户事实仅来自你的描述与已上传简历。</Text>}
+              </>
+            )}
           </View>
         )}
 
@@ -1414,6 +1705,11 @@ const ConversationPage: React.FC = () => {
       {showActionMenu && (
         <View className={styles.actionMenuOverlay} onClick={() => setShowActionMenu(false)}>
           <View className={styles.actionMenu}>
+            <View className={styles.actionMenuItem} onClick={() => { setShowActionMenu(false); openEvidenceBuilder(true, 'attachment_menu'); }}>
+              <Text className={styles.actionMenuIcon}>✦</Text>
+              <Text className={styles.actionMenuText}>口述经历 / 帮我找方向</Text>
+            </View>
+            <View className={styles.actionMenuDivider} />
             <View className={styles.actionMenuItem} onClick={handleImageSend}>
               <Text className={styles.actionMenuIcon}>🖼</Text>
               <Text className={styles.actionMenuText}>发送图片</Text>
@@ -1560,7 +1856,7 @@ const ConversationPage: React.FC = () => {
             className={classnames(styles.voiceButton, isRecording && styles.voiceButtonActive)}
             ariaRole='button'
             ariaLabel={isRecording ? '正在录音，再点一次发送' : '录音'}
-            onClick={handleVoiceClick}
+            onClick={() => handleVoiceClick('composer')}
           >
             <Text className={styles.voiceAccessibleLabel}>
               {isRecording ? '正在录音，再点一次发送' : '录音'}

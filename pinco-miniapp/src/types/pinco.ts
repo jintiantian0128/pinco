@@ -2,7 +2,7 @@ export type ConversationScenario = 'general' | 'resume' | 'interview' | 'emotion
 
 export type MessageType = 'text' | 'analysis' | 'interview' | 'jd' | 'resume' | 'image' | 'voice'
 
-export type MessageQuickActionKind = 'retry_chat' | 'retry_jd' | 'retry_interview' | 'paste_resume'
+export type MessageQuickActionKind = 'retry_chat' | 'retry_jd' | 'retry_interview' | 'paste_resume' | 'build_evidence'
 
 export interface MessageQuickAction {
   label: string
@@ -375,6 +375,7 @@ export interface CareerWorkspace {
   resume_analyses: any[]
   capability_radar?: {
     target_track?: string
+    competency_version?: string
     next_gap?: { key: string; label: string; score: number; suggestion?: string }
     dimensions: Array<{ key: string; label: string; score: number; source: string; evidence_ids?: string[] }>
     disclaimer: string

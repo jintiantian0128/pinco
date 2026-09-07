@@ -6,5 +6,5 @@ timestamp="$(date +%Y%m%d-%H%M%S)"
 output="${1:-$backend_dir/pinco-backend-upload-$timestamp-safe.zip}"
 
 cd "$backend_dir"
-zip -j "$output" Dockerfile main.py state_store.py career_taxonomy.py requirements.txt admin_console.html
+zip -j "$output" Dockerfile main.py state_store.py career_taxonomy.py expert_knowledge.py requirements.txt admin_console.html
 echo "$output"

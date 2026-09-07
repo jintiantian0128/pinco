@@ -378,6 +378,7 @@ const CareerPage: React.FC = () => {
       <View className={styles.card}>
         <Text className={styles.title}>AI 岗能力雷达</Text>
         <Text className={styles.desc}>{workspace.capability_radar?.disclaimer || '完成真实证据、简历诊断和面试练习后逐步形成。'}</Text>
+        {workspace.capability_radar?.competency_version && <Text className={styles.itemText}>认知体系版本：{workspace.capability_radar.competency_version}</Text>}
         {workspace.capability_radar?.target_track && <Text className={styles.itemText}>当前目标方向：{workspace.capability_radar.target_track}</Text>}
         {workspace.capability_radar?.next_gap && <Text className={styles.itemText}>下一证据缺口：{workspace.capability_radar.next_gap.label} · {workspace.capability_radar.next_gap.score}分{workspace.capability_radar.next_gap.suggestion ? ` · ${workspace.capability_radar.next_gap.suggestion}` : ''}</Text>}
         {(workspace.capability_radar?.dimensions || []).map((dimension) => (

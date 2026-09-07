@@ -13,6 +13,10 @@ from urllib.parse import urlencode
 from urllib.request import Request as UrlRequest, urlopen
 from state_store import StateStore, create_state_store
 from career_taxonomy import role_interview_focus, translate_job_query
+from expert_knowledge import (
+    EXPERT_KNOWLEDGE_VERSION,
+    build_expert_knowledge_context,
+)
 from decimal import Decimal, ROUND_HALF_UP
 from copy import deepcopy
 import hashlib
@@ -677,6 +681,12 @@ class EvidenceCreateRequest(BaseModel):
     result: str
     metrics: str = ""
     skills: List[str] = Field(default_factory=list)
+
+class EvidenceDraftRequest(BaseModel):
+    user_id: str
+    narrative: str = Field(min_length=20, max_length=6000)
+    include_resume_memory: bool = True
+    target_role: str = Field(default="", max_length=80)
 
 class WorkspaceJobCreateRequest(BaseModel):
     user_id: str
@@ -1979,6 +1989,9 @@ AGENT_MEMORY_KEYS = {
     "key_skills", "salary_expectation", "job_search_stage", "preferred_industry",
     "education", "graduation_year", "work_preference", "interview_preference",
 }
+AGENT_CONTEXT_REFERENCE_KEYS = AGENT_MEMORY_KEYS | {
+    "confirmed_evidence", "latest_resume", "job_progress", "recent_completed_practice",
+}
 AGENT_MEMORY_KEY_ALIASES = {
     "目标岗位": "target_role", "求职目标": "target_role", "岗位": "target_role",
     "工作年限": "years_experience", "经验年限": "years_experience", "工作经验": "years_experience",
@@ -2047,6 +2060,19 @@ def build_agent_memory_context(user: Dict[str, Any]) -> str:
     profile = user.get("career_profile") or {}
     facts = user.get("career_memory") or {}
     resume = user.get("resume_memory") or {}
+    confirmed_evidence = [
+        {
+            "id": item.get("id", ""),
+            "title": item.get("title", ""),
+            "situation": str(item.get("situation") or "")[:600],
+            "action": str(item.get("action") or "")[:1000],
+            "result": str(item.get("result") or "")[:600],
+            "metrics": str(item.get("metrics") or "")[:300],
+            "skills": (item.get("skills") or [])[:8],
+            "confirmed_at": item.get("created_at", ""),
+        }
+        for item in user.get("evidence", [])[:8]
+    ]
     jobs = [
         {
             "company": item.get("company", ""),
@@ -2074,6 +2100,7 @@ def build_agent_memory_context(user: Dict[str, Any]) -> str:
             "text_excerpt": str(resume.get("text_excerpt") or "")[:6000],
             "updated_at": resume.get("updated_at", ""),
         } if resume else None,
+        "confirmed_evidence": confirmed_evidence,
         "job_progress": jobs,
         "recent_completed_practice": completed_interviews,
         "already_prompted_milestones": list((user.get("agent_prompt_history") or {}).keys())[-20:],
@@ -2698,14 +2725,14 @@ def build_capability_radar(user: Dict[str, Any]) -> Dict[str, Any]:
         target_track = "通用 AI 岗位"
 
     dimensions = [
-        ("business_problem", "业务问题", r"业务|用户|需求|痛点|场景|增长|留存|转化"),
-        ("llm_foundation", "模型与 LLM 基础", r"LLM|大模型|模型|Prompt|提示词|Token|Embedding|微调|推理"),
-        ("rag_agent_multimodal", "RAG / Agent / 多模态", r"RAG|检索增强|Agent|智能体|工作流|多模态|向量|知识库|工具调用"),
-        ("data_evaluation", "数据与评测", r"数据|评测|指标|A/B|实验|准确率|召回率|幻觉|基准|监控"),
-        ("productization", "产品化与交付", r"产品化|上线|发布|交付|迭代|灰度|工程|稳定性|SLA|反馈闭环"),
-        ("roi", "ROI 与商业价值", r"ROI|成本|收入|营收|商业化|效率|节省|付费|客单|利润"),
-        ("safety", "安全与责任", r"安全|隐私|合规|权限|风控|红队|内容治理|可解释|偏见"),
-        ("project_expression", "项目表达", r"STAR|背景|目标|行动|结果|复盘|协作|推动|负责|主导"),
+        ("problem_judgment", "问题发现与产品判断", r"用户|需求|问题|痛点|场景|优先级|取舍|成功指标|PMF"),
+        ("agent_orchestration", "Agent 系统编排", r"Agent|智能体|任务拆解|工具调用|工作流|规划|执行|验证器|失败恢复"),
+        ("context_memory", "上下文与记忆工程", r"上下文|记忆|Memory|检索|RAG|知识库|跨会话|压缩|遗忘"),
+        ("evaluation_reliability", "评测与可靠性", r"评测|Eval|指标|基线|失败样本|误差|鲁棒|幻觉|回归|轨迹"),
+        ("model_strategy", "模型判断与可替换架构", r"模型|基座|路由|供应商|延迟|Token|选型|迁移|降级"),
+        ("production_delivery", "从 Demo 到可交付结果", r"上线|发布|交付|灰度|生产|监控|稳定性|完成率|反馈闭环|SLA"),
+        ("trust_risk", "信任、风险与人类问责", r"安全|隐私|合规|权限|风控|审计|撤销|人工确认|可解释|责任"),
+        ("unit_economics", "Token 与单位经济学", r"Token|成本|ROI|收入|商业化|效率|毛利|付费|预算|单位经济"),
     ]
     answer_texts = [
         str(answer.get("answer") or "")
@@ -2723,12 +2750,6 @@ def build_capability_radar(user: Dict[str, Any]) -> Dict[str, Any]:
             if re.search(pattern, text, re.I):
                 matched_ids.append(item.get("id"))
         matched_answers = sum(1 for text in answer_texts if re.search(pattern, text, re.I))
-        if key == "project_expression":
-            structured_items = [
-                item for item in evidence
-                if item.get("action") and item.get("result") and (item.get("situation") or item.get("metrics"))
-            ]
-            matched_ids = [item.get("id") for item in structured_items]
         score = min(100, len(matched_ids) * 25 + min(25, matched_answers * 5))
         radar_dimensions.append({
             "key": key,
@@ -2740,14 +2761,15 @@ def build_capability_radar(user: Dict[str, Any]) -> Dict[str, Any]:
     lowest = min(radar_dimensions, key=lambda item: item["score"]) if radar_dimensions else None
     return {
         "target_track": target_track,
+        "competency_version": EXPERT_KNOWLEDGE_VERSION,
         "dimensions": radar_dimensions,
         "next_gap": {"key": lowest["key"], "label": lowest["label"], "score": lowest["score"]} if lowest else None,
-        "disclaimer": "这是 AI 岗八个维度的证据覆盖度，不是能力鉴定。只统计你提交的真实证据和练习回答；0 分表示尚无证据，不代表没有能力。",
+        "disclaimer": "这是 Pinco AI 产品认知体系的八维证据覆盖度，不是能力鉴定。只统计你确认的真实证据和练习回答；0 分表示尚无证据，不代表没有能力。",
     }
 
 def build_learning_plan(user: Dict[str, Any], radar: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     radar = radar or build_capability_radar(user)
-    gap = radar.get("next_gap") or {"key": "project_expression", "label": "项目表达", "score": 0}
+    gap = radar.get("next_gap") or {"key": "problem_judgment", "label": "问题发现与产品判断", "score": 0}
     today = datetime.utcnow().date()
     week_start = today - timedelta(days=today.weekday())
     plan_id = f"learning-{week_start.isoformat()}-{gap['key']}"
@@ -2757,14 +2779,14 @@ def build_learning_plan(user: Dict[str, Any], radar: Optional[Dict[str, Any]] = 
         if str(value).isdigit() and 1 <= int(value) <= 7
     }
     gap_outputs = {
-        "business_problem": "一条包含用户、场景、问题规模和业务目标的证据",
-        "llm_foundation": "一张解释模型选择、Prompt/Token 约束和失败边界的项目卡",
-        "rag_agent_multimodal": "一张 RAG/Agent/多模态链路图及一次真实取舍记录",
-        "data_evaluation": "一套含样本、指标、基线和误差分析的评测证据",
-        "productization": "一条从灰度、监控到反馈闭环的上线证据",
-        "roi": "一条把成本、效率或收入变化量化的 ROI 证据",
-        "safety": "一条包含隐私、权限、内容风险和处置方案的安全证据",
-        "project_expression": "一个不编造、可连续深挖 10 分钟的 STAR 项目故事",
+        "problem_judgment": "一条说明用户问题、替代方案、成功标准和产品取舍的证据",
+        "agent_orchestration": "一张包含规划、工具、状态、验证和失败恢复的 Agent 链路证据",
+        "context_memory": "一条说明上下文分层、记忆授权、检索和遗忘机制的设计证据",
+        "evaluation_reliability": "一套含样本、指标、基线、失败归因和回归机制的评测证据",
+        "model_strategy": "一条解释模型选型、任务门槛、路由和迁移预案的证据",
+        "production_delivery": "一条从灰度、监控、异常恢复到现实结果的交付证据",
+        "trust_risk": "一份含风险分级、权限、人工确认和撤销点的信任设计证据",
+        "unit_economics": "一条把单任务 Token 成本、质量门槛和业务价值连起来的证据",
     }
     output = gap_outputs.get(gap["key"], "一条可核验的岗位证据")
     days = [
@@ -3124,6 +3146,144 @@ def forget_career_memory(request: CareerMemoryForgetRequest):
         "career_profile": deepcopy(profile),
     }
 
+
+@app.post("/api/v1/workspace/evidence/draft")
+def draft_career_evidence(request: EvidenceDraftRequest):
+    """Turn a rough story or an old resume into a reviewable draft.
+
+    Nothing is persisted until the user confirms it through the existing
+    ``/workspace/evidence`` endpoint. This keeps model inference out of the
+    user's factual memory and makes the truth boundary visible in the UI.
+    """
+    with _state_lock:
+        state = load_beta_state()
+        user = state.get("users", {}).get(request.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在，请重新进入小程序")
+        resume_memory = deepcopy(user.get("resume_memory") or {})
+        profile = deepcopy(user.get("career_profile") or {})
+        memory_role = str(
+            ((user.get("career_memory") or {}).get("target_role") or {}).get("value") or ""
+        )
+
+    target_role = request.target_role.strip() or "、".join(profile.get("target_roles") or []) or memory_role
+    source_parts = [f"用户本次描述：\n{request.narrative.strip()}"]
+    if request.include_resume_memory and resume_memory.get("text_excerpt"):
+        source_parts.append(f"用户此前上传的旧简历片段：\n{str(resume_memory['text_excerpt'])[:6000]}")
+    source_text = "\n\n".join(source_parts)
+    expert_context, expert_cards = build_expert_knowledge_context(
+        source_text,
+        target_role=target_role or "AI 产品经理 AI 产品运营",
+        limit=5,
+    )
+    prompt = f"""把用户的粗略经历整理成一张待确认职业证据卡，并推荐 2-3 个值得探索的 AI 产品/AI 产品运营方向。
+
+【事实来源】
+{source_text[:11000]}
+
+【用户已有目标岗位】
+{target_role or '尚未确定'}
+
+{expert_context}
+
+只输出合法 JSON：
+{{
+  "draft": {{
+    "title": "不超过30字的证据标题",
+    "situation": "用户和业务问题；来源没说就写待补充",
+    "action": "只写用户明确做过的动作和决策",
+    "result": "明确结果；没有结果就写待补充",
+    "metrics": "原文出现的数字或证据链接；没有就留空",
+    "skills": ["最多5个能力标签"],
+    "confidence_questions": ["最多3个只补关键事实的问题"]
+  }},
+  "resume_bullet": "一条不编造数字、可继续修改的基础简历表达",
+  "role_directions": [
+    {{
+      "role": "岗位方向",
+      "fit": "high|medium|explore",
+      "reason": "为什么值得探索",
+      "existing_evidence": "已有哪条证据",
+      "largest_gap": "最大证据缺口",
+      "search_query": "可直接用于搜索的岗位关键词"
+    }}
+  ]
+}}
+
+硬性规则：
+1. 不得补写来源中没有的公司、数字、技术栈、职责或结果。
+2. 推断必须写成待确认问题，不能混入 action/result。
+3. 专家知识只用于判断和追问，不能冒充用户经历。
+4. 方向推荐不是录用概率，不得用虚假精确分数。
+5. 用户是 0-5 年 AI 求职者，优先考虑 AI 产品经理、AI 产品运营及相邻的 AI Agent 产品方向。"""
+    try:
+        raw = llm_chat_with_fallback(
+            [{"role": "user", "content": prompt}],
+            temperature=0.2,
+            system_prompt="你是 Pinco 职业证据教练。先守住事实边界，再做岗位判断；输出必须可由用户逐项确认。",
+            max_tokens=2200,
+        )
+        data = json.loads(clean_json_response(raw))
+        draft = data.get("draft") or {}
+        directions = data.get("role_directions") or []
+        if not all(str(draft.get(key) or "").strip() for key in ["title", "action", "result"]):
+            raise RuntimeError("INVALID_EVIDENCE_DRAFT")
+        if not isinstance(draft.get("skills"), list) or not isinstance(draft.get("confidence_questions"), list):
+            raise RuntimeError("INVALID_EVIDENCE_DRAFT_LISTS")
+        if not isinstance(directions, list) or len(directions) < 2:
+            raise RuntimeError("INVALID_ROLE_DIRECTIONS")
+        normalized_directions = []
+        for direction in directions[:3]:
+            if not isinstance(direction, dict) or not str(direction.get("role") or "").strip():
+                continue
+            search_query = str(direction.get("search_query") or direction.get("role") or "").strip()[:80]
+            normalized_directions.append({
+                "role": str(direction.get("role") or "").strip()[:80],
+                "fit": direction.get("fit") if direction.get("fit") in {"high", "medium", "explore"} else "explore",
+                "reason": str(direction.get("reason") or "").strip()[:500],
+                "existing_evidence": str(direction.get("existing_evidence") or "").strip()[:500],
+                "largest_gap": str(direction.get("largest_gap") or "").strip()[:500],
+                "search_query": search_query,
+            })
+        if len(normalized_directions) < 2:
+            raise RuntimeError("INVALID_ROLE_DIRECTIONS")
+    except Exception as error:
+        print(f"Evidence Draft Error: {error}")
+        raise llm_http_exception(error)
+
+    safe_draft = {
+        "title": str(draft.get("title") or "").strip()[:100],
+        "situation": str(draft.get("situation") or "").strip()[:1200],
+        "action": str(draft.get("action") or "").strip()[:2000],
+        "result": str(draft.get("result") or "").strip()[:1200],
+        "metrics": str(draft.get("metrics") or "").strip()[:500],
+        "skills": [str(item).strip()[:60] for item in draft.get("skills", []) if str(item).strip()][:5],
+        "confidence_questions": [
+            str(item).strip()[:200]
+            for item in draft.get("confidence_questions", [])
+            if str(item).strip()
+        ][:3],
+    }
+    with _state_lock:
+        state = load_beta_state()
+        append_product_event_to_state(state, "activation.evidence_draft.generated", request.user_id, {
+            "used_resume_memory": bool(request.include_resume_memory and resume_memory.get("text_excerpt")),
+            "direction_count": len(normalized_directions),
+            "knowledge_version": EXPERT_KNOWLEDGE_VERSION,
+        })
+        save_beta_state(state)
+    return {
+        "draft": safe_draft,
+        "resume_bullet": str(data.get("resume_bullet") or "").strip()[:800],
+        "role_directions": normalized_directions,
+        "source_boundary": "这是待确认草稿，尚未写入职业证据；只有点击确认后才保存。",
+        "expert_knowledge": {
+            "version": EXPERT_KNOWLEDGE_VERSION,
+            "cards_used": expert_cards,
+        },
+    }
+
+
 @app.post("/api/v1/workspace/evidence")
 def create_evidence(request: EvidenceCreateRequest):
     if len(request.title.strip()) < 2 or len(request.action.strip()) < 5 or len(request.result.strip()) < 2:
@@ -3148,6 +3308,10 @@ def create_evidence(request: EvidenceCreateRequest):
         items.insert(0, evidence)
         user["evidence"] = items[:100]
         append_product_event_to_state(state, "workspace.evidence.created", request.user_id, {"has_metric": bool(evidence["metrics"])})
+        append_product_event_to_state(state, "activation.evidence_confirmed", request.user_id, {
+            "has_metric": bool(evidence["metrics"]),
+            "skill_count": len(evidence["skills"]),
+        })
         save_beta_state(state)
     return {"evidence": evidence}
 
@@ -3281,10 +3445,17 @@ def generate_job_materials(job_id: str, request: JobMaterialGenerateRequest):
         raise HTTPException(status_code=400, detail="请先为岗位补充完整 JD，再生成定制材料")
     if not selected:
         raise HTTPException(status_code=400, detail="请先在职业证据库添加至少一条真实经历")
+    expert_context, expert_cards = build_expert_knowledge_context(
+        f"{job.get('title', '')} {job.get('jd_text', '')}",
+        target_role=job.get("title", ""),
+        limit=5,
+    )
     prompt = f"""基于真实 JD 和候选人证据，为单个岗位生成定制求职材料。不得编造经历、数字、公司或技术栈。
 岗位：{job['company']} - {job['title']}
 JD：{job['jd_text'][:7000]}
 候选人证据：{json.dumps(selected, ensure_ascii=False)[:9000]}
+
+{expert_context}
 
 只输出合法 JSON：
 {{"fit_decision":"GO 或 MAYBE 或 NO_GO","fit_reasons":["只引用 JD 与真实证据的理由"],"match_summary":"匹配与缺口","resume_bullets":["3-5条可直接改写的简历要点"],"outreach_message":"80-150字投递/内推话术","interview_stories":[{{"question":"可能问题","evidence_id":"证据ID","answer_outline":"只用证据事实的回答框架"}}],"gaps":["缺失证据"]}}"""
@@ -3309,6 +3480,10 @@ JD：{job['jd_text'][:7000]}
         raise llm_http_exception(error)
     materials["generated_at"] = now_iso()
     materials["evidence_ids"] = [item["id"] for item in selected]
+    materials["expert_knowledge"] = {
+        "version": EXPERT_KNOWLEDGE_VERSION if expert_cards else None,
+        "cards_used": expert_cards,
+    }
     with _state_lock:
         state = load_beta_state()
         _, current_job = _workspace_job_for_user(state, request.user_id, job_id)
@@ -4203,6 +4378,15 @@ async def chat(request: ChatRequest):
                 system += f"\n\n【带来源岗位候选】以下结果只确认了来源和职位信号，不保证此刻仍在招聘：\n{jobs_text}\n\n请自然引用并分析匹配度，同时提醒用户打开原页面确认有效期；不得补写来源中没有的信息。"
 
         memory_context = build_agent_memory_context(user_snapshot)
+        career_profile = user_snapshot.get("career_profile") or {}
+        memory_target_role = str(
+            ((user_snapshot.get("career_memory") or {}).get("target_role") or {}).get("value") or ""
+        )
+        target_role = "、".join(career_profile.get("target_roles") or []) or memory_target_role
+        expert_context, expert_cards = build_expert_knowledge_context(
+            latest_user_text,
+            target_role=target_role,
+        )
         system = build_scenario_instruction(request.scenario) + "\n\n" + system + f"""
 
 【Pinco 会话 Agent】
@@ -4211,12 +4395,18 @@ async def chat(request: ChatRequest):
 只有在以下真实节点成立时才可以询问是否记录进度：完成一版简历、完成模拟面试、用户在复盘一次真实面试、比较或决策 Offer。
 普通问答、仅提到“面试”或已经提示过的同一节点，progress_suggestion 必须为 null。
 只保存后续求职有用且用户明确说出的职业信息；不保存身份证、电话、住址、健康、家庭等敏感信息。
-memory_updates 和 used_memory_keys 中的 key 必须严格使用以下英文值，不得翻译成中文：
+memory_updates 中的 key 必须严格使用以下英文值，不得翻译成中文：
 {','.join(sorted(AGENT_MEMORY_KEYS))}
+used_memory_keys 用于披露本次实际使用了哪类已持久化上下文，可使用：
+{','.join(sorted(AGENT_CONTEXT_REFERENCE_KEYS))}
 当用户明确说“请记住”并提供上述职业信息时，必须写入 memory_updates；口头说记住但不写入是不允许的。
 
 【已持久化的用户上下文】
 {memory_context}
+
+{expert_context}
+
+专家知识与用户事实必须严格分开：专家知识用于判断和追问，不能被描述成用户做过的事；只有用户明确提供并确认的经历才能进入用户证据和记忆。
 
 只输出一个合法 JSON 对象，不要 markdown 代码块，结构为：
 {{"response":"给用户看的完整回答","intent":"简短意图","next_action":"下一步","used_memory_keys":[],"memory_updates":[{{"key":"target_role","value":"AI产品经理","confidence":0.95}}],"progress_suggestion":null}}
@@ -4275,6 +4465,8 @@ memory_updates 和 used_memory_keys 中的 key 必须严格使用以下英文值
                 "next_action": agent_result["next_action"],
                 "used_memory_keys": agent_result["used_memory_keys"],
                 "memory_updated": bool(agent_result["memory_updates"]),
+                "expert_knowledge_version": EXPERT_KNOWLEDGE_VERSION if expert_cards else None,
+                "expert_knowledge_cards": expert_cards,
             },
             progress_suggestion=accepted_progress,
         )
@@ -4735,6 +4927,11 @@ async def start_interview_practice(request: InterviewPracticeStartRequest):
     if not source_labels:
         source_labels.append("目标岗位通用能力（未提供 JD/简历）")
     taxonomy_focus = role_interview_focus(effective_position)
+    expert_context, expert_cards = build_expert_knowledge_context(
+        f"{effective_position} {effective_jd} {request.anxiety_focus}",
+        target_role=effective_position,
+        limit=5,
+    )
     prompt = f"""为一名 0-5 年经验的中文求职者设计面试前练习计划。
 目标岗位：{effective_position}
 目标公司：{effective_company or '未提供'}
@@ -4749,6 +4946,8 @@ async def start_interview_practice(request: InterviewPracticeStartRequest):
 JD：{(effective_jd or '未提供')[:1600]}
 学社练习来源：{source_post_text or '未提供'}
 重点：{', '.join(request.focus_areas or taxonomy_focus) or '岗位匹配、表达结构、案例证据'}
+
+{expert_context}
 
 只输出合法 JSON：
 {{"plan_summary":"本轮练习重点","questions":["问题1"],"focus":["评分重点1","评分重点2"]}}
@@ -4778,6 +4977,10 @@ questions 必须刚好 {total_questions} 题，从最影响临场表现的问题
         "anxiety_focus": request.anxiety_focus.strip(),
         "practice_style": request.practice_style,
         "question_sources": source_labels,
+        "expert_knowledge": {
+            "version": EXPERT_KNOWLEDGE_VERSION if expert_cards else None,
+            "cards_used": expert_cards,
+        },
         "job_id": bound_job.get("id") if bound_job else None,
         "source_post_id": source_post.get("id") if source_post else None,
         "duration_minutes": duration,

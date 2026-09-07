@@ -272,6 +272,292 @@
   line-height: $line-height-normal;
 }
 
+/* ---- P0 黄金路径：经历 -> 证据 -> 岗位方向 ---- */
+.evidenceBuilder {
+  margin: 12rpx 24rpx 30rpx;
+  padding: 26rpx;
+  background: #fff;
+  border: 2rpx solid rgba(124, 77, 255, 0.12);
+  border-radius: 28rpx;
+  box-shadow: 0 14rpx 38rpx rgba(63, 38, 116, 0.09);
+}
+
+.evidenceHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 18rpx;
+}
+
+.evidenceHeaderMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.evidenceTitle,
+.evidenceSubtitle,
+.evidenceFieldLabel,
+.evidenceSectionTitle,
+.roleDirectionReason,
+.roleDirectionGap,
+.directionDisclaimer,
+.evidenceKnowledgeNote {
+  display: block;
+}
+
+.evidenceTitle {
+  color: $color-text-primary;
+  font-size: 30rpx;
+  font-weight: $font-weight-bold;
+}
+
+.evidenceSubtitle {
+  margin-top: 8rpx;
+  color: $color-text-secondary;
+  font-size: 22rpx;
+  line-height: 1.55;
+}
+
+.evidenceClose {
+  width: 50rpx;
+  height: 50rpx;
+  border-radius: 25rpx;
+  background: #f5f2fb;
+  color: $color-text-secondary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+  line-height: 1;
+}
+
+.evidenceNarrative,
+.evidenceField {
+  width: 100%;
+  box-sizing: border-box;
+  background: #f8f7fb;
+  border: 2rpx solid transparent;
+  border-radius: 18rpx;
+  color: $color-text-primary;
+  font-size: 24rpx;
+  line-height: 1.55;
+}
+
+.evidenceNarrative {
+  min-height: 220rpx;
+  margin-top: 24rpx;
+  padding: 22rpx;
+}
+
+.evidenceField {
+  min-height: 78rpx;
+  padding: 16rpx 18rpx;
+}
+
+.evidenceFieldLabel {
+  margin: 20rpx 0 8rpx;
+  color: $color-text-secondary;
+  font-size: 21rpx;
+  font-weight: $font-weight-semibold;
+}
+
+.evidenceSourceRow {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 16rpx;
+  color: $color-text-secondary;
+  font-size: 21rpx;
+  line-height: 1.4;
+}
+
+.evidenceCheckbox {
+  flex: 0 0 auto;
+  width: 30rpx;
+  height: 30rpx;
+  border: 2rpx solid #c8c1d8;
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 20rpx;
+}
+
+.evidenceCheckboxActive {
+  border-color: $color-primary;
+  background: $color-primary;
+}
+
+.evidencePrimaryRow,
+.evidenceConfirmRow {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 22rpx;
+}
+
+.evidenceVoiceButton,
+.evidenceGenerateButton,
+.evidenceSecondaryButton {
+  flex: 1;
+  min-height: 72rpx;
+  padding: 16rpx 14rpx;
+  border-radius: 18rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 23rpx;
+  font-weight: $font-weight-semibold;
+}
+
+.evidenceVoiceButton {
+  margin: 0;
+  border: 2rpx solid rgba(124, 77, 255, 0.24);
+  background: #f6f2ff;
+  color: $color-primary;
+
+  &::after { border: 0; }
+}
+
+.evidenceVoiceButtonActive {
+  background: #171427;
+  color: #fff;
+}
+
+.evidenceGenerateButton {
+  background: linear-gradient(135deg, #7c4dff, #ec4899);
+  color: #fff;
+}
+
+.evidenceSecondaryButton {
+  background: #f2eff7;
+  color: $color-text-secondary;
+}
+
+.evidenceButtonDisabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.evidenceBoundary {
+  margin-top: 22rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 21rpx;
+  line-height: 1.5;
+}
+
+.evidenceSkills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 18rpx;
+
+  Text {
+    padding: 8rpx 14rpx;
+    border-radius: 999rpx;
+    background: #f1ecff;
+    color: $color-primary;
+    font-size: 20rpx;
+  }
+}
+
+.evidenceQuestions,
+.resumeBulletCard {
+  margin-top: 20rpx;
+  padding: 18rpx;
+  border-radius: 18rpx;
+  background: #f8f7fb;
+  color: $color-text-secondary;
+  font-size: 22rpx;
+  line-height: 1.55;
+}
+
+.evidenceQuestions > Text:not(:first-child) {
+  display: block;
+  margin-top: 8rpx;
+}
+
+.evidenceSectionTitle {
+  color: $color-text-primary;
+  font-size: 24rpx;
+  font-weight: $font-weight-bold;
+  margin-bottom: 8rpx;
+}
+
+.roleDirectionSection {
+  margin-top: 28rpx;
+  padding-top: 24rpx;
+  border-top: 2rpx solid #eeeaf5;
+}
+
+.directionDisclaimer,
+.evidenceKnowledgeNote {
+  color: $color-text-tertiary;
+  font-size: 19rpx;
+  line-height: 1.5;
+}
+
+.roleDirectionCard {
+  margin-top: 16rpx;
+  padding: 20rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(145deg, #faf8ff, #fff8fb);
+  border: 2rpx solid rgba(124, 77, 255, 0.1);
+}
+
+.roleDirectionTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.roleDirectionName {
+  color: $color-text-primary;
+  font-size: 25rpx;
+  font-weight: $font-weight-bold;
+}
+
+.roleDirectionFit {
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: rgba(236, 72, 153, 0.1);
+  color: #be185d;
+  font-size: 18rpx;
+}
+
+.roleDirectionReason {
+  margin-top: 10rpx;
+  color: $color-text-primary;
+  font-size: 22rpx;
+  line-height: 1.55;
+}
+
+.roleDirectionGap {
+  margin-top: 8rpx;
+  color: $color-text-secondary;
+  font-size: 20rpx;
+  line-height: 1.45;
+}
+
+.roleSearchButton {
+  margin-top: 16rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 14rpx;
+  background: #171427;
+  color: #fff;
+  font-size: 21rpx;
+  text-align: center;
+}
+
+.evidenceKnowledgeNote {
+  margin-top: 18rpx;
+}
+
 /* ---- 对话中识别到求职状态后的轻量确认卡 ---- */
 .supportFeedbackCard {
   margin: 12rpx 24rpx 20rpx 104rpx;

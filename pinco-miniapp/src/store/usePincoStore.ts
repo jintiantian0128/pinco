@@ -1052,6 +1052,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           content,
           type: 'analysis',
           createdAt: Date.now(),
+          quickActions: [
+            { label: '从旧简历提炼真实证据', kind: 'build_evidence' },
+          ],
         }],
       })
       get().saveMessages()
