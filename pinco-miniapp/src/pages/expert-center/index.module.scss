@@ -13,7 +13,8 @@
 .statusDesc, .reviewNote, .hint { display: block; font-size: 24rpx; line-height: 1.6; color: $color-text-secondary; }
 .reviewNote { margin-top: 8rpx; color: #92400E; }
 .label { display: block; margin: 18rpx 0 8rpx; font-size: 24rpx; font-weight: 600; color: $color-text-primary; }
-.input, .textarea, .longTextarea { box-sizing: border-box; width: 100%; padding: 20rpx 22rpx; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 16rpx; font-size: 26rpx; color: $color-text-primary; }
+.input, .textarea, .longTextarea { box-sizing: border-box; display: block; width: 100%; min-width: 0; padding: 20rpx 22rpx; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 16rpx; font-size: 26rpx; color: $color-text-primary; }
+.input { height: 88rpx; line-height: 48rpx; }
 .textarea { height: 160rpx; line-height: 1.55; }
 .longTextarea { height: 240rpx; line-height: 1.55; }
 .fieldCount { display: block; margin-top: 6rpx; color: $color-text-tertiary; font-size: 20rpx; text-align: right; }

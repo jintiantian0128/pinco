@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from urllib.parse import urlencode
 from urllib.request import Request as UrlRequest, urlopen
+from urllib.error import HTTPError
 from state_store import StateStore, create_state_store
 from career_taxonomy import role_interview_focus, translate_job_query
 from expert_knowledge import (
@@ -31,6 +32,7 @@ import shutil
 import subprocess
 import secrets
 import base64
+import hmac
 import statistics
 import importlib.util
 
@@ -101,6 +103,15 @@ WECHAT_PAY_REFUND_NOTIFY_URL = os.environ.get("WECHAT_PAY_REFUND_NOTIFY_URL", ""
 WECHAT_PAY_TEST_USER_IDS = {
     value.strip() for value in os.environ.get("WECHAT_PAY_TEST_USER_IDS", "").split(",") if value.strip()
 }
+
+# Expert marketplace coordination. Curated profiles become operable after an
+# approved applicant with the same public name is bound to a Pinco user.
+PINCO_DEVELOPER_USER_ID = os.environ.get("PINCO_DEVELOPER_USER_ID", "").strip()
+TENCENT_MEETING_APP_ID = os.environ.get("TENCENT_MEETING_APP_ID", "").strip()
+TENCENT_MEETING_SDK_ID = os.environ.get("TENCENT_MEETING_SDK_ID", "").strip()
+TENCENT_MEETING_SECRET_ID = os.environ.get("TENCENT_MEETING_SECRET_ID", "").strip()
+TENCENT_MEETING_SECRET_KEY = os.environ.get("TENCENT_MEETING_SECRET_KEY", "").strip()
+TENCENT_MEETING_CREATOR_USER_ID = os.environ.get("TENCENT_MEETING_CREATOR_USER_ID", "").strip()
 
 MOCK_MODE = LLM_PROVIDER == "mock" or (LLM_PROVIDER != "anthropic" and not OPENAI_API_KEY) or (LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY)
 
@@ -555,6 +566,7 @@ class BookingCreateRequest(BaseModel):
     desc: str
     job_id: Optional[str] = None
     share_context_with_expert: bool = False
+    contact_wechat: str = Field(default="", max_length=80)
 
 class ExpertApplicationRequest(BaseModel):
     user_id: str
@@ -578,9 +590,10 @@ class ExpertAvailabilityRequest(BaseModel):
     slots: List[str] = Field(default_factory=list)
 
 class ExpertBookingDecisionRequest(BaseModel):
-    expert_user_id: str
+    expert_user_id: str = ""
     decision: str
     note: str = Field(default="", max_length=500)
+    confirmed_slot: str = Field(default="", max_length=80)
 
 class ExpertBookingCompleteRequest(BaseModel):
     expert_user_id: str
@@ -1263,6 +1276,8 @@ def default_community_posts() -> List[Dict[str, Any]]:
             "postType": "share",
             "comments": [],
             "is_example": True,
+            "is_featured": True,
+            "moderation_status": "published",
         },
         {
             "id": "editorial-support-1",
@@ -1276,51 +1291,94 @@ def default_community_posts() -> List[Dict[str, Any]]:
             "postType": "treehole",
             "comments": [],
             "is_example": True,
+            "is_featured": False,
+            "moderation_status": "published",
+        },
+        {
+            "id": "editorial-help-1",
+            "author": "Pinco 学姐",
+            "roleTag": "官方问答",
+            "created_at": "2026-09-08T00:00:00",
+            "title": "没有新简历，也不知道投什么岗位，先做哪一步？",
+            "content": "先不用硬写一份完整简历。把一段最熟悉的项目经历讲清楚，Pinco 会提炼成待确认职业证据，再据此给出岗位方向和有来源的岗位候选。事实由你确认，AI 不替你编经历。",
+            "liked_by": [],
+            "hugged_by": [],
+            "postType": "help",
+            "comments": [],
+            "is_example": True,
+            "is_featured": True,
+            "moderation_status": "published",
+        },
+        {
+            "id": "editorial-success-1",
+            "author": "Pinco 编辑部",
+            "roleTag": "上岸复盘模板",
+            "created_at": "2026-09-08T00:00:00",
+            "title": "上岸后，怎样写一篇对后来者真正有用的复盘？",
+            "content": "建议写清岗位方向、求职周期、最有效的一次调整，以及哪些方法只适用于你的背景。隐去公司机密和个人隐私，保留能让后来者行动起来的证据。",
+            "liked_by": [],
+            "hugged_by": [],
+            "postType": "success",
+            "comments": [],
+            "is_example": True,
+            "is_featured": False,
+            "moderation_status": "published",
         },
     ]
 
+
+def default_expert_slots() -> List[str]:
+    """Generate three near-term Beijing-time slots without hard-coded stale dates."""
+    today = datetime.utcnow() + timedelta(hours=8)
+    return [
+        (today + timedelta(days=offset)).strftime("%Y-%m-%d 19:30")
+        for offset in (2, 4, 6)
+    ]
+
+
 def default_expert_profiles() -> List[Dict[str, Any]]:
-    """Seed honest demand-matching profiles without pretending that a fictional person was verified."""
+    """Seed the first invited experts and keep account binding explicit."""
     common = {
         "owner_user_id": None,
         "reference_price": 0,
-        "slots": ["提交后 24 小时内由平台匹配"],
+        "slots": default_expert_slots(),
         "duration_minutes": 30,
         "status": "approved",
-        "is_demo": True,
-        "created_at": "2026-08-13T00:00:00",
-        "updated_at": "2026-08-13T00:00:00",
+        "is_demo": False,
+        "verification_status": "首批合作专家",
+        "created_at": "2026-09-08T00:00:00",
+        "updated_at": "2026-09-08T00:00:00",
     }
     return [
         {
             **common,
             "id": "expert-demo-ai-pm",
-            "name": "AI 产品经理匹配专区",
-            "title": "0-5 年 AI 产品求职·内测需求画像",
-            "intro": "适合做 AI 产品经理岗位定位、项目经历深挖、产品案例面试和 Offer 判断。这是内测匹配入口，不是虚构真人专家。",
+            "name": "Tiana",
+            "title": "AI 产品专家",
+            "intro": "聚焦 0-5 年 AI 产品求职，擅长岗位定位、真实项目证据深挖、产品案例面试和 Offer 判断。",
             "tags": ["AI产品", "项目深挖", "模拟面试", "Offer选择"],
-            "service_name": "AI 产品求职问题匹配",
-            "service_deliverables": ["平台确认问题类型", "匹配真人专家后再确认服务"],
+            "service_name": "AI 产品求职诊断",
+            "service_deliverables": ["核心问题诊断", "下一步行动清单"],
         },
         {
             **common,
             "id": "expert-demo-ai-ops",
-            "name": "AI 产品运营匹配专区",
-            "title": "AI 增长 / 内容 / 用户运营·内测需求画像",
-            "intro": "适合 AI 产品运营的方向选择、数据化简历、增长案例拆解与面试复盘。提交后由平台匹配真人，当前不代表已有指定专家接单。",
+            "name": "Sara",
+            "title": "AI 运营专家",
+            "intro": "聚焦 AI 产品运营、增长与内容方向，帮助求职者把运营动作讲成可核验的数据证据，并完成面试复盘。",
             "tags": ["AI运营", "增长", "内容策略", "数据复盘"],
-            "service_name": "AI 产品运营问题匹配",
-            "service_deliverables": ["平台确认问题类型", "匹配真人专家后再确认服务"],
+            "service_name": "AI 运营求职诊断",
+            "service_deliverables": ["经历证据诊断", "表达改进建议"],
         },
         {
             **common,
             "id": "expert-demo-agent-pm",
-            "name": "AI Agent 产品匹配专区",
-            "title": "Agent 产品设计 / 作品集·内测需求画像",
-            "intro": "适合需要讲清 Agent 规划、记忆、工具调用和评测方案的候选人。这是真实专家入驻前的内测匹配入口。",
+            "name": "Kai",
+            "title": "AI Agent 架构专家",
+            "intro": "聚焦 Agent 规划、记忆、工具调用与评测体系，帮助候选人讲清技术理解、产品方案和作品集。",
             "tags": ["AI Agent", "作品集", "方案设计", "技术理解"],
-            "service_name": "AI Agent 产品求职问题匹配",
-            "service_deliverables": ["平台确认问题类型", "匹配真人专家后再确认服务"],
+            "service_name": "AI Agent 方案诊断",
+            "service_deliverables": ["架构问题诊断", "作品集改进清单"],
         },
     ]
 
@@ -1340,6 +1398,7 @@ def default_beta_state() -> Dict[str, Any]:
         "pilot_feedback": [],
         "community_reports": [],
         "point_ledger": [],
+        "developer_notifications": [],
     }
 
 
@@ -1374,18 +1433,36 @@ def load_beta_state() -> Dict[str, Any]:
         real_posts = [post for post in posts if post.get("id") not in legacy_seed_ids]
         existing_ids = {post.get("id") for post in real_posts}
         posts[:] = real_posts + [post for post in default_community_posts() if post["id"] not in existing_ids]
+    existing_post_ids = {post.get("id") for post in posts}
+    posts.extend(post for post in default_community_posts() if post["id"] not in existing_post_ids)
     data.setdefault("events", [])
     data.setdefault("orders", [])
     data.setdefault("expert_applications", [])
     experts = data.setdefault("experts", [])
+    default_experts = {item["id"]: item for item in default_expert_profiles()}
     existing_expert_ids = {item.get("id") for item in experts}
-    experts.extend(item for item in default_expert_profiles() if item["id"] not in existing_expert_ids)
+    experts.extend(item for item in default_experts.values() if item["id"] not in existing_expert_ids)
+    # Upgrade only the old platform-owned placeholder records. User-created,
+    # reviewed experts and their bookings remain untouched.
+    for expert in experts:
+        replacement = default_experts.get(expert.get("id"))
+        if not replacement or (
+            not expert.get("is_demo")
+            and "匹配专区" not in str(expert.get("name", ""))
+        ):
+            continue
+        owner_user_id = expert.get("owner_user_id")
+        expert.update(deepcopy(replacement))
+        expert["owner_user_id"] = owner_user_id
     data.setdefault("expert_bookings", [])
     data.setdefault("expert_reviews", [])
     data.setdefault("membership_interests", [])
     data.setdefault("pilot_feedback", [])
     data.setdefault("community_reports", [])
     data.setdefault("point_ledger", [])
+    data.setdefault("developer_notifications", [])
+    for user in data.get("users", {}).values():
+        user.setdefault("notifications", [])
     return data
 
 def save_beta_state(state: Dict[str, Any]) -> None:
@@ -1422,8 +1499,10 @@ def ensure_user(state: Dict[str, Any], device_id: str, nickname: Optional[str], 
             "messages": default_messages(),
             "bookings": [],
             "service_timeline": default_timeline(),
+            "notifications": [],
         }
     else:
+        users[user_id].setdefault("notifications", [])
         users[user_id]["profile"]["last_seen_at"] = now_iso()
         users[user_id]["profile"]["platform"] = platform
         if nickname:
@@ -1918,6 +1997,7 @@ def miniapp_bootstrap(request: MiniappBootstrapRequest):
         "session_token": session_token,
         "messages": user["messages"],
         "bookings": user["bookings"],
+        "notifications": user.get("notifications", [])[-30:],
         "service_timeline": user["service_timeline"],
         "service_health": build_service_health_summary(),
         "wechat_ready": bool(user["profile"].get("wechat_bound")),
@@ -3616,8 +3696,8 @@ def serialize_expert(state: Dict[str, Any], expert: Dict[str, Any]) -> Dict[str,
         "rating": rating,
         "servedCount": completed_count,
         "verificationStatus": (
-            "内测需求画像·尚未指定真人"
-            if expert.get("is_demo") else "平台已审核"
+            expert.get("verification_status")
+            or ("内测需求画像·尚未指定真人" if expert.get("is_demo") else "平台已审核")
         ),
         "isDemo": bool(expert.get("is_demo")),
         "serviceName": expert.get("service_name", "30分钟求职问题诊断"),
@@ -3633,6 +3713,44 @@ def serialize_expert(state: Dict[str, Any], expert: Dict[str, Any]) -> Dict[str,
             for review in reviews[-10:]
         ],
     }
+
+
+def append_notification(
+    state: Dict[str, Any],
+    user_id: Optional[str],
+    title: str,
+    content: str,
+    kind: str,
+    booking_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    notification = {
+        "id": f"notice-{uuid.uuid4().hex[:12]}",
+        "title": title,
+        "content": content,
+        "kind": kind,
+        "booking_id": booking_id,
+        "read": False,
+        "created_at": now_iso(),
+    }
+    user = state.get("users", {}).get(user_id) if user_id else None
+    if user:
+        user.setdefault("notifications", []).insert(0, notification)
+        user["notifications"] = user["notifications"][:100]
+    return notification
+
+
+def append_developer_notification(state: Dict[str, Any], notification: Dict[str, Any]) -> None:
+    state.setdefault("developer_notifications", []).insert(0, notification)
+    state["developer_notifications"] = state["developer_notifications"][:500]
+    if PINCO_DEVELOPER_USER_ID:
+        append_notification(
+            state,
+            PINCO_DEVELOPER_USER_ID,
+            notification["title"],
+            notification["content"],
+            notification.get("kind", "operator"),
+            notification.get("booking_id"),
+        )
 
 def require_admin_token(token: Optional[str]) -> None:
     if not PINCO_ADMIN_TOKEN:
@@ -3653,8 +3771,6 @@ def list_experts():
 @app.post("/api/v1/experts/applications")
 def apply_as_expert(request: ExpertApplicationRequest):
     proof_urls = [url.strip() for url in request.proof_urls if re.match(r"^https?://", url.strip())][:5]
-    if not proof_urls:
-        raise HTTPException(status_code=422, detail="至少提供一个可核验的履历或作品链接")
     tags = [tag.strip() for tag in request.tags if tag.strip()][:8]
     slots = list(dict.fromkeys(slot.strip() for slot in request.slots if slot.strip()))[:30]
     deliverables = [item.strip() for item in request.service_deliverables if item.strip()][:6]
@@ -3752,6 +3868,15 @@ def review_expert_application(
                 None,
             )
             if not expert:
+                expert = next(
+                    (
+                        item for item in state.get("experts", [])
+                        if item.get("id") in {"expert-demo-ai-pm", "expert-demo-ai-ops", "expert-demo-agent-pm"}
+                        and str(item.get("name", "")).strip().casefold() == application["real_name"].strip().casefold()
+                    ),
+                    None,
+                )
+            if not expert:
                 expert = {
                     "id": f"expert-{uuid.uuid4().hex[:12]}",
                     "owner_user_id": application["user_id"],
@@ -3759,6 +3884,7 @@ def review_expert_application(
                 }
                 state.setdefault("experts", []).append(expert)
             expert.update({
+                "owner_user_id": application["user_id"],
                 "name": application["real_name"],
                 "title": application["title"],
                 "intro": application["intro"],
@@ -3772,6 +3898,17 @@ def review_expert_application(
                 "application_id": application["id"],
                 "updated_at": now_iso(),
             })
+            for booking in state.get("expert_bookings", []):
+                if booking.get("expertId") == expert["id"] and not booking.get("expert_owner_user_id"):
+                    booking["expert_owner_user_id"] = application["user_id"]
+                    update_user_booking_copy(state, booking)
+            append_notification(
+                state,
+                application["user_id"],
+                "专家身份审核通过",
+                "你的专家工作台已开启，可以维护档期并处理预约。",
+                "expert_application",
+            )
         save_beta_state(state)
     return {"application": application}
 
@@ -3835,6 +3972,102 @@ def build_expert_briefing(user: Dict[str, Any], job: Dict[str, Any], question: s
         "privacy_note": "仅包含用户本次明确授权分享的关联岗位、已确认职业证据和关联练习摘要。",
     }
 
+
+def parse_booking_slot(slot: str) -> tuple[int, int]:
+    cleaned = re.sub(r"\s+", " ", slot.strip())
+    parsed = None
+    for pattern in ("%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M"):
+        try:
+            parsed = datetime.strptime(cleaned, pattern)
+            break
+        except ValueError:
+            continue
+    if not parsed:
+        raise ValueError("预约时段必须是 YYYY-MM-DD HH:MM 格式")
+    # Input is Beijing local time. datetime.timestamp() uses the server zone, so
+    # convert explicitly to UTC before producing epoch seconds.
+    utc_start = parsed - timedelta(hours=8)
+    start = int((utc_start - datetime(1970, 1, 1)).total_seconds())
+    if start <= int(time.time()) + 300:
+        raise ValueError("预约时段必须晚于当前时间至少 5 分钟")
+    return start, start + 30 * 60
+
+
+def tencent_meeting_config_issue() -> Optional[str]:
+    required = {
+        "TENCENT_MEETING_APP_ID": TENCENT_MEETING_APP_ID,
+        "TENCENT_MEETING_SECRET_ID": TENCENT_MEETING_SECRET_ID,
+        "TENCENT_MEETING_SECRET_KEY": TENCENT_MEETING_SECRET_KEY,
+        "TENCENT_MEETING_CREATOR_USER_ID": TENCENT_MEETING_CREATOR_USER_ID,
+    }
+    missing = [key for key, value in required.items() if not value]
+    return f"缺少腾讯会议配置：{', '.join(missing)}" if missing else None
+
+
+def create_tencent_meeting(booking: Dict[str, Any]) -> Dict[str, str]:
+    issue = tencent_meeting_config_issue()
+    if issue:
+        raise RuntimeError(issue)
+    start_time, end_time = parse_booking_slot(booking["slot"])
+    uri = "/v1/meetings"
+    body = json.dumps({
+        "userid": TENCENT_MEETING_CREATOR_USER_ID,
+        "instanceid": 1,
+        "subject": f"Pinco 专家咨询｜{booking['expertName']}",
+        "type": 0,
+        "start_time": str(start_time),
+        "end_time": str(end_time),
+        "settings": {
+            "mute_enable_join": False,
+            "allow_in_before_host": True,
+            "auto_in_waiting_room": False,
+        },
+    }, ensure_ascii=False, separators=(",", ":"))
+    timestamp = str(int(time.time()))
+    nonce = str(secrets.randbelow(900000000) + 100000000)
+    sign_source = (
+        f"POST\nX-TC-Key={TENCENT_MEETING_SECRET_ID}&X-TC-Nonce={nonce}"
+        f"&X-TC-Timestamp={timestamp}\n{uri}\n{body}"
+    )
+    digest = hmac.new(
+        TENCENT_MEETING_SECRET_KEY.encode("utf-8"),
+        sign_source.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    signature = base64.b64encode(digest.encode("utf-8")).decode("ascii")
+    headers = {
+        "Content-Type": "application/json",
+        "X-TC-Key": TENCENT_MEETING_SECRET_ID,
+        "X-TC-Timestamp": timestamp,
+        "X-TC-Nonce": nonce,
+        "X-TC-Signature": signature,
+        "X-TC-Registered": "1",
+        "AppId": TENCENT_MEETING_APP_ID,
+    }
+    if TENCENT_MEETING_SDK_ID:
+        headers["SdkId"] = TENCENT_MEETING_SDK_ID
+    try:
+        request = UrlRequest(
+            f"https://api.meeting.qq.com{uri}",
+            data=body.encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")[:500]
+        raise RuntimeError(f"腾讯会议创建失败 ({error.code})：{detail}") from error
+    meetings = payload.get("meeting_info_list") or []
+    if not meetings or not meetings[0].get("meeting_code"):
+        raise RuntimeError("腾讯会议返回中没有会议号")
+    meeting = meetings[0]
+    return {
+        "meeting_id": str(meeting.get("meeting_id", "")),
+        "meeting_code": str(meeting["meeting_code"]),
+        "meeting_url": str(meeting.get("join_url", "")),
+    }
+
 @app.post("/api/v1/bookings")
 def create_booking(request: BookingCreateRequest):
     with _state_lock:
@@ -3866,13 +4099,10 @@ def create_booking(request: BookingCreateRequest):
             "topic": expert.get("service_name", "30分钟求职问题诊断"),
             "slot": request.slot,
             "desc": request.desc.strip(),
-            "status": "平台匹配中" if expert.get("is_demo") else "待专家确认",
+            "contact_wechat": request.contact_wechat.strip(),
+            "status": "待专家确认",
             "status_code": "intent_submitted",
-            "payment_status": (
-                "awaiting_expert_confirmation"
-                if can_user_initiate_payment(request.user_id, "expert")
-                else "not_charged_beta"
-            ),
+            "payment_status": "not_charged_beta",
             "reference_price": expert.get("reference_price", 0),
             "job_id": bound_job.get("id") if bound_job else None,
             "job_label": f"{bound_job.get('company', '')} · {bound_job.get('title', '')}" if bound_job else None,
@@ -3898,6 +4128,20 @@ def create_booking(request: BookingCreateRequest):
         ]
         user["service_timeline"] = user["service_timeline"][:4]
         append_product_event_to_state(state, "expert.booking.created", request.user_id, {"expert_id": expert["id"]})
+        notice = append_notification(
+            state,
+            expert.get("owner_user_id"),
+            "收到新的专家预约",
+            f"{nickname if (nickname := user.get('profile', {}).get('nickname')) else '一位用户'} 预约了 {request.slot}，请在专家工作台确认或改期。",
+            "expert_booking",
+            booking["id"],
+        )
+        if not expert.get("owner_user_id"):
+            append_developer_notification(state, {
+                **notice,
+                "title": f"{expert['name']} 收到预约，待绑定专家账号",
+                "content": f"用户预约 {request.slot}；专家账号尚未绑定，请先完成专家申请审核绑定。",
+            })
         save_beta_state(state)
     return {"booking": booking, "bookings": user["bookings"], "service_timeline": user["service_timeline"]}
 
@@ -3908,6 +4152,22 @@ def list_user_bookings(user_id: str):
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     return {"bookings": user.get("bookings", [])}
+
+
+@app.get("/api/v1/notifications")
+def list_user_notifications(user_id: str):
+    state = load_beta_state()
+    user = state.get("users", {}).get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"notifications": user.get("notifications", [])[:100]}
+
+
+@app.get("/api/v1/admin/developer-notifications")
+def list_developer_notifications(x_pinco_admin_token: Optional[str] = Header(default=None)):
+    require_admin_token(x_pinco_admin_token)
+    state = load_beta_state()
+    return {"notifications": state.get("developer_notifications", [])[:500]}
 
 def update_user_booking_copy(state: Dict[str, Any], booking: Dict[str, Any]) -> None:
     user = state.get("users", {}).get(booking.get("user_id"))
@@ -3962,6 +4222,79 @@ def get_expert_bookings(expert_user_id: str):
     ]
     return {"bookings": bookings}
 
+
+def apply_expert_booking_decision(
+    state: Dict[str, Any],
+    booking: Dict[str, Any],
+    decision: str,
+    note: str,
+    requested_slot: str,
+) -> Dict[str, Any]:
+    if booking.get("status_code") != "intent_submitted":
+        raise HTTPException(status_code=409, detail="该预约已处理")
+    original_slot = booking.get("slot", "")
+    confirmed_slot = requested_slot.strip() or original_slot
+    if decision == "confirmed":
+        try:
+            parse_booking_slot(confirmed_slot)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        booking["slot"] = confirmed_slot
+    booking["status_code"] = decision
+    booking["payment_status"] = "not_charged_beta"
+    booking["status"] = "待服务" if decision == "confirmed" else "专家未接单"
+    booking["expert_note"] = note.strip()
+    booking["updated_at"] = now_iso()
+    if decision == "confirmed":
+        expert = next((item for item in state.get("experts", []) if item.get("id") == booking["expertId"]), None)
+        if expert and original_slot in expert.get("slots", []):
+            expert["slots"].remove(original_slot)
+        try:
+            booking.update(create_tencent_meeting(booking))
+            booking["meeting_setup_status"] = "created"
+            booking["meeting_setup_error"] = ""
+        except Exception as error:
+            booking["meeting_setup_status"] = "configuration_required" if tencent_meeting_config_issue() else "failed"
+            booking["meeting_setup_error"] = str(error)[:500]
+            booking["status"] = "已确认，会议待创建"
+        meeting_text = (
+            f"腾讯会议号：{booking['meeting_code']}"
+            if booking.get("meeting_code")
+            else "腾讯会议尚未创建，请开发者处理会议配置。"
+        )
+        append_notification(
+            state,
+            booking.get("user_id"),
+            f"{booking['expertName']} 已确认预约",
+            f"时间：{booking['slot']}。{meeting_text}",
+            "booking_confirmed",
+            booking["id"],
+        )
+        append_developer_notification(state, {
+            "id": f"notice-{uuid.uuid4().hex[:12]}",
+            "title": "专家预约已确认",
+            "content": (
+                f"专家：{booking['expertName']}；时间：{booking['slot']}；{meeting_text}；"
+                f"用户微信 ID（用户主动填写）：{booking.get('contact_wechat', '') or '未填写'}"
+            ),
+            "kind": "booking_confirmed",
+            "booking_id": booking["id"],
+            "read": False,
+            "created_at": now_iso(),
+        })
+    else:
+        append_notification(
+            state,
+            booking.get("user_id"),
+            f"{booking['expertName']} 暂时无法接单",
+            note.strip() or "这次时间没有匹配上，可以选择其他专家或时段。",
+            "booking_rejected",
+            booking["id"],
+        )
+    update_user_booking_copy(state, booking)
+    return booking
+
+
 @app.post("/api/v1/experts/bookings/{booking_id}/decision")
 def decide_expert_booking(booking_id: str, request: ExpertBookingDecisionRequest):
     decision = request.decision.strip().lower()
@@ -3974,23 +4307,31 @@ def decide_expert_booking(booking_id: str, request: ExpertBookingDecisionRequest
             raise HTTPException(status_code=404, detail="预约不存在")
         if booking.get("expert_owner_user_id") != request.expert_user_id:
             raise HTTPException(status_code=403, detail="只能处理自己的预约")
-        if booking.get("status_code") != "intent_submitted":
-            raise HTTPException(status_code=409, detail="该预约已处理")
-        booking["status_code"] = decision
-        if decision == "confirmed" and booking.get("payment_status") == "awaiting_expert_confirmation":
-            booking["payment_status"] = "payment_required"
-        booking["status"] = (
-            "待付款" if decision == "confirmed" and booking.get("payment_status") == "payment_required"
-            else "待服务" if decision == "confirmed"
-            else "专家未接单"
+        apply_expert_booking_decision(
+            state, booking, decision, request.note, request.confirmed_slot
         )
-        booking["expert_note"] = request.note.strip()
-        booking["updated_at"] = now_iso()
-        if decision == "confirmed":
-            expert = next((item for item in state.get("experts", []) if item.get("id") == booking["expertId"]), None)
-            if expert and booking["slot"] in expert.get("slots", []):
-                expert["slots"].remove(booking["slot"])
-        update_user_booking_copy(state, booking)
+        save_beta_state(state)
+    return {"booking": booking}
+
+
+@app.post("/api/v1/admin/expert-bookings/{booking_id}/decision")
+def admin_decide_expert_booking(
+    booking_id: str,
+    request: ExpertBookingDecisionRequest,
+    x_pinco_admin_token: Optional[str] = Header(default=None),
+):
+    require_admin_token(x_pinco_admin_token)
+    decision = request.decision.strip().lower()
+    if decision not in {"confirmed", "rejected"}:
+        raise HTTPException(status_code=422, detail="decision 必须是 confirmed 或 rejected")
+    with _state_lock:
+        state = load_beta_state()
+        booking = next((item for item in state.get("expert_bookings", []) if item.get("id") == booking_id), None)
+        if not booking:
+            raise HTTPException(status_code=404, detail="预约不存在")
+        apply_expert_booking_decision(
+            state, booking, decision, request.note, request.confirmed_slot
+        )
         save_beta_state(state)
     return {"booking": booking}
 

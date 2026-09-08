@@ -68,6 +68,7 @@ export const createBooking = async (payload: {
   desc: string
   job_id?: string
   share_context_with_expert?: boolean
+  contact_wechat: string
 }) => {
   return apiRequest<BookingResponse>('/api/v1/bookings', 'POST', payload)
 }
@@ -238,11 +239,18 @@ export const updateExpertAvailability = async (expertId: string, userId: string,
   })
 }
 
-export const decideExpertBooking = async (bookingId: string, expertUserId: string, decision: 'confirmed' | 'rejected', note = '') => {
+export const decideExpertBooking = async (
+  bookingId: string,
+  expertUserId: string,
+  decision: 'confirmed' | 'rejected',
+  note = '',
+  confirmedSlot = '',
+) => {
   return apiRequest<{ booking: BookingItem }>(`/api/v1/experts/bookings/${bookingId}/decision`, 'POST', {
     expert_user_id: expertUserId,
     decision,
     note,
+    confirmed_slot: confirmedSlot,
   })
 }
 

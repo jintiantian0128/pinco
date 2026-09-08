@@ -12,6 +12,7 @@ import {
   MessageItem,
   MiniappReadiness,
   MiniappRuntimeInfo,
+  PincoNotification,
   ServiceHealth,
   ServiceTimelineItem,
   SupportFollowUp,
@@ -51,6 +52,7 @@ interface PincoState {
   runtimeInfo: MiniappRuntimeInfo
   messages: MessageItem[]
   bookings: BookingItem[]
+  notifications: PincoNotification[]
   serviceTimeline: ServiceTimelineItem[]
   conversationMeta: ConversationMeta
   serviceHealth: ServiceHealth
@@ -90,7 +92,7 @@ interface PincoState {
   dismissPendingJobEvent: () => void
   bindLatestMaterialToJob: (jobId: string, material: keyof JobProgressItem['materials']) => void
   updateJobStatus: (jobId: string, status: JobStatus) => Promise<void>
-  createBookingOrder: (payload: { expert_id: string; expert_name: string; topic: string; slot: string; desc: string; job_id?: string; share_context_with_expert?: boolean }) => Promise<void>
+  createBookingOrder: (payload: { expert_id: string; expert_name: string; topic: string; slot: string; desc: string; contact_wechat: string; job_id?: string; share_context_with_expert?: boolean }) => Promise<void>
   cancelBookingOrder: (bookingId: string) => Promise<void>
   refreshBookings: () => Promise<void>
   loadMessages: () => void
@@ -219,6 +221,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
   runtimeInfo: defaultRuntimeInfo,
   messages: [welcomeMessage],
   bookings: [],
+  notifications: [],
   serviceTimeline: [],
   conversationMeta: {
     title: '专属会话',
@@ -425,6 +428,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         runtimeInfo,
         messages: mergeMessages(localMessages, data.messages?.length > 0 ? data.messages : [welcomeMessage]),
         bookings: data.bookings,
+        notifications: data.notifications || [],
         serviceTimeline: data.service_timeline,
         serviceHealth: data.service_health,
         membership: data.membership || null,
@@ -1241,7 +1245,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     }
   },
 
-  createBookingOrder: async ({ expert_id, expert_name, topic, slot, desc, job_id, share_context_with_expert }) => {
+  createBookingOrder: async ({ expert_id, expert_name, topic, slot, desc, contact_wechat, job_id, share_context_with_expert }) => {
     const userProfile = get().userProfile
     if (!userProfile) {
       Taro.showToast({ title: '请先重新进入小程序', icon: 'none' })
@@ -1254,6 +1258,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       topic,
       slot,
       desc,
+      contact_wechat,
       job_id,
       share_context_with_expert,
     })

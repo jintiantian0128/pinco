@@ -36,6 +36,7 @@ type PilotFeedback = {
 const MinePage: React.FC = () => {
   const serviceHealth = usePincoStore((state) => state.serviceHealth)
   const bookings = usePincoStore((state) => state.bookings)
+  const notifications = usePincoStore((state) => state.notifications)
   const refreshServiceHealth = usePincoStore((state) => state.refreshServiceHealth)
   const userProfile = usePincoStore((state) => state.userProfile)
   const wechatReady = usePincoStore((state) => state.wechatReady)
@@ -452,6 +453,20 @@ const MinePage: React.FC = () => {
         </View>
 
         {/* 我的预约 */}
+        {notifications.length > 0 && (
+          <View className={styles.card}>
+            <Text className={styles.cardTitle}>站内通知</Text>
+            <Text className={styles.cardDesc}>预约确认、改期和专家处理结果会在这里同步。</Text>
+            {notifications.slice(0, 5).map((notification) => (
+              <View key={notification.id} className={styles.bookingWrap}>
+                <Text className={styles.bookingExpert}>{notification.title}</Text>
+                <Text className={styles.bookingDelivery}>{notification.content}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* 我的预约 */}
         <View className={styles.card}>
           <View className={styles.progressHeader}>
             <View>
@@ -476,6 +491,8 @@ const MinePage: React.FC = () => {
                       <Text className={styles.bookingExpert}>{booking.expertName}</Text>
                       <Text className={styles.bookingTopic}>{booking.topic}</Text>
                       <Text className={styles.bookingSlot}>⏰ {booking.slot}</Text>
+                      {booking.meeting_code && <Text className={styles.bookingDelivery}>腾讯会议号：{booking.meeting_code}</Text>}
+                      {booking.meeting_url && <Text className={styles.bookingDelivery}>入会链接：{booking.meeting_url}</Text>}
                     </View>
                     <View className={styles.bookingStatus}>
                       <Text className={styles.bookingStatusText}>{booking.status}</Text>

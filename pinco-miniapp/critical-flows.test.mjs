@@ -34,6 +34,9 @@ assert.match(hub, /postContentInput[\s\S]*关联岗位（可选[\s\S]*postModalB
 assert.doesNotMatch(hub, /commentInput[\s\S]{0,1800}关联岗位（可选/, 'Comment composer must not contain the post-level job selector')
 assert.match(hub, /经验标签（可选，帮助其他人判断是否适用）/, 'High-value community posts must support round and time metadata')
 assert.doesNotMatch(hub, /请先登录|先登录/, 'Summon must not block anonymous users')
+assert.match(hub, /useEffect\(\(\) => \{[\s\S]{0,120}userProfile\?\.user_id[\s\S]{0,80}loadPosts\(\)/, 'Community must reload after async identity bootstrap')
+assert.match(hub, /activeFilter === 'all'[\s\S]{0,100}articles: \[\]/, 'All must be a community feed instead of duplicating the editorial tab')
+assert.match(hub, /activeFilter === 'article'[\s\S]{0,160}isFeatured/, 'Featured must combine editorial knowledge with explicitly featured discussions')
 
 assert.match(api, /wx\.cloud\.callContainer/, 'WeChat runtime must use wx.cloud.callContainer')
 assert.doesNotMatch(api, /process\.env\.NODE_ENV === 'development'[\s\S]{0,120}127\.0\.0\.1:8090/, 'WeChat development builds must not point real devices at localhost')
@@ -112,6 +115,8 @@ assert.match(article, /seedConversation\('garden'/, 'Article practice must seed 
 assert.match(expertCenter, /Promise\.allSettled/, 'Expert status and workspace loading must not take down the whole page together')
 assert.match(expertCenter, /intro\.trim\(\)\.length < 20/, 'Expert applications must validate minimum intro length before submitting')
 assert.match(expertCenter, /proof.*https?:/is, 'Expert applications must validate proof URLs before submitting')
+assert.match(expertCenter, /确认并创建会议/, 'Expert workbench must support the booking-to-meeting confirmation step')
+assert.match(expertCenter, /confirmedSlots/, 'Experts must be able to confirm or adjust the requested time')
 
 assert.doesNotMatch(store, /我先基于你发来的岗位描述做本地拆解/, 'JD failure must not look like a completed analysis')
 assert.match(store, /模拟面试没有启动成功/, 'Interview failure must be explicit')
@@ -126,6 +131,8 @@ assert.doesNotMatch(mine, /requestPayment|payExpert|refundPaymentOrder|closePaym
 assert.doesNotMatch(experts, /requestPayment|payExpert|¥|￥/, 'The 1.0 expert surface must not expose prices or payment controls')
 assert.match(mine, /1\.0 免费公测/, 'The profile must clearly identify the free public beta')
 assert.match(experts, /免费公测预约/, 'Expert booking must be presented as a free beta intent')
+assert.match(experts, /contact_wechat:\s*contactWechat\.trim\(\)/, 'Free booking must send the user-consented contact WeChat id')
+assert.match(experts, /腾讯会议号/, 'The booking success copy must explain where the meeting number appears')
 assert.equal(fs.existsSync(path.join(root, 'src/data/experts.ts')), false, 'Static expert candidates must not ship')
 assert.equal(fs.existsSync(path.join(root, 'src/data/community.ts')), false, 'Static community interactions must not ship')
 assert.match(jobSearch, /job\.verified_source\s*&&\s*job\.url/, 'Job cards must require a verified source URL')

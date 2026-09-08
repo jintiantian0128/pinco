@@ -12,6 +12,7 @@ const ExpertsPage: React.FC = () => {
   const [showBookingForm, setShowBookingForm] = useState(false)
   const [slot, setSlot] = useState('')
   const [topic, setTopic] = useState('')
+  const [contactWechat, setContactWechat] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [selectedJobId, setSelectedJobId] = useState('')
@@ -39,13 +40,14 @@ const ExpertsPage: React.FC = () => {
     setShowBookingForm(false)
     setSlot('')
     setTopic('')
+    setContactWechat('')
     setSelectedJobId('')
     setShareContextWithExpert(false)
   }
 
   const submitBooking = async () => {
-    if (!selectedExpert || !slot || !topic.trim()) {
-      Taro.showToast({ title: '请选择真实可约时段并填写问题', icon: 'none' })
+    if (!selectedExpert || !slot || !topic.trim() || contactWechat.trim().length < 2) {
+      Taro.showToast({ title: '请选择时段、填写问题和联系微信', icon: 'none' })
       return
     }
     if (loading) return
@@ -57,15 +59,14 @@ const ExpertsPage: React.FC = () => {
         topic: selectedExpert.serviceName,
         slot,
         desc: topic.trim(),
+        contact_wechat: contactWechat.trim(),
         job_id: selectedJobId || undefined,
         share_context_with_expert: Boolean(selectedJobId && shareContextWithExpert),
       })
       close()
       Taro.showModal({
-        title: selectedExpert.isDemo ? '匹配需求已提交' : '预约意向已送达',
-        content: selectedExpert.isDemo
-          ? '这是内测需求匹配，尚未指定真人专家，不会扣款。平台确认有合适真人后再通知你。'
-          : '专家会确认是否接单。当前为内测撮合，不会扣款；确认结果可在“我的”查看。',
+        title: '免费预约已送达',
+        content: '专家会确认或调整时间。确认后，时间和腾讯会议号会出现在“我的预约”中；本次不会扣款。',
         showCancel: false,
       })
     } catch (error) {
@@ -80,7 +81,7 @@ const ExpertsPage: React.FC = () => {
     <View className={styles.page}>
       <View className={styles.header}>
         <Text className={styles.title}>专家市场</Text>
-        <Text className={styles.desc}>1.0 免费公测只收集预约意向。真人专家会明确标注“平台已审核”，暂不开放商业化服务。</Text>
+        <Text className={styles.desc}>首批合作专家开放免费公测预约。专家确认后会同步时间和腾讯会议号，暂不开放付费。</Text>
         <View className={styles.applyButton} onClick={() => Taro.navigateTo({ url: '/pages/expert-center/index' })}>
           <Text>申请成为专家 / 专家工作台</Text>
         </View>
@@ -120,7 +121,7 @@ const ExpertsPage: React.FC = () => {
               className={styles.bookButton}
               onClick={(event) => { event.stopPropagation(); setSelectedExpert(expert); setShowBookingForm(true) }}
             >
-              <Text>{expert.isDemo ? '提交匹配需求' : expert.slots.length ? '去预约' : '暂无档期'}</Text>
+              <Text>{expert.slots.length ? '去预约' : '暂无档期'}</Text>
             </View>
           </View>
         </View>
@@ -136,7 +137,7 @@ const ExpertsPage: React.FC = () => {
             <Text className={styles.detailTitle}>{selectedExpert.title}</Text>
             <Text className={styles.detailPrice}>1.0 免费公测预约</Text>
             <View className={styles.detailSection}>
-              <Text className={styles.detailSectionTitle}>{selectedExpert.isDemo ? '内测需求说明' : '平台审核资料'}</Text>
+              <Text className={styles.detailSectionTitle}>专家介绍</Text>
               <Text className={styles.detailIntro}>{selectedExpert.intro}</Text>
             </View>
             <View className={styles.detailSection}>
@@ -164,7 +165,7 @@ const ExpertsPage: React.FC = () => {
                 ? setShowBookingForm(true)
                 : Taro.showToast({ title: '专家暂未发布档期', icon: 'none' })}
             >
-              <Text className={styles.detailBookText}>{selectedExpert.isDemo ? '提交匹配需求' : selectedExpert.slots.length ? '选择真实档期' : '暂无可约档期'}</Text>
+              <Text className={styles.detailBookText}>{selectedExpert.slots.length ? '选择可约档期' : '暂无可约档期'}</Text>
             </View>
           </ScrollView>
         </View>
@@ -178,7 +179,7 @@ const ExpertsPage: React.FC = () => {
               <View className={styles.detailClose} onClick={close}><Text>✕</Text></View>
             </View>
             <View className={styles.paySection}>
-              <Text className={styles.payLabel}>{selectedExpert.isDemo ? '平台匹配时效' : '专家发布的可约时段'}</Text>
+              <Text className={styles.payLabel}>专家发布的可约时段（北京时间）</Text>
               <View className={styles.slotGrid}>
                 {selectedExpert.slots.map((item) => (
                   <View
@@ -200,6 +201,19 @@ const ExpertsPage: React.FC = () => {
                 autoHeight
                 showConfirmBar={false}
               />
+            </View>
+            <View className={styles.paySection}>
+              <Text className={styles.payLabel}>联系微信 ID</Text>
+              <Textarea
+                className={styles.payInput}
+                value={contactWechat}
+                onInput={(event) => setContactWechat(event.detail.value)}
+                placeholder="由你主动填写，仅用于本次预约联络"
+                maxlength={80}
+                autoHeight
+                showConfirmBar={false}
+              />
+              <Text className={styles.detailIntro}>专家确认后，该微信 ID、时间和会议号会同步给开发者协调本次服务，不读取你的微信 openid。</Text>
             </View>
             {jobProgress.length > 0 && (
               <View className={styles.paySection}>
@@ -226,7 +240,7 @@ const ExpertsPage: React.FC = () => {
                 </View>
               </View>
             )}
-            <Text className={styles.noChargeNote}>{selectedExpert.isDemo ? '当前没有指定的真人专家接单。本次只收集需求并尝试匹配。' : '本次只提交免费预约意向，专家确认后再通知下一步。'}</Text>
+            <Text className={styles.noChargeNote}>本次是免费公测预约，不会触发支付。专家确认或改期后会发送站内通知。</Text>
             <View className={styles.detailBookButton} onClick={submitBooking}>
               <Text className={styles.detailBookText}>{loading ? '提交中…' : '提交预约意向（不扣款）'}</Text>
             </View>

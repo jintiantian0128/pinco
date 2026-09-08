@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Input, Text, Textarea, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import styles from './index.module.scss'
@@ -22,6 +22,7 @@ const statusText: Record<string, string> = {
 
 const ExpertCenterPage: React.FC = () => {
   const userProfile = usePincoStore((state) => state.userProfile)
+  const bootstrap = usePincoStore((state) => state.bootstrap)
   const [application, setApplication] = useState<ExpertApplication | null>(null)
   const [expert, setExpert] = useState<ExpertProfile | null>(null)
   const [bookings, setBookings] = useState<BookingItem[]>([])
@@ -36,6 +37,7 @@ const ExpertCenterPage: React.FC = () => {
   const [deliveryNextActions, setDeliveryNextActions] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [confirmedSlots, setConfirmedSlots] = useState<Record<string, string>>({})
 
   const load = async () => {
     if (!userProfile?.user_id) {
@@ -75,13 +77,22 @@ const ExpertCenterPage: React.FC = () => {
 
   useDidShow(load)
 
+  useEffect(() => {
+    if (userProfile?.user_id) load()
+  }, [userProfile?.user_id])
+
   const submitApplication = async () => {
-    if (!userProfile?.user_id || loading) return
+    if (loading) return
+    if (!usePincoStore.getState().userProfile?.user_id) await bootstrap()
+    const userId = usePincoStore.getState().userProfile?.user_id
+    if (!userId) {
+      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none' })
+      return
+    }
     const normalizedProofUrls = proofUrls.split('\n').map((item) => item.trim()).filter(Boolean)
     const validationError = realName.trim().length < 2 ? '真实姓名至少填写 2 个字'
       : title.trim().length < 2 ? '专业头衔至少填写 2 个字'
       : intro.trim().length < 20 ? '对求职者的介绍至少填写 20 个字'
-      : normalizedProofUrls.length === 0 ? '请至少填写一个可核验的证明链接'
       : normalizedProofUrls.some((url) => !/^https?:\/\//i.test(url)) ? '证明链接需要以 http:// 或 https:// 开头'
       : ''
     if (validationError) {
@@ -91,7 +102,7 @@ const ExpertCenterPage: React.FC = () => {
     setLoading(true)
     try {
       const result = await applyAsExpert({
-        user_id: userProfile.user_id,
+        user_id: userId,
         real_name: realName.trim(),
         title: title.trim(),
         intro: intro.trim(),
@@ -106,7 +117,7 @@ const ExpertCenterPage: React.FC = () => {
       setApplication(result.application)
       Taro.showModal({
         title: '申请已进入审核',
-        content: '平台会核验履历与作品链接。审核通过前不会在专家市场展示，也不会接收预约。',
+        content: '平台会人工核验资料。审核通过前不会公开展示，也不会接收预约。',
         showCancel: false,
       })
     } catch (error: any) {
@@ -140,7 +151,13 @@ const ExpertCenterPage: React.FC = () => {
     if (!userProfile?.user_id || loading) return
     setLoading(true)
     try {
-      const result = await decideExpertBooking(booking.id, userProfile.user_id, decision)
+      const result = await decideExpertBooking(
+        booking.id,
+        userProfile.user_id,
+        decision,
+        '',
+        decision === 'confirmed' ? (confirmedSlots[booking.id] || booking.slot) : '',
+      )
       setBookings((prev) => prev.map((item) => item.id === booking.id ? result.booking : item))
       Taro.showToast({ title: decision === 'confirmed' ? '已确认接单' : '已拒绝预约', icon: 'none' })
     } catch (error) {
@@ -200,7 +217,7 @@ const ExpertCenterPage: React.FC = () => {
       {canApply && (
         <View className={styles.card}>
           <Text className={styles.sectionTitle}>{application ? '补充并重新申请' : '申请成为专家'}</Text>
-          <Text className={styles.hint}>首步只收集 4 项核心资料。服务包、价格和档期在审核通过后再配置。</Text>
+          <Text className={styles.hint}>首步只收集姓名、专业头衔和服务方向。证明链接可选，服务包和档期在审核通过后再配置。</Text>
           <Text className={styles.label}>真实姓名 *</Text>
           <Input className={styles.input} value={realName} onInput={(event) => setRealName(event.detail.value)} placeholder="用于平台核验和公开展示" maxlength={30} />
           <Text className={styles.label}>专业头衔 *</Text>
@@ -210,8 +227,8 @@ const ExpertCenterPage: React.FC = () => {
           <Text className={styles.fieldCount}>{intro.length}/600</Text>
           <Text className={styles.label}>擅长标签（可选）</Text>
           <Input className={styles.input} value={tags} onInput={(event) => setTags(event.detail.value)} placeholder="用逗号分隔，如：AI产品，技术面" />
-          <Text className={styles.label}>一个可核验的履历 / 作品链接 *</Text>
-          <Textarea className={styles.textarea} value={proofUrls} onInput={(event) => setProofUrls(event.detail.value)} placeholder="公开主页、作品集或可核验材料的 https 链接，至少一个" maxlength={1000} cursorSpacing={24} disableDefaultPadding showConfirmBar={false} />
+          <Text className={styles.label}>可核验的履历 / 作品链接（可选）</Text>
+          <Textarea className={styles.textarea} value={proofUrls} onInput={(event) => setProofUrls(event.detail.value)} placeholder="公开主页、作品集或可核验材料的 https 链接，每行一个" maxlength={1000} cursorSpacing={24} disableDefaultPadding showConfirmBar={false} />
           <View className={styles.primaryButton} onClick={submitApplication}><Text>{loading ? '提交中…' : '提交平台审核'}</Text></View>
         </View>
       )}
@@ -232,6 +249,7 @@ const ExpertCenterPage: React.FC = () => {
               <Text className={styles.bookingTitle}>{booking.topic}</Text>
               <Text className={styles.bookingMeta}>{booking.slot} · {booking.status}</Text>
               <Text className={styles.bookingDesc}>{booking.desc}</Text>
+              {booking.contact_wechat && <Text className={styles.bookingDesc}>联系微信（用户主动填写）：{booking.contact_wechat}</Text>}
               {booking.expert_briefing && (
                 <View className={styles.statusCard}>
                   <Text className={styles.statusTitle}>用户已授权的会前摘要</Text>
@@ -248,10 +266,20 @@ const ExpertCenterPage: React.FC = () => {
                 </View>
               )}
               {booking.status_code === 'intent_submitted' && (
-                <View className={styles.actionRow}>
-                  <View className={styles.secondaryButton} onClick={() => decide(booking, 'rejected')}><Text>无法接单</Text></View>
-                  <View className={styles.primarySmall} onClick={() => decide(booking, 'confirmed')}><Text>确认接单</Text></View>
-                </View>
+                <>
+                  <Text className={styles.label}>确认时间（可直接修改，格式 YYYY-MM-DD HH:MM）</Text>
+                  <Input
+                    className={styles.input}
+                    value={confirmedSlots[booking.id] ?? booking.slot}
+                    onInput={(event) => setConfirmedSlots((current) => ({ ...current, [booking.id]: event.detail.value }))}
+                    placeholder="2026-09-10 19:30"
+                    maxlength={80}
+                  />
+                  <View className={styles.actionRow}>
+                    <View className={styles.secondaryButton} onClick={() => decide(booking, 'rejected')}><Text>无法接单</Text></View>
+                    <View className={styles.primarySmall} onClick={() => decide(booking, 'confirmed')}><Text>确认并创建会议</Text></View>
+                  </View>
+                </>
               )}
               {booking.status_code === 'confirmed' && deliveryBookingId !== booking.id && (
                 <View className={styles.primaryButton} onClick={() => setDeliveryBookingId(booking.id)}><Text>填写交付摘要</Text></View>

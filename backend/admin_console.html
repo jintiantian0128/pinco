@@ -37,19 +37,21 @@
       <nav class="tabs" aria-label="工作台栏目">
         <button class="tab active" data-tab="experts">专家审核</button>
         <button class="tab" data-tab="reports">内容治理</button>
+        <button class="tab" data-tab="notifications">预约通知</button>
         <button class="tab" data-tab="metrics">PMF 数据</button>
       </nav>
       <section class="panel">
         <div class="panelHead"><h2 id="panelTitle">专家审核</h2><button id="refresh" class="btn ghost">刷新</button></div>
         <div id="experts" class="list"></div>
         <div id="reports" class="list hidden"></div>
+        <div id="notifications" class="list hidden"></div>
         <div id="metrics" class="hidden"></div>
       </section>
     </section>
   </main>
   <script>
     (()=>{
-      let adminToken=''; let activeTab='experts'; let snapshot={applications:[],reports:[],metrics:null,readiness:null,health:null};
+      let adminToken=''; let activeTab='experts'; let snapshot={applications:[],reports:[],notifications:[],metrics:null,readiness:null,health:null};
       const $=id=>document.getElementById(id); const notice=$('notice');
       const text=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value??'';if(cls)n.className=cls;return n};
       const setNotice=(value,type='')=>{notice.textContent=value;notice.className='notice '+type};
@@ -57,9 +59,9 @@
       async function load(){
         setNotice('正在读取真实线上数据…');
         try{
-          const [applications,reports,metrics,readiness,health]=await Promise.all([
-            api('/api/v1/admin/expert-applications'),api('/api/v1/admin/community/reports'),api('/api/v1/admin/metrics/pmf'),fetch('/api/v1/miniapp/readiness',{cache:'no-store'}).then(r=>r.json()),fetch('/health',{cache:'no-store'}).then(r=>r.json())]);
-          snapshot={applications:applications.applications||[],reports:reports.reports||[],metrics,readiness,health};
+          const [applications,reports,notifications,metrics,readiness,health]=await Promise.all([
+            api('/api/v1/admin/expert-applications'),api('/api/v1/admin/community/reports'),api('/api/v1/admin/developer-notifications'),api('/api/v1/admin/metrics/pmf'),fetch('/api/v1/miniapp/readiness',{cache:'no-store'}).then(r=>r.json()),fetch('/health',{cache:'no-store'}).then(r=>r.json())]);
+          snapshot={applications:applications.applications||[],reports:reports.reports||[],notifications:notifications.notifications||[],metrics,readiness,health};
           $('workspace').classList.remove('hidden');$('disconnect').disabled=false;render();setNotice('已连接。页面关闭或刷新后令牌会被清除。','ok');
         }catch(error){adminToken='';$('token').value='';$('workspace').classList.add('hidden');$('disconnect').disabled=true;setNotice(error.message||'连接失败','bad')}
       }
@@ -67,7 +69,7 @@
         const pendingExperts=snapshot.applications.filter(x=>x.status==='pending'||x.status==='changes_requested');
         const pendingReports=snapshot.reports.filter(x=>x.status==='pending');
         $('ready').textContent=`${snapshot.readiness.ready_count||0}/${snapshot.readiness.total_count||0}`;$('expertCount').textContent=pendingExperts.length;$('reportCount').textContent=pendingReports.length;
-        $('health').textContent=snapshot.health?.state?.online&&snapshot.health?.llm?.online?'正常':'需检查';renderExperts(pendingExperts);renderReports(pendingReports);renderMetrics(snapshot.metrics||{});
+        $('health').textContent=snapshot.health?.state?.online&&snapshot.health?.llm?.online?'正常':'需检查';renderExperts(pendingExperts);renderReports(pendingReports);renderNotifications(snapshot.notifications);renderMetrics(snapshot.metrics||{});
       }
       function renderExperts(items){const root=$('experts');root.replaceChildren();if(!items.length){root.append(text('div','当前没有待处理的专家申请。','empty'));return}items.forEach(app=>{
         const card=text('article','', 'card');const top=text('div','', 'cardTop');const title=text('div');title.append(text('h3',`${app.real_name} · ${app.title}`),text('div',`${app.status} · ${app.created_at||''}`,'meta'));top.append(title,text('span',`¥${app.reference_price||0}/30分钟`,'chip'));card.append(top,text('p',app.intro,'copy'),text('p',`可核验经历：${app.experience_summary}`,'copy'));
@@ -76,12 +78,13 @@
         const review=text('div','', 'review');const note=document.createElement('textarea');note.placeholder='审核意见（驳回或要求修改时必填更清楚）';const actions=text('div','', 'actions');[['approved','通过','success'],['changes_requested','要求修改','warning'],['rejected','拒绝','danger']].forEach(([decision,label,cls])=>{const b=text('button',label,`btn ${cls}`);b.onclick=()=>reviewExpert(app.id,decision,note.value,b);actions.append(b)});review.append(note,actions);card.append(review);root.append(card)
       })}
       function renderReports(items){const root=$('reports');root.replaceChildren();if(!items.length){root.append(text('div','当前没有待处理的内容举报。','empty'));return}items.forEach(report=>{const post=report.post||{};const card=text('article','', 'card');card.append(text('h3',post.title||`帖子 ${report.post_id}`),text('div',`${post.author_name||'未知作者'} · ${post.post_type||''} · ${post.moderation_status||''}`,'meta'),text('p',post.content||'帖子正文不可用','copy'),text('p',`举报原因：${report.reason}`,'copy'));const review=text('div','', 'review');const note=document.createElement('textarea');note.placeholder='处置说明';const actions=text('div','', 'actions');[['published','保留','ghost'],['featured','精选','success'],['hidden','隐藏','danger']].forEach(([decision,label,cls])=>{const b=text('button',label,`btn ${cls}`);b.onclick=()=>moderate(post.id||report.post_id,decision,note.value,b);actions.append(b)});review.append(note,actions);card.append(review);root.append(card)})}
+      function renderNotifications(items){const root=$('notifications');root.replaceChildren();if(!items.length){root.append(text('div','当前没有预约协调通知。','empty'));return}items.forEach(item=>{const card=text('article','', 'card');card.append(text('h3',item.title),text('div',`${item.created_at||''} · ${item.booking_id||''}`,'meta'),text('p',item.content,'copy'));if(item.kind==='expert_booking'&&item.booking_id){const actions=text('div','', 'actions');const confirmButton=text('button','确认 / 改期','btn success');confirmButton.onclick=async()=>{const found=(item.content||'').match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);const slot=prompt('确认时间（北京时间，格式 YYYY-MM-DD HH:MM）',found?.[0]||'');if(!slot)return;confirmButton.disabled=true;try{await api(`/api/v1/admin/expert-bookings/${encodeURIComponent(item.booking_id)}/decision`,{method:'POST',body:JSON.stringify({decision:'confirmed',confirmed_slot:slot,note:'平台代专家确认'})});await load()}catch(e){setNotice(e.message,'bad');confirmButton.disabled=false}};const rejectButton=text('button','无法接单','btn danger');rejectButton.onclick=async()=>{if(!confirm('确认拒绝这次预约？'))return;rejectButton.disabled=true;try{await api(`/api/v1/admin/expert-bookings/${encodeURIComponent(item.booking_id)}/decision`,{method:'POST',body:JSON.stringify({decision:'rejected',note:'本次时间无法匹配'})});await load()}catch(e){setNotice(e.message,'bad');rejectButton.disabled=false}};actions.append(confirmButton,rejectButton);card.append(actions)}root.append(card)})}
       function renderMetrics(data){const root=$('metrics');root.replaceChildren();const d=data.decision_metrics||{};const pilot=d.pilot_feedback||{};const cards=[['近7天推进用户',d.weekly_job_progress_users?.value??0,'真正完成岗位、材料、练习或进度动作的人数'],['首次产出中位时间',d.first_trusted_output_minutes?.median==null?'暂无样本':`${d.first_trusted_output_minutes.median} 分钟`,'从注册到完成可信求职产出的速度'],['14天第二岗位复用',d.second_job_reuse_14d?.rate==null?'暂无样本':`${Math.round(d.second_job_reuse_14d.rate*100)}%`,'用户是否愿意把同一套闭环用于第二个岗位'],['材料可直接使用',d.material_directly_usable?.rate==null?'暂无样本':`${Math.round(d.material_directly_usable.rate*100)}%`,'用户反馈为直接使用或只需小改的占比'],['学社带动行动',d.community_action_starts?.users??0,'从学社内容启动练习、岗位或进度动作的人数'],['情感支持有帮助',d.emotional_support_helpful?.rate==null?'暂无样本':`${Math.round(d.emotional_support_helpful.rate*100)}%`,'仅统计用户明确反馈，不用打开或聊天次数替代'],['首批用户愿意继续用',pilot.return_yes_rate==null?'暂无样本':`${Math.round(pilot.return_yes_rate*100)}%`,`共创反馈 ${pilot.responses??0} 份；只统计明确选择“会”的用户`]];const grid=text('div','', 'metricGrid');cards.forEach(([label,value,desc])=>{const card=text('article','', 'metricCard');card.append(text('span',label,'muted'),text('strong',String(value)),text('small',desc));grid.append(card)});root.append(grid,text('div',data.note||'这里只展示真实数据；样本不足时不计算成功率。','metricNote'))}
       async function reviewExpert(id,decision,note,button){if(!confirm(`确认执行“${button.textContent}”？`))return;button.disabled=true;try{await api(`/api/v1/admin/expert-applications/${encodeURIComponent(id)}/review`,{method:'POST',body:JSON.stringify({decision,review_note:note})});await load()}catch(e){setNotice(e.message,'bad');button.disabled=false}}
       async function moderate(id,decision,note,button){if(!confirm(`确认执行“${button.textContent}”？`))return;button.disabled=true;try{await api(`/api/v1/admin/community/posts/${encodeURIComponent(id)}/moderate`,{method:'POST',body:JSON.stringify({decision,note})});await load()}catch(e){setNotice(e.message,'bad');button.disabled=false}}
-      function selectTab(tab){activeTab=tab;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));['experts','reports','metrics'].forEach(id=>$(id).classList.toggle('hidden',id!==tab));$('panelTitle').textContent={experts:'专家审核',reports:'内容治理',metrics:'PMF 数据'}[tab]}
+      function selectTab(tab){activeTab=tab;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));['experts','reports','notifications','metrics'].forEach(id=>$(id).classList.toggle('hidden',id!==tab));$('panelTitle').textContent={experts:'专家审核',reports:'内容治理',notifications:'预约通知',metrics:'PMF 数据'}[tab]}
       $('connect').onclick=()=>{adminToken=$('token').value.trim();if(adminToken.length<32){setNotice('管理员令牌至少需要 32 位。','bad');return}$('token').value='';load()};
-      $('disconnect').onclick=()=>{adminToken='';snapshot={applications:[],reports:[],metrics:null,readiness:null,health:null};$('workspace').classList.add('hidden');$('disconnect').disabled=true;setNotice('已断开，当前页面中的管理员令牌已清除。','ok')};
+      $('disconnect').onclick=()=>{adminToken='';snapshot={applications:[],reports:[],notifications:[],metrics:null,readiness:null,health:null};$('workspace').classList.add('hidden');$('disconnect').disabled=true;setNotice('已断开，当前页面中的管理员令牌已清除。','ok')};
       $('refresh').onclick=load;document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>selectTab(x.dataset.tab));$('token').addEventListener('keydown',e=>{if(e.key==='Enter')$('connect').click()});window.addEventListener('pagehide',()=>{adminToken=''});
     })();
   </script>

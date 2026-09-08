@@ -188,7 +188,7 @@ export interface BookingItem {
   topic: string
   slot: string
   desc: string
-  status: '平台匹配中' | '待专家确认' | '待付款' | '待服务' | '退款处理中' | '已取消并退款' | '专家未接单' | '待评价' | '已完成' | '已取消' | '待连线' | '已预约'
+  status: '平台匹配中' | '待专家确认' | '待付款' | '待服务' | '已确认，会议待创建' | '退款处理中' | '已取消并退款' | '专家未接单' | '待评价' | '已完成' | '已取消' | '待连线' | '已预约'
   status_code?: 'intent_submitted' | 'confirmed' | 'rejected' | 'completed' | 'cancelled'
   delivery_summary?: string
   next_actions?: string[]
@@ -207,6 +207,20 @@ export interface BookingItem {
   refund_status?: 'not_applicable_not_charged' | 'processing' | 'success' | 'failed'
   job_id?: string
   job_label?: string
+  contact_wechat?: string
+  meeting_code?: string
+  meeting_url?: string
+  meeting_setup_status?: 'created' | 'configuration_required' | 'failed'
+}
+
+export interface PincoNotification {
+  id: string
+  title: string
+  content: string
+  kind: string
+  booking_id?: string
+  read: boolean
+  created_at: string
 }
 
 export interface ExpertApplication {
@@ -312,6 +326,7 @@ export interface MiniappBootstrapResponse {
   user: UserProfile
   messages: MessageItem[]
   bookings: BookingItem[]
+  notifications?: PincoNotification[]
   service_timeline: ServiceTimelineItem[]
   service_health: ServiceHealth
   wechat_ready: boolean

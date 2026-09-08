@@ -727,17 +727,22 @@ class TrustFoundationTests(unittest.TestCase):
             persisted = store.load()["community_posts"]
             self.assertTrue(any(post["id"] == created["id"] for post in persisted))
             self.assertFalse(any(post["id"] in {"post-1", "post-2", "post-3"} for post in persisted))
+            self.assertEqual(
+                {post["postType"] for post in main.default_community_posts()},
+                {"treehole", "help", "share", "success"},
+            )
 
     def test_expert_market_requires_review_then_supports_delivery_and_real_review(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
-            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None), patch.object(main, "PINCO_ADMIN_TOKEN", "admin-secret"):
+            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None), patch.object(main, "PINCO_ADMIN_TOKEN", "admin-secret"), patch.object(main, "create_tencent_meeting", side_effect=RuntimeError("missing meeting credentials")), patch.object(main, "tencent_meeting_config_issue", return_value="missing meeting credentials"):
                 state = main.default_beta_state()
                 expert_user = main.ensure_user(state, "expert-device", "周老师", "weapp")
                 candidate = main.ensure_user(state, "candidate-device", "小陈", "weapp")
                 store.save(state)
                 expert_user_id = expert_user["profile"]["user_id"]
                 candidate_user_id = candidate["profile"]["user_id"]
+                first_slot, second_slot = main.default_expert_slots()[:2]
                 applied = main.apply_as_expert(main.ExpertApplicationRequest(
                     user_id=expert_user_id,
                     real_name="周老师",
@@ -747,12 +752,13 @@ class TrustFoundationTests(unittest.TestCase):
                     experience_summary="有五年 AI 产品工作经验，参与过三款线上产品，并持续辅导校招和社招面试。",
                     proof_urls=["https://example.com/portfolio"],
                     reference_price=99,
-                    slots=["2026-08-08 20:00"],
+                    slots=[first_slot],
                 ))["application"]
                 seeded = main.list_experts()["experts"]
                 self.assertEqual(len(seeded), 3)
-                self.assertTrue(all(item["isDemo"] for item in seeded))
-                self.assertTrue(all("尚未指定真人" in item["verificationStatus"] for item in seeded))
+                self.assertEqual({item["name"] for item in seeded}, {"Tiana", "Sara", "Kai"})
+                self.assertTrue(all(not item["isDemo"] for item in seeded))
+                self.assertTrue(all(item["verificationStatus"] == "首批合作专家" for item in seeded))
                 main.review_expert_application(
                     applied["id"],
                     main.ExpertApplicationReviewRequest(decision="approved", review_note="资料已人工核验"),
@@ -780,10 +786,11 @@ class TrustFoundationTests(unittest.TestCase):
                     expert_id=public_expert["id"],
                     expert_name="不信任客户端名字",
                     topic="项目深挖",
-                    slot="2026-08-08 20:00",
+                    slot=first_slot,
                     desc="希望把一个真实项目讲清楚",
                     job_id=saved_job["id"],
                     share_context_with_expert=True,
+                    contact_wechat="candidate_wechat",
                 ))["booking"]
                 self.assertEqual(booking["expert_briefing"]["job"]["label"], "目标公司 · AI 产品经理")
                 self.assertEqual(booking["expert_briefing"]["evidence"][0]["title"], "评测体系落地")
@@ -793,6 +800,8 @@ class TrustFoundationTests(unittest.TestCase):
                     main.ExpertBookingDecisionRequest(expert_user_id=expert_user_id, decision="confirmed"),
                 )["booking"]
                 self.assertEqual(confirmed["payment_status"], "not_charged_beta")
+                self.assertEqual(confirmed["meeting_setup_status"], "configuration_required")
+                self.assertIn("candidate_wechat", store.load()["developer_notifications"][0]["content"])
                 main.complete_expert_booking(
                     booking["id"],
                     main.ExpertBookingCompleteRequest(
@@ -814,14 +823,14 @@ class TrustFoundationTests(unittest.TestCase):
                 self.assertEqual(listed["slots"], [])
                 main.update_expert_availability(
                     public_expert["id"],
-                    main.ExpertAvailabilityRequest(user_id=expert_user_id, slots=["2026-08-09 20:00"]),
+                    main.ExpertAvailabilityRequest(user_id=expert_user_id, slots=[second_slot]),
                 )
                 second = main.create_booking(main.BookingCreateRequest(
                     user_id=candidate_user_id,
                     expert_id=public_expert["id"],
                     expert_name="客户端伪造名字",
                     topic="客户端任意主题",
-                    slot="2026-08-09 20:00",
+                    slot=second_slot,
                     desc="希望确认固定交付",
                 ))["booking"]
                 cancelled = main.cancel_expert_booking(
@@ -833,7 +842,7 @@ class TrustFoundationTests(unittest.TestCase):
                 main.delete_account(main.AccountDeleteRequest(user_id=expert_user_id, confirmation="DELETE"))
                 after_delete = store.load()
                 self.assertNotIn(expert_user_id, after_delete["users"])
-                self.assertTrue(all(item["isDemo"] for item in main.list_experts()["experts"]))
+                self.assertTrue(all(item["name"] in {"Tiana", "Sara", "Kai"} for item in main.list_experts()["experts"]))
                 buyer_bookings = after_delete["users"][candidate_user_id]["bookings"]
                 self.assertTrue(all(item.get("expertName") == "已注销专家" for item in buyer_bookings))
                 self.assertTrue(all(item.get("expert_owner_user_id") is None for item in after_delete["expert_bookings"]))

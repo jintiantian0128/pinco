@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input, ScrollView, Text, Textarea, View } from '@tarojs/components'
 import Taro, { useDidShow, usePullDownRefresh, useShareAppMessage } from '@tarojs/taro'
 import classnames from 'classnames'
@@ -50,6 +50,7 @@ const HubPage: React.FC = () => {
   const openConversation = usePincoStore((state) => state.openConversation)
   const seedConversation = usePincoStore((state) => state.seedConversation)
   const startInterview = usePincoStore((state) => state.startInterview)
+  const bootstrap = usePincoStore((state) => state.bootstrap)
 
   const resetPostModal = () => {
     newPostTitleRef.current = ''
@@ -61,7 +62,14 @@ const HubPage: React.FC = () => {
     setPostModalKey((key) => key + 1)
   }
 
-  const openPostModal = () => {
+  const openPostModal = async () => {
+    if (!usePincoStore.getState().userProfile?.user_id) {
+      await bootstrap()
+    }
+    if (!usePincoStore.getState().userProfile?.user_id) {
+      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none' })
+      return
+    }
     resetPostModal()
     setShowPostModal(true)
   }
@@ -91,6 +99,10 @@ const HubPage: React.FC = () => {
   useDidShow(() => {
     loadPosts()
   })
+
+  useEffect(() => {
+    if (userProfile?.user_id) loadPosts()
+  }, [userProfile?.user_id])
 
   usePullDownRefresh(() => {
     loadPosts().finally(() => Taro.stopPullDownRefresh())
@@ -160,10 +172,10 @@ const HubPage: React.FC = () => {
       )
     }
     if (activeFilter === 'all') {
-      return { articles: gardenArticles, posts: filteredPosts }
+      return { articles: [], posts: filteredPosts }
     }
     if (activeFilter === 'article') {
-      return { articles: gardenArticles, posts: [] }
+      return { articles: gardenArticles, posts: filteredPosts.filter((post) => post.isFeatured) }
     }
     return { articles: [], posts: filteredPosts }
   }, [activeFilter, posts, searchQuery])
