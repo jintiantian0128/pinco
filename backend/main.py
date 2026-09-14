@@ -1327,13 +1327,55 @@ def default_community_posts() -> List[Dict[str, Any]]:
     ]
 
 
-def default_expert_slots() -> List[str]:
-    """Generate three near-term Beijing-time slots without hard-coded stale dates."""
+CURATED_EXPERT_IDS = {
+    "expert-demo-ai-pm",
+    "expert-demo-ai-ops",
+    "expert-demo-agent-pm",
+}
+ACTIVE_BOOKING_STATUSES = {"intent_submitted", "confirmed"}
+
+
+def suggested_expert_slots(limit: int = 3) -> List[str]:
+    """Generate a rolling pool of Beijing-time evening slots."""
     today = datetime.utcnow() + timedelta(hours=8)
     return [
         (today + timedelta(days=offset)).strftime("%Y-%m-%d 19:30")
-        for offset in (2, 4, 6)
+        for offset in range(2, 2 + max(limit, 0) * 2, 2)
     ]
+
+
+def default_expert_slots() -> List[str]:
+    """Generate three near-term Beijing-time slots without hard-coded stale dates."""
+    return suggested_expert_slots(3)
+
+
+def refresh_curated_expert_slots(state: Dict[str, Any]) -> None:
+    """Drop expired/reserved curated slots and keep three future choices available."""
+    reserved = {
+        (booking.get("expertId"), booking.get("slot"))
+        for booking in state.get("expert_bookings", [])
+        if booking.get("status_code") in ACTIVE_BOOKING_STATUSES
+    }
+    now_epoch = int(time.time()) + 300
+    for expert in state.get("experts", []):
+        if expert.get("id") not in CURATED_EXPERT_IDS:
+            continue
+        available: List[str] = []
+        for slot in expert.get("slots", []):
+            if not isinstance(slot, str) or not slot.strip():
+                continue
+            try:
+                start, _ = parse_booking_slot(slot)
+            except ValueError:
+                continue
+            if start > now_epoch and (expert.get("id"), slot) not in reserved:
+                available.append(slot)
+        for slot in suggested_expert_slots(15):
+            if len(available) >= 3:
+                break
+            if slot not in available and (expert.get("id"), slot) not in reserved:
+                available.append(slot)
+        expert["slots"] = available[:3]
 
 
 def default_expert_profiles() -> List[Dict[str, Any]]:
@@ -1455,6 +1497,7 @@ def load_beta_state() -> Dict[str, Any]:
         expert.update(deepcopy(replacement))
         expert["owner_user_id"] = owner_user_id
     data.setdefault("expert_bookings", [])
+    refresh_curated_expert_slots(data)
     data.setdefault("expert_reviews", [])
     data.setdefault("membership_interests", [])
     data.setdefault("pilot_feedback", [])
@@ -3683,7 +3726,15 @@ def serialize_expert(state: Dict[str, Any], expert: Dict[str, Any]) -> Dict[str,
         1 for booking in state.get("expert_bookings", [])
         if booking.get("expertId") == expert.get("id") and booking.get("status_code") == "completed"
     )
-    slots = [slot for slot in expert.get("slots", []) if isinstance(slot, str) and slot.strip()]
+    slots = []
+    for slot in expert.get("slots", []):
+        if not isinstance(slot, str) or not slot.strip():
+            continue
+        try:
+            parse_booking_slot(slot)
+        except ValueError:
+            continue
+        slots.append(slot)
     return {
         "id": expert["id"],
         "name": expert["name"],
@@ -4083,6 +4134,18 @@ def create_booking(request: BookingCreateRequest):
             raise HTTPException(status_code=404, detail="该专家尚未通过平台审核")
         if request.slot not in expert.get("slots", []):
             raise HTTPException(status_code=409, detail="该时段已不可约，请刷新后重选")
+        try:
+            parse_booking_slot(request.slot)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        duplicated = any(
+            item.get("expertId") == expert["id"]
+            and item.get("slot") == request.slot
+            and item.get("status_code") in ACTIVE_BOOKING_STATUSES
+            for item in state.get("expert_bookings", [])
+        )
+        if duplicated:
+            raise HTTPException(status_code=409, detail="该时段刚刚被预约，请刷新后重选")
         bound_job = None
         if request.job_id:
             bound_job = next((item for item in user.get("jobs", []) if item.get("id") == request.job_id), None)

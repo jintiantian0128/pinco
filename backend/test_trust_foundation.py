@@ -847,6 +847,48 @@ class TrustFoundationTests(unittest.TestCase):
                 self.assertTrue(all(item.get("expertName") == "已注销专家" for item in buyer_bookings))
                 self.assertTrue(all(item.get("expert_owner_user_id") is None for item in after_delete["expert_bookings"]))
 
+    def test_curated_expert_slots_roll_forward_and_cannot_be_double_booked(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None):
+                state = main.default_beta_state()
+                state["experts"][0]["slots"] = ["2020-01-01 19:30"]
+                first_user = main.ensure_user(state, "slot-user-1", "小陈", "weapp")
+                second_user = main.ensure_user(state, "slot-user-2", "小林", "weapp")
+                store.save(state)
+
+                expert = next(
+                    item for item in main.list_experts()["experts"]
+                    if item["id"] == "expert-demo-ai-pm"
+                )
+                self.assertEqual(len(expert["slots"]), 3)
+                self.assertNotIn("2020-01-01 19:30", expert["slots"])
+                for slot in expert["slots"]:
+                    main.parse_booking_slot(slot)
+
+                request = dict(
+                    expert_id=expert["id"],
+                    expert_name=expert["name"],
+                    topic="求职诊断",
+                    slot=expert["slots"][0],
+                    desc="希望梳理项目经历",
+                )
+                main.create_booking(main.BookingCreateRequest(
+                    user_id=first_user["profile"]["user_id"], **request
+                ))
+                with self.assertRaises(HTTPException) as context:
+                    main.create_booking(main.BookingCreateRequest(
+                        user_id=second_user["profile"]["user_id"], **request
+                    ))
+                self.assertEqual(context.exception.status_code, 409)
+
+                refreshed = next(
+                    item for item in main.list_experts()["experts"]
+                    if item["id"] == "expert-demo-ai-pm"
+                )
+                self.assertEqual(len(refreshed["slots"]), 3)
+                self.assertNotIn(request["slot"], refreshed["slots"])
+
     def test_community_three_unique_reports_hold_content_for_review(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
