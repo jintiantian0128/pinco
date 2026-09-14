@@ -92,7 +92,7 @@ interface PincoState {
   dismissPendingJobEvent: () => void
   bindLatestMaterialToJob: (jobId: string, material: keyof JobProgressItem['materials']) => void
   updateJobStatus: (jobId: string, status: JobStatus) => Promise<void>
-  createBookingOrder: (payload: { expert_id: string; expert_name: string; topic: string; slot: string; desc: string; contact_wechat: string; job_id?: string; share_context_with_expert?: boolean }) => Promise<void>
+  createBookingOrder: (payload: { expert_id: string; expert_name: string; topic: string; slot: string; desc: string; contact_wechat?: string; share_contact_with_expert?: boolean; job_id?: string; share_context_with_expert?: boolean }) => Promise<void>
   cancelBookingOrder: (bookingId: string) => Promise<void>
   refreshBookings: () => Promise<void>
   loadMessages: () => void
@@ -1245,7 +1245,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     }
   },
 
-  createBookingOrder: async ({ expert_id, expert_name, topic, slot, desc, contact_wechat, job_id, share_context_with_expert }) => {
+  createBookingOrder: async ({ expert_id, expert_name, topic, slot, desc, contact_wechat, share_contact_with_expert, job_id, share_context_with_expert }) => {
     const userProfile = get().userProfile
     if (!userProfile) {
       Taro.showToast({ title: '请先重新进入小程序', icon: 'none' })
@@ -1259,6 +1259,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       slot,
       desc,
       contact_wechat,
+      share_contact_with_expert,
       job_id,
       share_context_with_expert,
     })

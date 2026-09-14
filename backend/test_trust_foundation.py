@@ -847,6 +847,82 @@ class TrustFoundationTests(unittest.TestCase):
                 self.assertTrue(all(item.get("expertName") == "已注销专家" for item in buyer_bookings))
                 self.assertTrue(all(item.get("expert_owner_user_id") is None for item in after_delete["expert_bookings"]))
 
+    def test_expert_public_name_binding_and_candidate_anonymity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None), patch.object(main, "PINCO_ADMIN_TOKEN", "admin-secret"):
+                state = main.default_beta_state()
+                expert_user = main.ensure_user(state, "tiana-device", "专家本人昵称", "weapp")
+                candidate = main.ensure_user(state, "anonymous-candidate", "不应暴露的微信昵称", "weapp")
+                store.save(state)
+                expert_user_id = expert_user["profile"]["user_id"]
+                candidate_user_id = candidate["profile"]["user_id"]
+
+                applied = main.apply_as_expert(main.ExpertApplicationRequest(
+                    user_id=expert_user_id,
+                    real_name="金甜甜",
+                    display_name="Tiana",
+                    title="AI 产品专家",
+                    intro="帮助零到五年 AI 产品求职者梳理项目证据、岗位选择与面试表达。",
+                    tags=["AI产品"],
+                    experience_summary="平台核验资料",
+                    proof_urls=[],
+                    slots=[],
+                ))["application"]
+                main.review_expert_application(
+                    applied["id"],
+                    main.ExpertApplicationReviewRequest(
+                        decision="approved",
+                        review_note="实名已核验",
+                        display_name="Tiana",
+                        bind_expert_id="expert-demo-ai-pm",
+                    ),
+                    x_pinco_admin_token="admin-secret",
+                )
+                saved_state = store.load()
+                bound = next(item for item in saved_state["experts"] if item["id"] == "expert-demo-ai-pm")
+                self.assertEqual(bound["name"], "Tiana")
+                self.assertEqual(bound["legal_name"], "金甜甜")
+                self.assertEqual(bound["owner_user_id"], expert_user_id)
+                public = next(item for item in main.list_experts()["experts"] if item["id"] == bound["id"])
+                self.assertEqual(public["name"], "Tiana")
+                self.assertNotIn("legal_name", public)
+
+                first_slot, second_slot = public["slots"][:2]
+                anonymous_booking = main.create_booking(main.BookingCreateRequest(
+                    user_id=candidate_user_id,
+                    expert_id=public["id"],
+                    expert_name=public["name"],
+                    topic="项目诊断",
+                    slot=first_slot,
+                    desc="希望匿名讨论项目经历",
+                    contact_wechat="private_contact",
+                ))["booking"]
+                workspace = main.get_my_expert_workspace(expert_user_id)
+                expert_view = next(item for item in workspace["bookings"] if item["id"] == anonymous_booking["id"])
+                self.assertTrue(expert_view["candidate_alias"].startswith("匿名求职者 "))
+                self.assertNotIn("user_id", expert_view)
+                self.assertNotIn("contact_wechat", expert_view)
+                expert_notices = store.load()["users"][expert_user_id]["notifications"]
+                self.assertNotIn("不应暴露的微信昵称", expert_notices[0]["content"])
+
+                shared_booking = main.create_booking(main.BookingCreateRequest(
+                    user_id=candidate_user_id,
+                    expert_id=public["id"],
+                    expert_name=public["name"],
+                    topic="岗位诊断",
+                    slot=second_slot,
+                    desc="这次主动分享联系方式",
+                    contact_wechat="shared_contact",
+                    share_contact_with_expert=True,
+                ))["booking"]
+                shared_view = next(
+                    item for item in main.get_expert_bookings(expert_user_id)["bookings"]
+                    if item["id"] == shared_booking["id"]
+                )
+                self.assertEqual(shared_view["contact_wechat"], "shared_contact")
+                self.assertNotIn("user_id", shared_view)
+
     def test_curated_expert_slots_roll_forward_and_cannot_be_double_booked(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)

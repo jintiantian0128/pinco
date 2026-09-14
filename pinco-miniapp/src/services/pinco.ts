@@ -68,7 +68,8 @@ export const createBooking = async (payload: {
   desc: string
   job_id?: string
   share_context_with_expert?: boolean
-  contact_wechat: string
+  share_contact_with_expert?: boolean
+  contact_wechat?: string
 }) => {
   return apiRequest<BookingResponse>('/api/v1/bookings', 'POST', payload)
 }
@@ -215,6 +216,7 @@ export const fetchExpertApplicationStatus = async (userId: string) => {
 export const applyAsExpert = async (payload: {
   user_id: string
   real_name: string
+  display_name: string
   title: string
   intro: string
   tags: string[]

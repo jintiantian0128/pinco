@@ -566,11 +566,13 @@ class BookingCreateRequest(BaseModel):
     desc: str
     job_id: Optional[str] = None
     share_context_with_expert: bool = False
+    share_contact_with_expert: bool = False
     contact_wechat: str = Field(default="", max_length=80)
 
 class ExpertApplicationRequest(BaseModel):
     user_id: str
     real_name: str = Field(min_length=2, max_length=30)
+    display_name: str = Field(default="", max_length=30)
     title: str = Field(min_length=2, max_length=80)
     intro: str = Field(min_length=20, max_length=600)
     tags: List[str] = Field(default_factory=list)
@@ -584,6 +586,8 @@ class ExpertApplicationRequest(BaseModel):
 class ExpertApplicationReviewRequest(BaseModel):
     decision: str
     review_note: str = Field(default="", max_length=500)
+    display_name: str = Field(default="", max_length=30)
+    bind_expert_id: Optional[str] = None
 
 class ExpertAvailabilityRequest(BaseModel):
     user_id: str
@@ -1335,6 +1339,23 @@ CURATED_EXPERT_IDS = {
 ACTIVE_BOOKING_STATUSES = {"intent_submitted", "confirmed"}
 
 
+def anonymous_booking_alias(booking_id: str) -> str:
+    """Create a stable public alias without exposing a user or booking id."""
+    digest = hashlib.sha256((booking_id or "booking").encode("utf-8")).hexdigest()[:4].upper()
+    return f"匿名求职者 {digest}"
+
+
+def serialize_booking_for_expert(booking: Dict[str, Any]) -> Dict[str, Any]:
+    """Limit candidate identity data returned to an expert-owned surface."""
+    result = deepcopy(booking)
+    result.pop("user_id", None)
+    result.pop("expert_owner_user_id", None)
+    result["candidate_alias"] = booking.get("candidate_alias") or anonymous_booking_alias(booking.get("id", ""))
+    if not booking.get("share_contact_with_expert"):
+        result.pop("contact_wechat", None)
+    return result
+
+
 def suggested_expert_slots(limit: int = 3) -> List[str]:
     """Generate a rolling pool of Beijing-time evening slots."""
     today = datetime.utcnow() + timedelta(hours=8)
@@ -1479,7 +1500,9 @@ def load_beta_state() -> Dict[str, Any]:
     posts.extend(post for post in default_community_posts() if post["id"] not in existing_post_ids)
     data.setdefault("events", [])
     data.setdefault("orders", [])
-    data.setdefault("expert_applications", [])
+    expert_applications = data.setdefault("expert_applications", [])
+    for application in expert_applications:
+        application.setdefault("display_name", application.get("real_name", ""))
     experts = data.setdefault("experts", [])
     default_experts = {item["id"]: item for item in default_expert_profiles()}
     existing_expert_ids = {item.get("id") for item in experts}
@@ -1496,7 +1519,12 @@ def load_beta_state() -> Dict[str, Any]:
         owner_user_id = expert.get("owner_user_id")
         expert.update(deepcopy(replacement))
         expert["owner_user_id"] = owner_user_id
-    data.setdefault("expert_bookings", [])
+    expert_bookings = data.setdefault("expert_bookings", [])
+    for booking in expert_bookings:
+        booking.setdefault("candidate_alias", anonymous_booking_alias(booking.get("id", "")))
+        # Historical bookings did not include explicit consent to reveal contact
+        # details, so their expert-facing view remains private by default.
+        booking.setdefault("share_contact_with_expert", False)
     refresh_curated_expert_slots(data)
     data.setdefault("expert_reviews", [])
     data.setdefault("membership_interests", [])
@@ -3840,6 +3868,7 @@ def apply_as_expert(request: ExpertApplicationRequest):
             "id": f"expert-application-{uuid.uuid4().hex[:12]}",
             "user_id": request.user_id,
             "real_name": request.real_name.strip(),
+            "display_name": request.display_name.strip() or request.real_name.strip(),
             "title": request.title.strip(),
             "intro": request.intro.strip(),
             "tags": tags,
@@ -3884,7 +3913,7 @@ def get_my_expert_workspace(user_id: str):
     ]
     return {
         "expert": serialize_expert(state, expert) if expert else None,
-        "bookings": bookings,
+        "bookings": [serialize_booking_for_expert(item) for item in bookings],
     }
 
 @app.get("/api/v1/admin/expert-applications")
@@ -3914,16 +3943,27 @@ def review_expert_application(
         application["review_note"] = request.review_note.strip()
         application["updated_at"] = now_iso()
         if decision == "approved":
+            requested_bind_id = (request.bind_expert_id or "").strip()
+            if requested_bind_id and requested_bind_id not in CURATED_EXPERT_IDS:
+                raise HTTPException(status_code=422, detail="只能绑定平台预设的首批专家账号")
             expert = next(
                 (item for item in state.get("experts", []) if item.get("owner_user_id") == application["user_id"]),
                 None,
             )
+            if not expert and requested_bind_id:
+                expert = next(
+                    (item for item in state.get("experts", []) if item.get("id") == requested_bind_id),
+                    None,
+                )
+                if expert and expert.get("owner_user_id") not in {None, application["user_id"]}:
+                    raise HTTPException(status_code=409, detail="该展示专家账号已绑定其他用户")
             if not expert:
                 expert = next(
                     (
                         item for item in state.get("experts", [])
-                        if item.get("id") in {"expert-demo-ai-pm", "expert-demo-ai-ops", "expert-demo-agent-pm"}
-                        and str(item.get("name", "")).strip().casefold() == application["real_name"].strip().casefold()
+                        if item.get("id") in CURATED_EXPERT_IDS
+                        and str(item.get("name", "")).strip().casefold() == application.get("display_name", "").strip().casefold()
+                        and item.get("owner_user_id") in {None, application["user_id"]}
                     ),
                     None,
                 )
@@ -3934,14 +3974,20 @@ def review_expert_application(
                     "created_at": now_iso(),
                 }
                 state.setdefault("experts", []).append(expert)
+            public_name = request.display_name.strip() or application.get("display_name", "").strip()
+            if requested_bind_id and not request.display_name.strip():
+                public_name = expert.get("name", "").strip() or public_name
+            public_name = public_name or application["real_name"]
+            application["display_name"] = public_name
             expert.update({
                 "owner_user_id": application["user_id"],
-                "name": application["real_name"],
+                "name": public_name,
+                "legal_name": application["real_name"],
                 "title": application["title"],
                 "intro": application["intro"],
                 "tags": application["tags"],
                 "reference_price": application["reference_price"],
-                "slots": application["slots"],
+                "slots": application["slots"] or expert.get("slots", []),
                 "service_name": application["service_name"],
                 "service_deliverables": application["service_deliverables"],
                 "duration_minutes": 30,
@@ -4163,6 +4209,7 @@ def create_booking(request: BookingCreateRequest):
             "slot": request.slot,
             "desc": request.desc.strip(),
             "contact_wechat": request.contact_wechat.strip(),
+            "share_contact_with_expert": bool(request.share_contact_with_expert and request.contact_wechat.strip()),
             "status": "待专家确认",
             "status_code": "intent_submitted",
             "payment_status": "not_charged_beta",
@@ -4176,6 +4223,7 @@ def create_booking(request: BookingCreateRequest):
             "created_at": now_iso(),
             "updated_at": now_iso(),
         }
+        booking["candidate_alias"] = anonymous_booking_alias(booking["id"])
         state.setdefault("expert_bookings", []).insert(0, booking)
         user["bookings"] = [booking] + user.get("bookings", [])
         user["service_timeline"] = [
@@ -4195,7 +4243,7 @@ def create_booking(request: BookingCreateRequest):
             state,
             expert.get("owner_user_id"),
             "收到新的专家预约",
-            f"{nickname if (nickname := user.get('profile', {}).get('nickname')) else '一位用户'} 预约了 {request.slot}，请在专家工作台确认或改期。",
+            f"{booking['candidate_alias']} 预约了 {request.slot}，请在专家工作台确认或改期。",
             "expert_booking",
             booking["id"],
         )
@@ -4283,7 +4331,7 @@ def get_expert_bookings(expert_user_id: str):
         item for item in state.get("expert_bookings", [])
         if item.get("expert_owner_user_id") == expert_user_id
     ]
-    return {"bookings": bookings}
+    return {"bookings": [serialize_booking_for_expert(item) for item in bookings]}
 
 
 def apply_expert_booking_decision(
@@ -4374,7 +4422,7 @@ def decide_expert_booking(booking_id: str, request: ExpertBookingDecisionRequest
             state, booking, decision, request.note, request.confirmed_slot
         )
         save_beta_state(state)
-    return {"booking": booking}
+    return {"booking": serialize_booking_for_expert(booking)}
 
 
 @app.post("/api/v1/admin/expert-bookings/{booking_id}/decision")
@@ -4425,7 +4473,7 @@ def complete_expert_booking(booking_id: str, request: ExpertBookingCompleteReque
         update_user_booking_copy(state, booking)
         append_product_event_to_state(state, "expert.booking.completed", booking.get("user_id"), {"expert_id": booking.get("expertId")})
         save_beta_state(state)
-    return {"booking": booking}
+    return {"booking": serialize_booking_for_expert(booking)}
 
 @app.post("/api/v1/bookings/{booking_id}/review")
 def review_expert_booking(booking_id: str, request: ExpertBookingReviewRequest):

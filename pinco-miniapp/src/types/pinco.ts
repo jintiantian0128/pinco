@@ -207,7 +207,9 @@ export interface BookingItem {
   refund_status?: 'not_applicable_not_charged' | 'processing' | 'success' | 'failed'
   job_id?: string
   job_label?: string
+  candidate_alias?: string
   contact_wechat?: string
+  share_contact_with_expert?: boolean
   meeting_code?: string
   meeting_url?: string
   meeting_setup_status?: 'created' | 'configuration_required' | 'failed'
@@ -227,6 +229,7 @@ export interface ExpertApplication {
   id: string
   user_id: string
   real_name: string
+  display_name: string
   title: string
   intro: string
   tags: string[]

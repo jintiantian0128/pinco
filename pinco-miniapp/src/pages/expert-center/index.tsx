@@ -27,6 +27,7 @@ const ExpertCenterPage: React.FC = () => {
   const [expert, setExpert] = useState<ExpertProfile | null>(null)
   const [bookings, setBookings] = useState<BookingItem[]>([])
   const [realName, setRealName] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [title, setTitle] = useState('')
   const [intro, setIntro] = useState('')
   const [tags, setTags] = useState('')
@@ -54,6 +55,7 @@ const ExpertCenterPage: React.FC = () => {
       setApplication(nextApplication)
       if (nextApplication && ['rejected', 'changes_requested'].includes(nextApplication.status)) {
         setRealName(nextApplication.real_name || '')
+        setDisplayName(nextApplication.display_name || '')
         setTitle(nextApplication.title || '')
         setIntro(nextApplication.intro || '')
         setTags((nextApplication.tags || []).join('，'))
@@ -91,6 +93,7 @@ const ExpertCenterPage: React.FC = () => {
     }
     const normalizedProofUrls = proofUrls.split('\n').map((item) => item.trim()).filter(Boolean)
     const validationError = realName.trim().length < 2 ? '真实姓名至少填写 2 个字'
+      : displayName.trim().length < 2 ? '公开展示名至少填写 2 个字'
       : title.trim().length < 2 ? '专业头衔至少填写 2 个字'
       : intro.trim().length < 20 ? '对求职者的介绍至少填写 20 个字'
       : normalizedProofUrls.some((url) => !/^https?:\/\//i.test(url)) ? '证明链接需要以 http:// 或 https:// 开头'
@@ -104,6 +107,7 @@ const ExpertCenterPage: React.FC = () => {
       const result = await applyAsExpert({
         user_id: userId,
         real_name: realName.trim(),
+        display_name: displayName.trim(),
         title: title.trim(),
         intro: intro.trim(),
         tags: tags.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean),
@@ -209,7 +213,8 @@ const ExpertCenterPage: React.FC = () => {
       {application && (
         <View className={styles.statusCard}>
           <Text className={styles.statusTitle}>{statusText[application.status] || application.status}</Text>
-          <Text className={styles.statusDesc}>申请人：{application.real_name} · {application.title}</Text>
+          <Text className={styles.statusDesc}>实名资料：{application.real_name} · 对外展示：{application.display_name || application.real_name}</Text>
+          <Text className={styles.statusDesc}>{application.title}</Text>
           {application.review_note && <Text className={styles.reviewNote}>审核意见：{application.review_note}</Text>}
         </View>
       )}
@@ -217,9 +222,11 @@ const ExpertCenterPage: React.FC = () => {
       {canApply && (
         <View className={styles.card}>
           <Text className={styles.sectionTitle}>{application ? '补充并重新申请' : '申请成为专家'}</Text>
-          <Text className={styles.hint}>首步只收集姓名、专业头衔和服务方向。证明链接可选，服务包和档期在审核通过后再配置。</Text>
-          <Text className={styles.label}>真实姓名 *</Text>
-          <Input className={styles.input} value={realName} onInput={(event) => setRealName(event.detail.value)} placeholder="用于平台核验和公开展示" maxlength={30} />
+          <Text className={styles.hint}>真实姓名只用于平台核验，求职者看到的是公开展示名。证明链接可选，服务包和档期在审核通过后再配置。</Text>
+          <Text className={styles.label}>真实姓名（仅平台审核可见）*</Text>
+          <Input className={styles.input} value={realName} onInput={(event) => setRealName(event.detail.value)} placeholder="用于平台核验，不会向求职者展示" maxlength={30} />
+          <Text className={styles.label}>公开展示名 *</Text>
+          <Input className={styles.input} value={displayName} onInput={(event) => setDisplayName(event.detail.value)} placeholder="例如：Tiana / 周老师" maxlength={30} />
           <Text className={styles.label}>专业头衔 *</Text>
           <Input className={styles.input} value={title} onInput={(event) => setTitle(event.detail.value)} placeholder="公司/岗位/专业方向，请如实填写" maxlength={80} />
           <Text className={styles.label}>你能帮谁解决什么问题 *</Text>
@@ -246,6 +253,7 @@ const ExpertCenterPage: React.FC = () => {
           {bookings.length === 0 && <View className={styles.card}><Text className={styles.hint}>还没有用户提交预约意向。</Text></View>}
           {bookings.map((booking) => (
             <View key={booking.id} className={styles.card}>
+              <Text className={styles.bookingMeta}>{booking.candidate_alias || '匿名求职者'} · 默认保护真实身份</Text>
               <Text className={styles.bookingTitle}>{booking.topic}</Text>
               <Text className={styles.bookingMeta}>{booking.slot} · {booking.status}</Text>
               <Text className={styles.bookingDesc}>{booking.desc}</Text>
@@ -277,7 +285,7 @@ const ExpertCenterPage: React.FC = () => {
                   />
                   <View className={styles.actionRow}>
                     <View className={styles.secondaryButton} onClick={() => decide(booking, 'rejected')}><Text>无法接单</Text></View>
-                    <View className={styles.primarySmall} onClick={() => decide(booking, 'confirmed')}><Text>确认并创建会议</Text></View>
+                    <View className={styles.primarySmall} onClick={() => decide(booking, 'confirmed')}><Text>确认预约</Text></View>
                   </View>
                 </>
               )}

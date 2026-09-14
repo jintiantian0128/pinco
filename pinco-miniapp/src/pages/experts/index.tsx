@@ -13,6 +13,7 @@ const ExpertsPage: React.FC = () => {
   const [slot, setSlot] = useState('')
   const [topic, setTopic] = useState('')
   const [contactWechat, setContactWechat] = useState('')
+  const [shareContactWithExpert, setShareContactWithExpert] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [selectedJobId, setSelectedJobId] = useState('')
@@ -41,13 +42,18 @@ const ExpertsPage: React.FC = () => {
     setSlot('')
     setTopic('')
     setContactWechat('')
+    setShareContactWithExpert(false)
     setSelectedJobId('')
     setShareContextWithExpert(false)
   }
 
   const submitBooking = async () => {
-    if (!selectedExpert || !slot || !topic.trim() || contactWechat.trim().length < 2) {
-      Taro.showToast({ title: '请选择时段、填写问题和联系微信', icon: 'none' })
+    if (!selectedExpert || !slot || !topic.trim()) {
+      Taro.showToast({ title: '请选择时段并填写想解决的问题', icon: 'none' })
+      return
+    }
+    if (shareContactWithExpert && contactWechat.trim().length < 2) {
+      Taro.showToast({ title: '请填写要分享给专家的微信 ID', icon: 'none' })
       return
     }
     if (loading) return
@@ -59,14 +65,15 @@ const ExpertsPage: React.FC = () => {
         topic: selectedExpert.serviceName,
         slot,
         desc: topic.trim(),
-        contact_wechat: contactWechat.trim(),
+        contact_wechat: shareContactWithExpert ? contactWechat.trim() : '',
+        share_contact_with_expert: shareContactWithExpert,
         job_id: selectedJobId || undefined,
         share_context_with_expert: Boolean(selectedJobId && shareContextWithExpert),
       })
       close()
       Taro.showModal({
         title: '免费预约已送达',
-        content: '专家会确认或调整时间。确认后，时间和腾讯会议号会出现在“我的预约”中；本次不会扣款。',
+        content: '专家会确认或调整时间。处理结果和时间会出现在“我的预约”和站内通知中；如你主动分享微信 ID，专家可按此联系。本次不会扣款。',
         showCancel: false,
       })
     } catch (error) {
@@ -81,7 +88,7 @@ const ExpertsPage: React.FC = () => {
     <View className={styles.page}>
       <View className={styles.header}>
         <Text className={styles.title}>专家市场</Text>
-        <Text className={styles.desc}>首批合作专家开放免费公测预约。专家确认后会同步时间和腾讯会议号，暂不开放付费。</Text>
+        <Text className={styles.desc}>首批合作专家开放免费公测预约。支持匿名提交；如需微信联系，由求职者每次预约时主动授权，暂不开放付费。</Text>
         <View className={styles.applyButton} onClick={() => Taro.navigateTo({ url: '/pages/expert-center/index' })}>
           <Text>申请成为专家 / 专家工作台</Text>
         </View>
@@ -203,17 +210,25 @@ const ExpertsPage: React.FC = () => {
               />
             </View>
             <View className={styles.paySection}>
-              <Text className={styles.payLabel}>联系微信 ID</Text>
-              <Textarea
-                className={styles.payInput}
-                value={contactWechat}
-                onInput={(event) => setContactWechat(event.detail.value)}
-                placeholder="由你主动填写，仅用于本次预约联络"
-                maxlength={80}
-                autoHeight
-                showConfirmBar={false}
-              />
-              <Text className={styles.detailIntro}>专家确认后，该微信 ID、时间和会议号会同步给开发者协调本次服务，不读取你的微信 openid。</Text>
+              <Text className={styles.payLabel}>隐私与联系</Text>
+              <Text className={styles.detailIntro}>默认以匿名身份预约，专家看不到你的微信昵称、OpenID 或联系方式。</Text>
+              <View
+                className={`${styles.slotChip} ${shareContactWithExpert ? styles.slotChipActive : ''}`}
+                onClick={() => setShareContactWithExpert((value) => !value)}
+              >
+                <Text>{shareContactWithExpert ? '✓ 已同意向专家分享微信 ID' : '需要时主动分享微信 ID'}</Text>
+              </View>
+              {shareContactWithExpert && (
+                <Textarea
+                  className={styles.payInput}
+                  value={contactWechat}
+                  onInput={(event) => setContactWechat(event.detail.value)}
+                  placeholder="只向本次预约的专家展示"
+                  maxlength={80}
+                  autoHeight
+                  showConfirmBar={false}
+                />
+              )}
             </View>
             {jobProgress.length > 0 && (
               <View className={styles.paySection}>
