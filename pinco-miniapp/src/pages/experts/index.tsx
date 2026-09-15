@@ -12,8 +12,7 @@ const ExpertsPage: React.FC = () => {
   const [showBookingForm, setShowBookingForm] = useState(false)
   const [slot, setSlot] = useState('')
   const [topic, setTopic] = useState('')
-  const [contactWechat, setContactWechat] = useState('')
-  const [shareContactWithExpert, setShareContactWithExpert] = useState(false)
+  const [consultationType, setConsultationType] = useState<'chat' | 'phone'>('chat')
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [selectedJobId, setSelectedJobId] = useState('')
@@ -41,8 +40,7 @@ const ExpertsPage: React.FC = () => {
     setShowBookingForm(false)
     setSlot('')
     setTopic('')
-    setContactWechat('')
-    setShareContactWithExpert(false)
+    setConsultationType('chat')
     setSelectedJobId('')
     setShareContextWithExpert(false)
   }
@@ -50,10 +48,6 @@ const ExpertsPage: React.FC = () => {
   const submitBooking = async () => {
     if (!selectedExpert || !slot || !topic.trim()) {
       Taro.showToast({ title: '请选择时段并填写想解决的问题', icon: 'none' })
-      return
-    }
-    if (shareContactWithExpert && contactWechat.trim().length < 2) {
-      Taro.showToast({ title: '请填写要分享给专家的微信 ID', icon: 'none' })
       return
     }
     if (loading) return
@@ -65,15 +59,18 @@ const ExpertsPage: React.FC = () => {
         topic: selectedExpert.serviceName,
         slot,
         desc: topic.trim(),
-        contact_wechat: shareContactWithExpert ? contactWechat.trim() : '',
-        share_contact_with_expert: shareContactWithExpert,
+        consultation_type: consultationType,
+        contact_wechat: '',
+        share_contact_with_expert: false,
         job_id: selectedJobId || undefined,
         share_context_with_expert: Boolean(selectedJobId && shareContextWithExpert),
       })
       close()
       Taro.showModal({
         title: '免费预约已送达',
-        content: '专家会确认或调整时间。处理结果和时间会出现在“我的预约”和站内通知中；如你主动分享微信 ID，专家可按此联系。本次不会扣款。',
+        content: consultationType === 'chat'
+          ? '专家接受后，你们可以直接在 Pinco 咨询消息里发送文字和图片。预约默认匿名，本次不会扣款。'
+          : '专家接受后，会在 Pinco 站内信中发送电话或会议链接；接受前不会展示双方联系方式。本次不会扣款。',
         showCancel: false,
       })
     } catch (error) {
@@ -88,7 +85,7 @@ const ExpertsPage: React.FC = () => {
     <View className={styles.page}>
       <View className={styles.header}>
         <Text className={styles.title}>专家市场</Text>
-        <Text className={styles.desc}>首批合作专家开放免费公测预约。支持匿名提交；如需微信联系，由求职者每次预约时主动授权，暂不开放付费。</Text>
+        <Text className={styles.desc}>首批合作专家开放免费公测预约。可选 Pinco 内图文咨询或电话咨询，求职者默认匿名，暂不开放付费。</Text>
         <View className={styles.applyButton} onClick={() => Taro.navigateTo({ url: '/pages/expert-center/index' })}>
           <Text>申请成为专家 / 专家工作台</Text>
         </View>
@@ -186,6 +183,25 @@ const ExpertsPage: React.FC = () => {
               <View className={styles.detailClose} onClick={close}><Text>✕</Text></View>
             </View>
             <View className={styles.paySection}>
+              <Text className={styles.payLabel}>选择咨询方式</Text>
+              <View className={styles.consultationGrid}>
+                <View
+                  className={`${styles.consultationCard} ${consultationType === 'chat' ? styles.consultationCardActive : ''}`}
+                  onClick={() => setConsultationType('chat')}
+                >
+                  <Text className={styles.consultationTitle}>{consultationType === 'chat' ? '✓ ' : ''}图文咨询</Text>
+                  <Text className={styles.consultationDesc}>直接在 Pinco 内发送文字和图片，默认匿名</Text>
+                </View>
+                <View
+                  className={`${styles.consultationCard} ${consultationType === 'phone' ? styles.consultationCardActive : ''}`}
+                  onClick={() => setConsultationType('phone')}
+                >
+                  <Text className={styles.consultationTitle}>{consultationType === 'phone' ? '✓ ' : ''}电话咨询</Text>
+                  <Text className={styles.consultationDesc}>专家接受后，在站内信发送电话或会议链接</Text>
+                </View>
+              </View>
+            </View>
+            <View className={styles.paySection}>
               <Text className={styles.payLabel}>专家发布的可约时段（北京时间）</Text>
               <View className={styles.slotGrid}>
                 {selectedExpert.slots.map((item) => (
@@ -210,25 +226,8 @@ const ExpertsPage: React.FC = () => {
               />
             </View>
             <View className={styles.paySection}>
-              <Text className={styles.payLabel}>隐私与联系</Text>
-              <Text className={styles.detailIntro}>默认以匿名身份预约，专家看不到你的微信昵称、OpenID 或联系方式。</Text>
-              <View
-                className={`${styles.slotChip} ${shareContactWithExpert ? styles.slotChipActive : ''}`}
-                onClick={() => setShareContactWithExpert((value) => !value)}
-              >
-                <Text>{shareContactWithExpert ? '✓ 已同意向专家分享微信 ID' : '需要时主动分享微信 ID'}</Text>
-              </View>
-              {shareContactWithExpert && (
-                <Textarea
-                  className={styles.payInput}
-                  value={contactWechat}
-                  onInput={(event) => setContactWechat(event.detail.value)}
-                  placeholder="只向本次预约的专家展示"
-                  maxlength={80}
-                  autoHeight
-                  showConfirmBar={false}
-                />
-              )}
+              <Text className={styles.payLabel}>隐私说明</Text>
+              <Text className={styles.detailIntro}>默认以匿名身份预约，专家看不到你的微信昵称、OpenID 或联系方式。电话咨询由专家接受后主动发送联系方式。</Text>
             </View>
             {jobProgress.length > 0 && (
               <View className={styles.paySection}>
@@ -255,7 +254,7 @@ const ExpertsPage: React.FC = () => {
                 </View>
               </View>
             )}
-            <Text className={styles.noChargeNote}>本次是免费公测预约，不会触发支付。专家确认或改期后会发送站内通知。</Text>
+            <Text className={styles.noChargeNote}>本次是免费公测预约，不会触发支付。咨询消息和处理结果可在“我的预约”查看。</Text>
             <View className={styles.detailBookButton} onClick={submitBooking}>
               <Text className={styles.detailBookText}>{loading ? '提交中…' : '提交预约意向（不扣款）'}</Text>
             </View>

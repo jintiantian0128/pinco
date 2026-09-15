@@ -735,7 +735,7 @@ class TrustFoundationTests(unittest.TestCase):
     def test_expert_market_requires_review_then_supports_delivery_and_real_review(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
-            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None), patch.object(main, "PINCO_ADMIN_TOKEN", "admin-secret"), patch.object(main, "create_tencent_meeting", side_effect=RuntimeError("missing meeting credentials")), patch.object(main, "tencent_meeting_config_issue", return_value="missing meeting credentials"):
+            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None), patch.object(main, "PINCO_ADMIN_TOKEN", "admin-secret"):
                 state = main.default_beta_state()
                 expert_user = main.ensure_user(state, "expert-device", "周老师", "weapp")
                 candidate = main.ensure_user(state, "candidate-device", "小陈", "weapp")
@@ -788,9 +788,9 @@ class TrustFoundationTests(unittest.TestCase):
                     topic="项目深挖",
                     slot=first_slot,
                     desc="希望把一个真实项目讲清楚",
+                    consultation_type="phone",
                     job_id=saved_job["id"],
                     share_context_with_expert=True,
-                    contact_wechat="candidate_wechat",
                 ))["booking"]
                 self.assertEqual(booking["expert_briefing"]["job"]["label"], "目标公司 · AI 产品经理")
                 self.assertEqual(booking["expert_briefing"]["evidence"][0]["title"], "评测体系落地")
@@ -800,8 +800,22 @@ class TrustFoundationTests(unittest.TestCase):
                     main.ExpertBookingDecisionRequest(expert_user_id=expert_user_id, decision="confirmed"),
                 )["booking"]
                 self.assertEqual(confirmed["payment_status"], "not_charged_beta")
-                self.assertEqual(confirmed["meeting_setup_status"], "configuration_required")
-                self.assertIn("candidate_wechat", store.load()["developer_notifications"][0]["content"])
+                self.assertEqual(confirmed["status"], "待专家发送联系方式")
+                self.assertEqual(confirmed["contact_setup_status"], "pending")
+                contact_result = main.share_booking_contact(
+                    booking["id"],
+                    main.BookingContactShareRequest(
+                        expert_user_id=expert_user_id,
+                        contact_type="phone",
+                        contact_value="138 0013 8000",
+                    ),
+                )
+                self.assertEqual(contact_result["booking"]["contact_setup_status"], "shared")
+                self.assertEqual(contact_result["message"]["contact_value"], "138 0013 8000")
+                self.assertTrue(all(
+                    "138 0013 8000" not in item.get("content", "")
+                    for item in store.load()["developer_notifications"]
+                ))
                 main.complete_expert_booking(
                     booking["id"],
                     main.ExpertBookingCompleteRequest(
@@ -846,6 +860,60 @@ class TrustFoundationTests(unittest.TestCase):
                 buyer_bookings = after_delete["users"][candidate_user_id]["bookings"]
                 self.assertTrue(all(item.get("expertName") == "已注销专家" for item in buyer_bookings))
                 self.assertTrue(all(item.get("expert_owner_user_id") is None for item in after_delete["expert_bookings"]))
+
+    def test_in_app_chat_is_private_and_supports_text_and_cloud_images(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None):
+                state = main.default_beta_state()
+                expert_user = main.ensure_user(state, "chat-expert", "专家微信昵称", "weapp")
+                candidate = main.ensure_user(state, "chat-candidate", "求职者微信昵称", "weapp")
+                outsider = main.ensure_user(state, "chat-outsider", "无关用户", "weapp")
+                expert = state["experts"][0]
+                expert["owner_user_id"] = expert_user["profile"]["user_id"]
+                store.save(state)
+
+                booking = main.create_booking(main.BookingCreateRequest(
+                    user_id=candidate["profile"]["user_id"],
+                    expert_id=expert["id"],
+                    expert_name="客户端伪造名",
+                    topic="客户端伪造主题",
+                    slot=expert["slots"][0],
+                    desc="我想梳理一段 AI 产品项目经历",
+                    consultation_type="chat",
+                ))["booking"]
+                initial = main.list_booking_messages(booking["id"], candidate["profile"]["user_id"])
+                self.assertEqual(initial["participant_role"], "candidate")
+                self.assertEqual(initial["messages"][0]["content"], "我想梳理一段 AI 产品项目经历")
+                self.assertEqual(initial["messages"][0]["sender_name"], booking["candidate_alias"])
+                with self.assertRaises(main.HTTPException) as forbidden:
+                    main.list_booking_messages(booking["id"], outsider["profile"]["user_id"])
+                self.assertEqual(forbidden.exception.status_code, 403)
+
+                main.decide_expert_booking(
+                    booking["id"],
+                    main.ExpertBookingDecisionRequest(
+                        expert_user_id=expert_user["profile"]["user_id"],
+                        decision="confirmed",
+                    ),
+                )
+                candidate_message = main.create_booking_message(
+                    booking["id"],
+                    main.BookingMessageCreateRequest(
+                        user_id=candidate["profile"]["user_id"],
+                        image_file_id="cloud://prod-d1g71nka2ab801ddb.consultations/example/image.jpg",
+                    ),
+                )
+                self.assertEqual(candidate_message["message"]["image_file_id"], "cloud://prod-d1g71nka2ab801ddb.consultations/example/image.jpg")
+                expert_message = main.create_booking_message(
+                    booking["id"],
+                    main.BookingMessageCreateRequest(
+                        user_id=expert_user["profile"]["user_id"],
+                        content="可以，我们先从目标、动作和结果拆解。",
+                    ),
+                )
+                self.assertEqual(expert_message["message"]["sender_role"], "expert")
+                self.assertGreaterEqual(len(expert_message["messages"]), 4)
 
     def test_expert_public_name_binding_and_candidate_anonymity(self):
         with tempfile.TemporaryDirectory() as directory:

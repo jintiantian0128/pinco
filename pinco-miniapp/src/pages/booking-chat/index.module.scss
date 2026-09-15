@@ -1,0 +1,43 @@
+@use '@/styles/variables.scss' as *;
+
+.page { box-sizing: border-box; display: flex; flex-direction: column; height: 100vh; background: #F7F5FA; }
+.header { padding: 24rpx 28rpx 20rpx; background: #FFF; border-bottom: 2rpx solid #EEEAF3; }
+.title { display: block; color: $color-text-primary; font-size: 32rpx; font-weight: 700; }
+.subtitle { display: block; margin-top: 6rpx; color: $color-text-secondary; font-size: 23rpx; }
+.status { display: block; margin-top: 8rpx; color: #7C3AED; font-size: 22rpx; }
+.messages { flex: 1; min-height: 0; padding: 22rpx 24rpx; box-sizing: border-box; }
+.messageRow { display: flex; justify-content: flex-start; margin-bottom: 20rpx; padding-right: 90rpx; }
+.messageRowMine { justify-content: flex-end; padding-right: 0; padding-left: 90rpx; }
+.bubble { max-width: 100%; padding: 18rpx 20rpx; background: #FFF; border-radius: 8rpx 22rpx 22rpx 22rpx; box-shadow: 0 4rpx 18rpx rgba(38, 24, 66, 0.05); }
+.bubbleMine { background: #6D28D9; border-radius: 22rpx 8rpx 22rpx 22rpx; }
+.senderName { display: block; margin-bottom: 8rpx; color: #7C3AED; font-size: 20rpx; font-weight: 600; }
+.bubbleMine .senderName { color: #EDE9FE; }
+.messageText { display: block; color: $color-text-primary; font-size: 27rpx; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.bubbleMine .messageText { color: #FFF; }
+.messageImage { display: block; width: 360rpx; max-width: 100%; margin-top: 8rpx; border-radius: 14rpx; }
+.time { display: block; margin-top: 10rpx; color: #9CA3AF; font-size: 18rpx; text-align: right; }
+.bubbleMine .time { color: #DDD6FE; }
+.systemMessage { margin: 14rpx 40rpx 22rpx; text-align: center; }
+.systemMessage Text { display: inline-block; padding: 8rpx 14rpx; border-radius: 12rpx; background: #EDE9FE; color: #6B7280; font-size: 20rpx; line-height: 1.45; }
+.contactCard { margin-top: 10rpx; padding: 16rpx; border-radius: 14rpx; background: #ECFDF5; }
+.contactLabel { display: block; color: #047857; font-size: 21rpx; font-weight: 600; }
+.contactValue { display: block; margin-top: 8rpx; color: #064E3B; font-size: 25rpx; word-break: break-all; }
+.copyButton { display: inline-flex; margin-top: 10rpx; padding: 8rpx 18rpx; background: #FFF; border-radius: 999rpx; }
+.copyButton Text { color: #047857; font-size: 20rpx; font-weight: 600; }
+.errorCard, .emptyCard { margin: 100rpx 20rpx; padding: 28rpx; border-radius: 18rpx; background: #FFF; text-align: center; }
+.errorCard Text, .emptyCard Text { color: $color-text-secondary; font-size: 24rpx; line-height: 1.6; }
+.composer { padding: 16rpx 20rpx calc(16rpx + env(safe-area-inset-bottom)); background: #FFF; border-top: 2rpx solid #EEEAF3; }
+.composerRow { display: flex; align-items: center; gap: 12rpx; }
+.imageButton { flex-shrink: 0; padding: 16rpx 14rpx; border-radius: 14rpx; background: #F3F4F6; }
+.imageButton Text { color: #4B5563; font-size: 22rpx; font-weight: 600; }
+.input { box-sizing: border-box; flex: 1; height: 72rpx; min-width: 0; padding: 0 18rpx; border-radius: 18rpx; background: #F5F3F7; color: $color-text-primary; font-size: 25rpx; }
+.sendButton { flex-shrink: 0; padding: 17rpx 20rpx; border-radius: 15rpx; background: #6D28D9; }
+.sendButton Text { color: #FFF; font-size: 23rpx; font-weight: 700; }
+.sendButtonDisabled { opacity: 0.55; }
+.privacyNote { display: block; margin-top: 10rpx; color: #9CA3AF; font-size: 19rpx; text-align: center; }
+.previewWrap { display: flex; align-items: flex-end; gap: 12rpx; margin-bottom: 12rpx; }
+.previewImage { width: 130rpx; height: 130rpx; border-radius: 14rpx; }
+.removePreview { padding: 8rpx 14rpx; border-radius: 999rpx; background: #FEE2E2; }
+.removePreview Text { color: #B91C1C; font-size: 20rpx; }
+.readonlyBar { padding: 24rpx 28rpx calc(24rpx + env(safe-area-inset-bottom)); background: #FFF; text-align: center; }
+.readonlyBar Text { color: $color-text-secondary; font-size: 23rpx; line-height: 1.5; }

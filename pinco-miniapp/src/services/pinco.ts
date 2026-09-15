@@ -1,5 +1,7 @@
 import { apiRequest } from '@/services/api'
 import {
+  BookingMessage,
+  BookingThreadResponse,
   BookingItem,
   CommunityPost,
   ContributionStatus,
@@ -66,12 +68,43 @@ export const createBooking = async (payload: {
   topic: string
   slot: string
   desc: string
+  consultation_type: 'chat' | 'phone'
   job_id?: string
   share_context_with_expert?: boolean
   share_contact_with_expert?: boolean
   contact_wechat?: string
 }) => {
   return apiRequest<BookingResponse>('/api/v1/bookings', 'POST', payload)
+}
+
+export const fetchBookingMessages = async (bookingId: string, userId: string) => {
+  return apiRequest<BookingThreadResponse>(`/api/v1/bookings/${encodeURIComponent(bookingId)}/messages?user_id=${encodeURIComponent(userId)}`)
+}
+
+export const sendBookingMessage = async (
+  bookingId: string,
+  userId: string,
+  content: string,
+  imageFileId = '',
+) => {
+  return apiRequest<{ booking: BookingItem; message: BookingMessage; messages: BookingMessage[] }>(
+    `/api/v1/bookings/${encodeURIComponent(bookingId)}/messages`,
+    'POST',
+    { user_id: userId, content, image_file_id: imageFileId },
+  )
+}
+
+export const shareBookingContact = async (
+  bookingId: string,
+  expertUserId: string,
+  contactType: 'phone' | 'meeting_link',
+  contactValue: string,
+) => {
+  return apiRequest<{ booking: BookingItem; message: BookingMessage; messages: BookingMessage[] }>(
+    `/api/v1/bookings/${encodeURIComponent(bookingId)}/contact`,
+    'POST',
+    { expert_user_id: expertUserId, contact_type: contactType, contact_value: contactValue },
+  )
 }
 
 export const fetchCommunityPosts = async (userId: string) => {

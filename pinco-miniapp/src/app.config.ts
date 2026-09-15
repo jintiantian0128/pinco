@@ -11,6 +11,7 @@ export default {
     'pages/job-search/index',
     'pages/career/index',
     'pages/expert-center/index',
+    'pages/booking-chat/index',
     'pages/webview/index'
   ],
   window: {

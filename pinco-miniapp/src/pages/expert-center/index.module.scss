@@ -30,3 +30,9 @@
 .secondaryButton { background: #F3F4F6; }
 .secondaryButton Text { color: #4B5563; font-size: 25rpx; }
 .primarySmall { background: #111827; }
+.contactBox { margin-top: 20rpx; padding: 20rpx; border-radius: 16rpx; background: #F9FAFB; }
+.contactTypeRow { display: flex; gap: 12rpx; margin-bottom: 14rpx; }
+.contactTypeActive { background: #EDE9FE; border: 2rpx solid #7C3AED; }
+.contactTypeActive Text { color: #6D28D9; font-weight: 700; }
+.secondaryWide { margin-top: 14rpx; padding: 18rpx; border-radius: 14rpx; background: #F3F4F6; text-align: center; }
+.secondaryWide Text { color: #4B5563; font-size: 25rpx; font-weight: 600; }

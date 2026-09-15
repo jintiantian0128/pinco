@@ -125,6 +125,10 @@ const MinePage: React.FC = () => {
     }
   }
 
+  const openBookingMessages = (bookingId: string) => {
+    Taro.navigateTo({ url: `/pages/booking-chat/index?booking_id=${encodeURIComponent(bookingId)}` })
+  }
+
   useEffect(() => {
     if (!userProfile?.user_id) return
     apiRequest<any>(`/api/v1/support/preferences?user_id=${encodeURIComponent(userProfile.user_id)}`)
@@ -458,9 +462,14 @@ const MinePage: React.FC = () => {
             <Text className={styles.cardTitle}>站内通知</Text>
             <Text className={styles.cardDesc}>预约确认、改期和专家处理结果会在这里同步。</Text>
             {notifications.slice(0, 5).map((notification) => (
-              <View key={notification.id} className={styles.bookingWrap}>
+              <View
+                key={notification.id}
+                className={styles.bookingWrap}
+                onClick={() => notification.booking_id && openBookingMessages(notification.booking_id)}
+              >
                 <Text className={styles.bookingExpert}>{notification.title}</Text>
                 <Text className={styles.bookingDelivery}>{notification.content}</Text>
+                {notification.booking_id && <Text className={styles.messageLink}>查看咨询消息 ›</Text>}
               </View>
             ))}
           </View>
@@ -490,13 +499,19 @@ const MinePage: React.FC = () => {
                     <View className={styles.bookingMain}>
                       <Text className={styles.bookingExpert}>{booking.expertName}</Text>
                       <Text className={styles.bookingTopic}>{booking.topic}</Text>
-                      <Text className={styles.bookingSlot}>⏰ {booking.slot}</Text>
+                      <Text className={styles.bookingSlot}>{booking.consultation_type === 'chat' ? '💬 图文咨询' : '☎️ 电话咨询'} · {booking.slot}</Text>
                       {booking.meeting_code && <Text className={styles.bookingDelivery}>腾讯会议号：{booking.meeting_code}</Text>}
                       {booking.meeting_url && <Text className={styles.bookingDelivery}>入会链接：{booking.meeting_url}</Text>}
                     </View>
                     <View className={styles.bookingStatus}>
                       <Text className={styles.bookingStatusText}>{booking.status}</Text>
                     </View>
+                  </View>
+                  {booking.consultation_type !== 'chat' && booking.status_code === 'confirmed' && booking.contact_setup_status !== 'shared' && (
+                    <Text className={styles.bookingHint}>专家已接受，正在通过站内信发送电话或会议链接。</Text>
+                  )}
+                  <View className={styles.messageLinkButton} onClick={() => openBookingMessages(booking.id)}>
+                    <Text>{booking.consultation_type === 'chat' ? '进入图文咨询' : '查看联系方式 / 咨询消息'}</Text>
                   </View>
                   {booking.delivery_summary && <Text className={styles.bookingDelivery}>交付摘要：{booking.delivery_summary}</Text>}
                   {(booking.next_actions || []).map((item, index) => <Text key={`next-${index}`} className={styles.bookingDelivery}>下一步 {index + 1}：{item}</Text>)}

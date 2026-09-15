@@ -9,6 +9,7 @@ import {
   decideExpertBooking,
   fetchExpertApplicationStatus,
   fetchMyExpertWorkspace,
+  shareBookingContact,
   updateExpertAvailability,
 } from '@/services/pinco'
 import { usePincoStore } from '@/store/usePincoStore'
@@ -39,6 +40,8 @@ const ExpertCenterPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [confirmedSlots, setConfirmedSlots] = useState<Record<string, string>>({})
+  const [contactTypes, setContactTypes] = useState<Record<string, 'phone' | 'meeting_link'>>({})
+  const [contactValues, setContactValues] = useState<Record<string, string>>({})
 
   const load = async () => {
     if (!userProfile?.user_id) {
@@ -194,6 +197,35 @@ const ExpertCenterPage: React.FC = () => {
     }
   }
 
+  const openConsultation = (bookingId: string) => {
+    Taro.navigateTo({ url: `/pages/booking-chat/index?booking_id=${encodeURIComponent(bookingId)}` })
+  }
+
+  const sendContact = async (booking: BookingItem) => {
+    if (!userProfile?.user_id || loading) return
+    const contactType = contactTypes[booking.id] || 'phone'
+    const contactValue = (contactValues[booking.id] || '').trim()
+    const valid = contactType === 'phone'
+      ? /^\+?[0-9][0-9\s-]{5,24}$/.test(contactValue)
+      : /^https:\/\//i.test(contactValue)
+    if (!valid) {
+      Taro.showToast({ title: contactType === 'phone' ? '请填写有效电话' : '请填写 https 会议链接', icon: 'none' })
+      return
+    }
+    setLoading(true)
+    try {
+      const result = await shareBookingContact(booking.id, userProfile.user_id, contactType, contactValue)
+      setBookings((prev) => prev.map((item) => item.id === booking.id ? result.booking : item))
+      setContactValues((current) => ({ ...current, [booking.id]: '' }))
+      Taro.showToast({ title: '联系方式已通过站内信发送', icon: 'success' })
+    } catch (error) {
+      console.error('[ExpertCenter] contact share failed', error)
+      Taro.showToast({ title: '发送失败，请刷新后重试', icon: 'none' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const canApply = !application || ['rejected', 'changes_requested'].includes(application.status)
 
   return (
@@ -255,9 +287,8 @@ const ExpertCenterPage: React.FC = () => {
             <View key={booking.id} className={styles.card}>
               <Text className={styles.bookingMeta}>{booking.candidate_alias || '匿名求职者'} · 默认保护真实身份</Text>
               <Text className={styles.bookingTitle}>{booking.topic}</Text>
-              <Text className={styles.bookingMeta}>{booking.slot} · {booking.status}</Text>
+              <Text className={styles.bookingMeta}>{booking.slot} · {booking.consultation_type === 'chat' ? '图文咨询' : '电话咨询'} · {booking.status}</Text>
               <Text className={styles.bookingDesc}>{booking.desc}</Text>
-              {booking.contact_wechat && <Text className={styles.bookingDesc}>联系微信（用户主动填写）：{booking.contact_wechat}</Text>}
               {booking.expert_briefing && (
                 <View className={styles.statusCard}>
                   <Text className={styles.statusTitle}>用户已授权的会前摘要</Text>
@@ -290,7 +321,39 @@ const ExpertCenterPage: React.FC = () => {
                 </>
               )}
               {booking.status_code === 'confirmed' && deliveryBookingId !== booking.id && (
-                <View className={styles.primaryButton} onClick={() => setDeliveryBookingId(booking.id)}><Text>填写交付摘要</Text></View>
+                <>
+                  {booking.consultation_type === 'chat' && (
+                    <View className={styles.primaryButton} onClick={() => openConsultation(booking.id)}><Text>进入图文咨询</Text></View>
+                  )}
+                  {booking.consultation_type !== 'chat' && booking.contact_setup_status !== 'shared' && (
+                    <View className={styles.contactBox}>
+                      <Text className={styles.label}>接受预约后发送联系方式</Text>
+                      <View className={styles.contactTypeRow}>
+                        <View
+                          className={`${styles.secondaryButton} ${(contactTypes[booking.id] || 'phone') === 'phone' ? styles.contactTypeActive : ''}`}
+                          onClick={() => setContactTypes((current) => ({ ...current, [booking.id]: 'phone' }))}
+                        ><Text>电话号码</Text></View>
+                        <View
+                          className={`${styles.secondaryButton} ${contactTypes[booking.id] === 'meeting_link' ? styles.contactTypeActive : ''}`}
+                          onClick={() => setContactTypes((current) => ({ ...current, [booking.id]: 'meeting_link' }))}
+                        ><Text>会议链接</Text></View>
+                      </View>
+                      <Input
+                        className={styles.input}
+                        value={contactValues[booking.id] || ''}
+                        onInput={(event) => setContactValues((current) => ({ ...current, [booking.id]: event.detail.value }))}
+                        placeholder={(contactTypes[booking.id] || 'phone') === 'phone' ? '填写可接听的电话号码' : '粘贴 https 会议链接'}
+                        maxlength={300}
+                      />
+                      <View className={styles.primaryButton} onClick={() => sendContact(booking)}><Text>通过站内信发送</Text></View>
+                    </View>
+                  )}
+                  {booking.consultation_type !== 'chat' && booking.contact_setup_status === 'shared' && (
+                    <Text className={styles.delivery}>联系方式已通过站内信发送给求职者。</Text>
+                  )}
+                  <View className={styles.secondaryWide} onClick={() => openConsultation(booking.id)}><Text>查看咨询消息</Text></View>
+                  <View className={styles.secondaryWide} onClick={() => setDeliveryBookingId(booking.id)}><Text>填写交付摘要</Text></View>
+                </>
               )}
               {booking.status_code === 'confirmed' && deliveryBookingId === booking.id && (
                 <>

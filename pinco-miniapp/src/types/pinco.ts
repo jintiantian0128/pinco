@@ -188,7 +188,7 @@ export interface BookingItem {
   topic: string
   slot: string
   desc: string
-  status: '平台匹配中' | '待专家确认' | '待付款' | '待服务' | '已确认，会议待创建' | '退款处理中' | '已取消并退款' | '专家未接单' | '待评价' | '已完成' | '已取消' | '待连线' | '已预约'
+  status: '平台匹配中' | '待专家确认' | '待付款' | '待服务' | '图文咨询中' | '待专家发送联系方式' | '已确认，会议待创建' | '退款处理中' | '已取消并退款' | '专家未接单' | '待评价' | '已完成' | '已取消' | '待连线' | '已预约'
   status_code?: 'intent_submitted' | 'confirmed' | 'rejected' | 'completed' | 'cancelled'
   delivery_summary?: string
   next_actions?: string[]
@@ -208,11 +208,33 @@ export interface BookingItem {
   job_id?: string
   job_label?: string
   candidate_alias?: string
+  consultation_type?: 'chat' | 'phone'
+  contact_setup_status?: 'pending' | 'shared' | 'not_needed'
+  message_count?: number
+  last_message_at?: string
+  last_message_preview?: string
   contact_wechat?: string
   share_contact_with_expert?: boolean
   meeting_code?: string
   meeting_url?: string
   meeting_setup_status?: 'created' | 'configuration_required' | 'failed'
+}
+
+export interface BookingMessage {
+  id: string
+  sender_role: 'candidate' | 'expert' | 'system'
+  sender_name: string
+  content: string
+  image_file_id?: string
+  contact_type?: 'phone' | 'meeting_link' | ''
+  contact_value?: string
+  created_at: string
+}
+
+export interface BookingThreadResponse {
+  booking: BookingItem
+  participant_role: 'candidate' | 'expert'
+  messages: BookingMessage[]
 }
 
 export interface PincoNotification {

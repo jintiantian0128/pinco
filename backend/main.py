@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from urllib.parse import urlencode
 from urllib.request import Request as UrlRequest, urlopen
-from urllib.error import HTTPError
 from state_store import StateStore, create_state_store
 from career_taxonomy import role_interview_focus, translate_job_query
 from expert_knowledge import (
@@ -107,11 +106,6 @@ WECHAT_PAY_TEST_USER_IDS = {
 # Expert marketplace coordination. Curated profiles become operable after an
 # approved applicant with the same public name is bound to a Pinco user.
 PINCO_DEVELOPER_USER_ID = os.environ.get("PINCO_DEVELOPER_USER_ID", "").strip()
-TENCENT_MEETING_APP_ID = os.environ.get("TENCENT_MEETING_APP_ID", "").strip()
-TENCENT_MEETING_SDK_ID = os.environ.get("TENCENT_MEETING_SDK_ID", "").strip()
-TENCENT_MEETING_SECRET_ID = os.environ.get("TENCENT_MEETING_SECRET_ID", "").strip()
-TENCENT_MEETING_SECRET_KEY = os.environ.get("TENCENT_MEETING_SECRET_KEY", "").strip()
-TENCENT_MEETING_CREATOR_USER_ID = os.environ.get("TENCENT_MEETING_CREATOR_USER_ID", "").strip()
 
 MOCK_MODE = LLM_PROVIDER == "mock" or (LLM_PROVIDER != "anthropic" and not OPENAI_API_KEY) or (LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY)
 
@@ -564,6 +558,7 @@ class BookingCreateRequest(BaseModel):
     topic: str
     slot: str
     desc: str
+    consultation_type: str = "phone"
     job_id: Optional[str] = None
     share_context_with_expert: bool = False
     share_contact_with_expert: bool = False
@@ -608,6 +603,16 @@ class ExpertBookingReviewRequest(BaseModel):
     user_id: str
     score: int = Field(ge=1, le=5)
     comment: str = Field(min_length=2, max_length=500)
+
+class BookingMessageCreateRequest(BaseModel):
+    user_id: str
+    content: str = Field(default="", max_length=2000)
+    image_file_id: str = Field(default="", max_length=600)
+
+class BookingContactShareRequest(BaseModel):
+    expert_user_id: str
+    contact_type: str
+    contact_value: str = Field(min_length=6, max_length=300)
 
 class BookingCancelRequest(BaseModel):
     user_id: str
@@ -1356,6 +1361,49 @@ def serialize_booking_for_expert(booking: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def booking_participant_role(booking: Dict[str, Any], user_id: str) -> str:
+    if booking.get("user_id") == user_id:
+        return "candidate"
+    if booking.get("expert_owner_user_id") == user_id:
+        return "expert"
+    raise HTTPException(status_code=403, detail="你无权访问这次咨询")
+
+
+def append_booking_message(
+    state: Dict[str, Any],
+    booking: Dict[str, Any],
+    sender_role: str,
+    content: str = "",
+    image_file_id: str = "",
+    contact_type: str = "",
+    contact_value: str = "",
+) -> Dict[str, Any]:
+    thread = state.setdefault("booking_messages", {}).setdefault(booking["id"], [])
+    if len(thread) >= 200:
+        raise HTTPException(status_code=409, detail="本次咨询消息已达到上限，请联系平台协助归档")
+    sender_name = (
+        booking.get("expertName", "专家") if sender_role == "expert"
+        else "Pinco" if sender_role == "system"
+        else booking.get("candidate_alias", "匿名求职者")
+    )
+    message = {
+        "id": f"booking-message-{uuid.uuid4().hex[:12]}",
+        "sender_role": sender_role,
+        "sender_name": sender_name,
+        "content": content.strip(),
+        "image_file_id": image_file_id.strip(),
+        "contact_type": contact_type,
+        "contact_value": contact_value.strip(),
+        "created_at": now_iso(),
+    }
+    thread.append(message)
+    booking["message_count"] = len(thread)
+    booking["last_message_at"] = message["created_at"]
+    booking["last_message_preview"] = message["content"][:80] or ("[图片]" if image_file_id else "[联系方式]")
+    update_user_booking_copy(state, booking)
+    return message
+
+
 def suggested_expert_slots(limit: int = 3) -> List[str]:
     """Generate a rolling pool of Beijing-time evening slots."""
     today = datetime.utcnow() + timedelta(hours=8)
@@ -1456,6 +1504,7 @@ def default_beta_state() -> Dict[str, Any]:
         "expert_applications": [],
         "experts": default_expert_profiles(),
         "expert_bookings": [],
+        "booking_messages": {},
         "expert_reviews": [],
         "membership_interests": [],
         "pilot_feedback": [],
@@ -1525,6 +1574,9 @@ def load_beta_state() -> Dict[str, Any]:
         # Historical bookings did not include explicit consent to reveal contact
         # details, so their expert-facing view remains private by default.
         booking.setdefault("share_contact_with_expert", False)
+        booking.setdefault("consultation_type", "phone")
+        booking.setdefault("contact_setup_status", "shared" if booking.get("meeting_url") or booking.get("meeting_code") else "pending")
+    data.setdefault("booking_messages", {})
     refresh_curated_expert_slots(data)
     data.setdefault("expert_reviews", [])
     data.setdefault("membership_interests", [])
@@ -3148,6 +3200,10 @@ def delete_account(request: AccountDeleteRequest):
             and request.user_id not in str(item.get("idempotency_key", ""))
         ]
         kept_bookings = []
+        private_booking_ids = {
+            item.get("id") for item in state.get("expert_bookings", [])
+            if item.get("user_id") == request.user_id or item.get("expert_owner_user_id") == request.user_id
+        }
         for booking in state.get("expert_bookings", []):
             buyer_deleted = booking.get("user_id") == request.user_id
             expert_deleted = booking.get("expert_owner_user_id") == request.user_id
@@ -3180,6 +3236,8 @@ def delete_account(request: AccountDeleteRequest):
                     update_user_booking_copy(state, sanitized)
             kept_bookings.append(sanitized)
         state["expert_bookings"] = kept_bookings
+        for booking_id in private_booking_ids:
+            state.get("booking_messages", {}).pop(booking_id, None)
         state["expert_reviews"] = [
             item for item in state.get("expert_reviews", [])
             if item.get("user_id") != request.user_id and item.get("expert_id") not in owned_expert_ids
@@ -4090,83 +4148,11 @@ def parse_booking_slot(slot: str) -> tuple[int, int]:
     return start, start + 30 * 60
 
 
-def tencent_meeting_config_issue() -> Optional[str]:
-    required = {
-        "TENCENT_MEETING_APP_ID": TENCENT_MEETING_APP_ID,
-        "TENCENT_MEETING_SECRET_ID": TENCENT_MEETING_SECRET_ID,
-        "TENCENT_MEETING_SECRET_KEY": TENCENT_MEETING_SECRET_KEY,
-        "TENCENT_MEETING_CREATOR_USER_ID": TENCENT_MEETING_CREATOR_USER_ID,
-    }
-    missing = [key for key, value in required.items() if not value]
-    return f"缺少腾讯会议配置：{', '.join(missing)}" if missing else None
-
-
-def create_tencent_meeting(booking: Dict[str, Any]) -> Dict[str, str]:
-    issue = tencent_meeting_config_issue()
-    if issue:
-        raise RuntimeError(issue)
-    start_time, end_time = parse_booking_slot(booking["slot"])
-    uri = "/v1/meetings"
-    body = json.dumps({
-        "userid": TENCENT_MEETING_CREATOR_USER_ID,
-        "instanceid": 1,
-        "subject": f"Pinco 专家咨询｜{booking['expertName']}",
-        "type": 0,
-        "start_time": str(start_time),
-        "end_time": str(end_time),
-        "settings": {
-            "mute_enable_join": False,
-            "allow_in_before_host": True,
-            "auto_in_waiting_room": False,
-        },
-    }, ensure_ascii=False, separators=(",", ":"))
-    timestamp = str(int(time.time()))
-    nonce = str(secrets.randbelow(900000000) + 100000000)
-    sign_source = (
-        f"POST\nX-TC-Key={TENCENT_MEETING_SECRET_ID}&X-TC-Nonce={nonce}"
-        f"&X-TC-Timestamp={timestamp}\n{uri}\n{body}"
-    )
-    digest = hmac.new(
-        TENCENT_MEETING_SECRET_KEY.encode("utf-8"),
-        sign_source.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-    signature = base64.b64encode(digest.encode("utf-8")).decode("ascii")
-    headers = {
-        "Content-Type": "application/json",
-        "X-TC-Key": TENCENT_MEETING_SECRET_ID,
-        "X-TC-Timestamp": timestamp,
-        "X-TC-Nonce": nonce,
-        "X-TC-Signature": signature,
-        "X-TC-Registered": "1",
-        "AppId": TENCENT_MEETING_APP_ID,
-    }
-    if TENCENT_MEETING_SDK_ID:
-        headers["SdkId"] = TENCENT_MEETING_SDK_ID
-    try:
-        request = UrlRequest(
-            f"https://api.meeting.qq.com{uri}",
-            data=body.encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        with urlopen(request, timeout=10) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"腾讯会议创建失败 ({error.code})：{detail}") from error
-    meetings = payload.get("meeting_info_list") or []
-    if not meetings or not meetings[0].get("meeting_code"):
-        raise RuntimeError("腾讯会议返回中没有会议号")
-    meeting = meetings[0]
-    return {
-        "meeting_id": str(meeting.get("meeting_id", "")),
-        "meeting_code": str(meeting["meeting_code"]),
-        "meeting_url": str(meeting.get("join_url", "")),
-    }
-
 @app.post("/api/v1/bookings")
 def create_booking(request: BookingCreateRequest):
+    consultation_type = request.consultation_type.strip().lower()
+    if consultation_type not in {"chat", "phone"}:
+        raise HTTPException(status_code=422, detail="咨询方式必须是 chat 或 phone")
     with _state_lock:
         state = load_beta_state()
         user = state.get("users", {}).get(request.user_id)
@@ -4208,6 +4194,8 @@ def create_booking(request: BookingCreateRequest):
             "topic": expert.get("service_name", "30分钟求职问题诊断"),
             "slot": request.slot,
             "desc": request.desc.strip(),
+            "consultation_type": consultation_type,
+            "contact_setup_status": "not_needed" if consultation_type == "chat" else "pending",
             "contact_wechat": request.contact_wechat.strip(),
             "share_contact_with_expert": bool(request.share_contact_with_expert and request.contact_wechat.strip()),
             "status": "待专家确认",
@@ -4226,6 +4214,13 @@ def create_booking(request: BookingCreateRequest):
         booking["candidate_alias"] = anonymous_booking_alias(booking["id"])
         state.setdefault("expert_bookings", []).insert(0, booking)
         user["bookings"] = [booking] + user.get("bookings", [])
+        if consultation_type == "chat":
+            append_booking_message(
+                state,
+                booking,
+                "candidate",
+                content=request.desc.strip(),
+            )
         user["service_timeline"] = [
             {
                 "id": f"timeline-{uuid.uuid4().hex[:10]}",
@@ -4238,7 +4233,10 @@ def create_booking(request: BookingCreateRequest):
             for index, item in enumerate(user.get("service_timeline", []))
         ]
         user["service_timeline"] = user["service_timeline"][:4]
-        append_product_event_to_state(state, "expert.booking.created", request.user_id, {"expert_id": expert["id"]})
+        append_product_event_to_state(state, "expert.booking.created", request.user_id, {
+            "expert_id": expert["id"],
+            "consultation_type": consultation_type,
+        })
         notice = append_notification(
             state,
             expert.get("owner_user_id"),
@@ -4272,6 +4270,109 @@ def list_user_notifications(user_id: str):
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     return {"notifications": user.get("notifications", [])[:100]}
+
+
+@app.get("/api/v1/bookings/{booking_id}/messages")
+def list_booking_messages(booking_id: str, user_id: str):
+    state = load_beta_state()
+    booking = next((item for item in state.get("expert_bookings", []) if item.get("id") == booking_id), None)
+    if not booking:
+        raise HTTPException(status_code=404, detail="咨询不存在")
+    role = booking_participant_role(booking, user_id)
+    return {
+        "booking": serialize_booking_for_expert(booking),
+        "participant_role": role,
+        "messages": deepcopy(state.get("booking_messages", {}).get(booking_id, [])),
+    }
+
+
+@app.post("/api/v1/bookings/{booking_id}/messages")
+def create_booking_message(booking_id: str, request: BookingMessageCreateRequest):
+    content = request.content.strip()
+    image_file_id = request.image_file_id.strip()
+    if not content and not image_file_id:
+        raise HTTPException(status_code=422, detail="消息文字和图片不能同时为空")
+    if image_file_id and not re.fullmatch(r"cloud://[A-Za-z0-9._/-]{10,580}", image_file_id):
+        raise HTTPException(status_code=422, detail="图片必须来自当前小程序的云存储")
+    with _state_lock:
+        state = load_beta_state()
+        booking = next((item for item in state.get("expert_bookings", []) if item.get("id") == booking_id), None)
+        if not booking:
+            raise HTTPException(status_code=404, detail="咨询不存在")
+        role = booking_participant_role(booking, request.user_id)
+        if booking.get("consultation_type") != "chat":
+            raise HTTPException(status_code=409, detail="电话咨询仅用于接收专家发送的联系方式")
+        if booking.get("status_code") in {"rejected", "cancelled", "completed"}:
+            raise HTTPException(status_code=409, detail="当前咨询状态不能继续发送消息")
+        message = append_booking_message(state, booking, role, content, image_file_id)
+        recipient_id = booking.get("user_id") if role == "expert" else booking.get("expert_owner_user_id")
+        notification = append_notification(
+            state,
+            recipient_id,
+            f"{message['sender_name']} 发来咨询消息",
+            message["content"][:80] or "发来一张图片，请进入咨询查看。",
+            "booking_message",
+            booking_id,
+        )
+        if not recipient_id:
+            append_developer_notification(state, {
+                **notification,
+                "title": f"{booking.get('expertName', '专家')} 的预约收到新消息，待绑定专家账号",
+            })
+        save_beta_state(state)
+    return {
+        "booking": serialize_booking_for_expert(booking),
+        "message": message,
+        "messages": deepcopy(state.get("booking_messages", {}).get(booking_id, [])),
+    }
+
+
+@app.post("/api/v1/bookings/{booking_id}/contact")
+def share_booking_contact(booking_id: str, request: BookingContactShareRequest):
+    contact_type = request.contact_type.strip().lower()
+    contact_value = request.contact_value.strip()
+    if contact_type not in {"phone", "meeting_link"}:
+        raise HTTPException(status_code=422, detail="联系方式必须是 phone 或 meeting_link")
+    if contact_type == "phone" and not re.fullmatch(r"[0-9+() -]{6,30}", contact_value):
+        raise HTTPException(status_code=422, detail="请填写有效的电话号码")
+    if contact_type == "meeting_link" and not re.fullmatch(r"https://[^\s]{6,280}", contact_value):
+        raise HTTPException(status_code=422, detail="会议链接必须以 https:// 开头")
+    with _state_lock:
+        state = load_beta_state()
+        booking = next((item for item in state.get("expert_bookings", []) if item.get("id") == booking_id), None)
+        if not booking:
+            raise HTTPException(status_code=404, detail="咨询不存在")
+        if booking.get("expert_owner_user_id") != request.expert_user_id:
+            raise HTTPException(status_code=403, detail="只能为自己的预约发送联系方式")
+        if booking.get("consultation_type") != "phone":
+            raise HTTPException(status_code=409, detail="图文咨询无需发送电话联系方式")
+        if booking.get("status_code") != "confirmed":
+            raise HTTPException(status_code=409, detail="接受预约后才能发送联系方式")
+        booking["contact_setup_status"] = "shared"
+        booking["contact_shared_at"] = now_iso()
+        label = "电话" if contact_type == "phone" else "会议链接"
+        message = append_booking_message(
+            state,
+            booking,
+            "expert",
+            content=f"专家已发送本次电话咨询的{label}。请仅用于本次预约，不要转发。",
+            contact_type=contact_type,
+            contact_value=contact_value,
+        )
+        append_notification(
+            state,
+            booking.get("user_id"),
+            f"{booking['expertName']} 已发送{label}",
+            "请进入咨询消息查看并按约定时间联系。",
+            "booking_contact",
+            booking_id,
+        )
+        save_beta_state(state)
+    return {
+        "booking": serialize_booking_for_expert(booking),
+        "message": message,
+        "messages": deepcopy(state.get("booking_messages", {}).get(booking_id, [])),
+    }
 
 
 @app.get("/api/v1/admin/developer-notifications")
@@ -4353,31 +4454,36 @@ def apply_expert_booking_decision(
         booking["slot"] = confirmed_slot
     booking["status_code"] = decision
     booking["payment_status"] = "not_charged_beta"
-    booking["status"] = "待服务" if decision == "confirmed" else "专家未接单"
+    consultation_type = booking.get("consultation_type", "phone")
+    booking["status"] = (
+        "图文咨询中" if decision == "confirmed" and consultation_type == "chat"
+        else "待专家发送联系方式" if decision == "confirmed"
+        else "专家未接单"
+    )
     booking["expert_note"] = note.strip()
     booking["updated_at"] = now_iso()
     if decision == "confirmed":
         expert = next((item for item in state.get("experts", []) if item.get("id") == booking["expertId"]), None)
         if expert and original_slot in expert.get("slots", []):
             expert["slots"].remove(original_slot)
-        try:
-            booking.update(create_tencent_meeting(booking))
-            booking["meeting_setup_status"] = "created"
-            booking["meeting_setup_error"] = ""
-        except Exception as error:
-            booking["meeting_setup_status"] = "configuration_required" if tencent_meeting_config_issue() else "failed"
-            booking["meeting_setup_error"] = str(error)[:500]
-            booking["status"] = "已确认，会议待创建"
-        meeting_text = (
-            f"腾讯会议号：{booking['meeting_code']}"
-            if booking.get("meeting_code")
-            else "腾讯会议尚未创建，请开发者处理会议配置。"
+        booking.pop("meeting_setup_error", None)
+        booking["contact_setup_status"] = "not_needed" if consultation_type == "chat" else "pending"
+        guidance = (
+            "图文咨询已开启，请在 Pinco 咨询消息中继续沟通。"
+            if consultation_type == "chat"
+            else "请等待专家通过 Pinco 站内信发送电话或会议链接。"
+        )
+        append_booking_message(
+            state,
+            booking,
+            "system",
+            content=f"专家已接受预约，确认时间：{booking['slot']}。{guidance}",
         )
         append_notification(
             state,
             booking.get("user_id"),
             f"{booking['expertName']} 已确认预约",
-            f"时间：{booking['slot']}。{meeting_text}",
+            f"时间：{booking['slot']}。{guidance}",
             "booking_confirmed",
             booking["id"],
         )
@@ -4385,8 +4491,8 @@ def apply_expert_booking_decision(
             "id": f"notice-{uuid.uuid4().hex[:12]}",
             "title": "专家预约已确认",
             "content": (
-                f"专家：{booking['expertName']}；时间：{booking['slot']}；{meeting_text}；"
-                f"用户微信 ID（用户主动填写）：{booking.get('contact_wechat', '') or '未填写'}"
+                f"专家：{booking['expertName']}；时间：{booking['slot']}；"
+                f"咨询方式：{'图文咨询' if consultation_type == 'chat' else '电话咨询'}"
             ),
             "kind": "booking_confirmed",
             "booking_id": booking["id"],
@@ -4394,6 +4500,13 @@ def apply_expert_booking_decision(
             "created_at": now_iso(),
         })
     else:
+        if booking.get("consultation_type") == "chat":
+            append_booking_message(
+                state,
+                booking,
+                "system",
+                content=note.strip() or "专家暂时无法接受这次预约。",
+            )
         append_notification(
             state,
             booking.get("user_id"),

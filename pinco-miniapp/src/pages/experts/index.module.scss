@@ -358,6 +358,43 @@
   font-weight: $font-weight-semibold;
 }
 
+.consultationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.consultationCard {
+  box-sizing: border-box;
+  min-height: 150rpx;
+  padding: 20rpx;
+  border: 2rpx solid $color-divider;
+  border-radius: 18rpx;
+  background: $color-bg-page;
+}
+
+.consultationCardActive {
+  border-color: $color-primary;
+  background: rgba($color-primary, 0.08);
+}
+
+.consultationTitle {
+  display: block;
+  color: $color-text-primary;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+}
+
+.consultationCardActive .consultationTitle { color: $color-primary; }
+
+.consultationDesc {
+  display: block;
+  margin-top: 8rpx;
+  color: $color-text-secondary;
+  font-size: 21rpx;
+  line-height: 1.5;
+}
+
 .payInput {
   width: 100%;
   min-height: 72rpx;
