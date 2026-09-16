@@ -143,6 +143,8 @@ assert.match(experts, /图文咨询[\s\S]*电话咨询/, 'Users must choose betw
 assert.match(experts, /consultation_type:\s*consultationType/, 'The selected consultation type must reach the backend')
 assert.match(experts, /contact_wechat:\s*''/, 'The user must not be asked to expose contact information before acceptance')
 assert.match(experts, /专家接受后[\s\S]*电话或会议链接/, 'Phone consultation must explain how contact is shared')
+assert.match(experts, /error\?\.message \|\| '提交失败或时段已变化，请刷新重试'/, 'Expert booking failures must keep the form open and show the real reason')
+assert.match(store, /createBookingOrder:[\s\S]{0,260}await get\(\)\.bootstrap\(\)[\s\S]{0,180}throw new Error\('身份初始化失败，请重新进入小程序'\)/, 'Expert booking must not pretend success when identity bootstrap fails')
 assert.match(mine, /进入图文咨询/, 'My bookings must expose the in-app chat entry')
 assert.match(mine, /查看联系方式 \/ 咨询消息/, 'Phone bookings must expose the private contact thread')
 assert.match(bookingChat, /fetchBookingMessages/, 'The consultation page must load the authorized booking thread')
