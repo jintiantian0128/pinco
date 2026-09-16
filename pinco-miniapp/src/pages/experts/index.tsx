@@ -75,7 +75,7 @@ const ExpertsPage: React.FC = () => {
       })
     } catch (error) {
       console.error('[Experts] booking failed', error)
-      Taro.showToast({ title: '提交失败或时段已变化，请刷新重试', icon: 'none' })
+      Taro.showToast({ title: error?.message || '提交失败或时段已变化，请刷新重试', icon: 'none' })
     } finally {
       setLoading(false)
     }
