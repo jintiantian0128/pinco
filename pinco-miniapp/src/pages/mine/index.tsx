@@ -129,6 +129,13 @@ const MinePage: React.FC = () => {
     Taro.navigateTo({ url: `/pages/booking-chat/index?booking_id=${encodeURIComponent(bookingId)}` })
   }
 
+  const getBookingMessageLabel = (booking: BookingItem) => {
+    if (booking.consultation_type === 'chat') {
+      return booking.status_code === 'confirmed' ? '进入图文咨询' : '查看预约进展 / 咨询消息'
+    }
+    return '查看联系方式 / 咨询消息'
+  }
+
   useEffect(() => {
     if (!userProfile?.user_id) return
     apiRequest<any>(`/api/v1/support/preferences?user_id=${encodeURIComponent(userProfile.user_id)}`)
@@ -511,7 +518,7 @@ const MinePage: React.FC = () => {
                     <Text className={styles.bookingHint}>专家已接受，正在通过站内信发送电话或会议链接。</Text>
                   )}
                   <View className={styles.messageLinkButton} onClick={() => openBookingMessages(booking.id)}>
-                    <Text>{booking.consultation_type === 'chat' ? '进入图文咨询' : '查看联系方式 / 咨询消息'}</Text>
+                    <Text>{getBookingMessageLabel(booking)}</Text>
                   </View>
                   {booking.delivery_summary && <Text className={styles.bookingDelivery}>交付摘要：{booking.delivery_summary}</Text>}
                   {(booking.next_actions || []).map((item, index) => <Text key={`next-${index}`} className={styles.bookingDelivery}>下一步 {index + 1}：{item}</Text>)}
