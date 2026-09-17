@@ -51,8 +51,9 @@ const BookingChatPage: React.FC = () => {
     return () => clearInterval(timer)
   }, [load, userProfile?.user_id])
 
-  const canChat = thread?.booking.consultation_type === 'chat'
-    && !['rejected', 'completed', 'cancelled'].includes(thread.booking.status_code || '')
+  const bookingStatusCode = thread?.booking.status_code || ''
+  const isChatConsultation = thread?.booking.consultation_type === 'chat'
+  const canChat = isChatConsultation && bookingStatusCode === 'confirmed'
   const scrollTarget = useMemo(() => {
     const messages = thread?.messages || []
     return messages.length ? `message-${messages[messages.length - 1].id}` : 'thread-start'
@@ -176,7 +177,13 @@ const BookingChatPage: React.FC = () => {
         </View>
       ) : (
         <View className={styles.readonlyBar}>
-          <Text>{thread?.booking.consultation_type === 'phone' ? '电话咨询仅用于接收专家发送的电话或会议链接' : '本次咨询已结束，消息仅供查看'}</Text>
+          <Text>
+            {thread?.booking.consultation_type === 'phone'
+              ? '电话咨询仅用于接收专家发送的电话或会议链接'
+              : bookingStatusCode === 'intent_submitted'
+                ? '专家确认后会开启图文咨询，这里会同步处理进展。'
+                : '本次咨询已结束，消息仅供查看'}
+          </Text>
         </View>
       )}
     </View>
