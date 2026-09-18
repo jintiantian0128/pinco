@@ -17,6 +17,7 @@ from expert_knowledge import (
     EXPERT_KNOWLEDGE_VERSION,
     build_expert_knowledge_context,
 )
+from community_seed import default_community_posts
 from decimal import Decimal, ROUND_HALF_UP
 from copy import deepcopy
 import hashlib
@@ -1270,71 +1271,6 @@ def default_messages() -> List[Dict[str, Any]]:
             "createdAt": now_time_label(),
         }
     ]
-
-def default_community_posts() -> List[Dict[str, Any]]:
-    return [
-        {
-            "id": "editorial-practice-1",
-            "author": "Pinco 编辑部",
-            "roleTag": "官方干货",
-            "created_at": "2026-08-04T00:00:00",
-            "title": "把一条求职经验变成可练习的动作",
-            "content": "收藏不是结束：先写出一个与你经历相关的例子，再限时 90 秒讲一遍，最后只改一个最卡的地方。你可以点下方“带我练”直接开始。",
-            "liked_by": [],
-            "hugged_by": [],
-            "postType": "share",
-            "comments": [],
-            "is_example": True,
-            "is_featured": True,
-            "moderation_status": "published",
-        },
-        {
-            "id": "editorial-support-1",
-            "author": "Pinco 学姐",
-            "roleTag": "官方说明",
-            "created_at": "2026-08-04T00:00:00",
-            "title": "树洞不是情绪打分比赛",
-            "content": "你可以只说发生了什么，也可以说明此刻更需要被听见还是一起找办法。Pinco 默认不保存树洞正文，除非你明确开启情绪记忆。",
-            "liked_by": [],
-            "hugged_by": [],
-            "postType": "treehole",
-            "comments": [],
-            "is_example": True,
-            "is_featured": False,
-            "moderation_status": "published",
-        },
-        {
-            "id": "editorial-help-1",
-            "author": "Pinco 学姐",
-            "roleTag": "官方问答",
-            "created_at": "2026-09-08T00:00:00",
-            "title": "没有新简历，也不知道投什么岗位，先做哪一步？",
-            "content": "先不用硬写一份完整简历。把一段最熟悉的项目经历讲清楚，Pinco 会提炼成待确认职业证据，再据此给出岗位方向和有来源的岗位候选。事实由你确认，AI 不替你编经历。",
-            "liked_by": [],
-            "hugged_by": [],
-            "postType": "help",
-            "comments": [],
-            "is_example": True,
-            "is_featured": True,
-            "moderation_status": "published",
-        },
-        {
-            "id": "editorial-success-1",
-            "author": "Pinco 编辑部",
-            "roleTag": "上岸复盘模板",
-            "created_at": "2026-09-08T00:00:00",
-            "title": "上岸后，怎样写一篇对后来者真正有用的复盘？",
-            "content": "建议写清岗位方向、求职周期、最有效的一次调整，以及哪些方法只适用于你的背景。隐去公司机密和个人隐私，保留能让后来者行动起来的证据。",
-            "liked_by": [],
-            "hugged_by": [],
-            "postType": "success",
-            "comments": [],
-            "is_example": True,
-            "is_featured": False,
-            "moderation_status": "published",
-        },
-    ]
-
 
 CURATED_EXPERT_IDS = {
     "expert-demo-ai-pm",

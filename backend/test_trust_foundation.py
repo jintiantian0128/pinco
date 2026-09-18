@@ -731,6 +731,16 @@ class TrustFoundationTests(unittest.TestCase):
                 {post["postType"] for post in main.default_community_posts()},
                 {"treehole", "help", "share", "success"},
             )
+            cold_start_counts = {
+                post_type: sum(
+                    1 for post in main.default_community_posts()
+                    if post["postType"] == post_type
+                )
+                for post_type in {"treehole", "help", "share", "success"}
+            }
+            self.assertTrue(all(count >= 10 for count in cold_start_counts.values()))
+            self.assertTrue(all(post["is_example"] for post in main.default_community_posts()))
+            self.assertTrue(all(not post["liked_by"] and not post["comments"] for post in main.default_community_posts()))
 
     def test_expert_market_requires_review_then_supports_delivery_and_real_review(self):
         with tempfile.TemporaryDirectory() as directory:

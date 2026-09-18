@@ -213,6 +213,8 @@ const welcomeMessage: MessageItem = {
   createdAt: Date.now(),
 }
 
+let bootstrapPromise: Promise<void> | null = null
+
 export const usePincoStore = create<PincoState>((set, get) => ({
   userProfile: null,
   wechatReady: false,
@@ -404,6 +406,8 @@ export const usePincoStore = create<PincoState>((set, get) => ({
   },
 
   bootstrap: async () => {
+    if (bootstrapPromise) return bootstrapPromise
+    bootstrapPromise = (async () => {
     let runtimeInfo = defaultRuntimeInfo
     try {
       const payload = await getBootstrapPayload()
@@ -483,6 +487,12 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         })()
       })
       trackProductEvent('app.bootstrap.failed', undefined, { stage: 'bootstrap' })
+    }
+    })()
+    try {
+      await bootstrapPromise
+    } finally {
+      bootstrapPromise = null
     }
   },
 
@@ -1246,10 +1256,10 @@ export const usePincoStore = create<PincoState>((set, get) => ({
   },
 
   createBookingOrder: async ({ expert_id, expert_name, topic, slot, desc, consultation_type, contact_wechat, share_contact_with_expert, job_id, share_context_with_expert }) => {
+    if (!get().userProfile?.user_id) await get().bootstrap()
     const userProfile = get().userProfile
     if (!userProfile) {
-      Taro.showToast({ title: '请先重新进入小程序', icon: 'none' })
-      return
+      throw new Error('身份初始化失败，请检查网络后重试')
     }
     const result = await createBooking({
       user_id: userProfile.user_id,

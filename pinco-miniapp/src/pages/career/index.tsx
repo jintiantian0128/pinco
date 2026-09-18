@@ -35,6 +35,7 @@ const memoryLabels: Record<string, string> = {
 
 const CareerPage: React.FC = () => {
   const userId = usePincoStore((state) => state.userProfile?.user_id)
+  const bootstrap = usePincoStore((state) => state.bootstrap)
   const openConversation = usePincoStore((state) => state.openConversation)
   const seedConversation = usePincoStore((state) => state.seedConversation)
   const startInterview = usePincoStore((state) => state.startInterview)
@@ -61,6 +62,18 @@ const CareerPage: React.FC = () => {
 
   const splitItems = (value: string) => value.split(/[，,、\n]/).map((item) => item.trim()).filter(Boolean)
 
+  const ensureUserId = async () => {
+    const existing = usePincoStore.getState().userProfile?.user_id
+    if (existing) return existing
+    await bootstrap()
+    const recovered = usePincoStore.getState().userProfile?.user_id
+    if (!recovered) {
+      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none', duration: 3000 })
+      return ''
+    }
+    return recovered
+  }
+
   const loadWorkspace = async () => {
     if (!userId) return
     setLoading(true)
@@ -83,10 +96,15 @@ const CareerPage: React.FC = () => {
   usePullDownRefresh(() => loadWorkspace().finally(() => Taro.stopPullDownRefresh()))
 
   const saveProfile = async () => {
-    if (!userId) return
+    const activeUserId = await ensureUserId()
+    if (!activeUserId) return
+    if (!targetRoles.trim()) {
+      Taro.showToast({ title: '请至少填写一个目标岗位', icon: 'none' })
+      return
+    }
     try {
       const response = await apiRequest<any>('/api/v1/workspace/profile', 'POST', {
-        user_id: userId,
+        user_id: activeUserId,
         target_roles: splitItems(targetRoles),
         years_experience: Number(years) || 0,
         cities: splitItems(cities),
@@ -135,10 +153,19 @@ const CareerPage: React.FC = () => {
   }
 
   const addEvidence = async () => {
-    if (!userId) return
+    const activeUserId = await ensureUserId()
+    if (!activeUserId) return
+    const validationError = evidenceTitle.trim().length < 2 ? '证据标题至少填写 2 个字'
+      : evidenceAction.trim().length < 5 ? '“你具体做了什么”至少填写 5 个字'
+      : evidenceResult.trim().length < 2 ? '请填写结果；没有数字可以写可验证的现象'
+      : ''
+    if (validationError) {
+      Taro.showToast({ title: validationError, icon: 'none', duration: 3000 })
+      return
+    }
     try {
       const response = await apiRequest<any>('/api/v1/workspace/evidence', 'POST', {
-        user_id: userId,
+        user_id: activeUserId,
         title: evidenceTitle,
         situation: evidenceSituation,
         action: evidenceAction,
@@ -155,10 +182,15 @@ const CareerPage: React.FC = () => {
   }
 
   const addJob = async () => {
-    if (!userId) return
+    const activeUserId = await ensureUserId()
+    if (!activeUserId) return
+    if (!jobCompany.trim() || !jobTitle.trim()) {
+      Taro.showToast({ title: '请填写公司和岗位名称', icon: 'none' })
+      return
+    }
     try {
       const response = await apiRequest<any>('/api/v1/workspace/jobs', 'POST', {
-        user_id: userId,
+        user_id: activeUserId,
         company: jobCompany,
         title: jobTitle,
         jd_text: jobJd,

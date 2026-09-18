@@ -107,8 +107,9 @@ export const shareBookingContact = async (
   )
 }
 
-export const fetchCommunityPosts = async (userId: string) => {
-  return apiRequest<CommunityPostsResponse>(`/api/v1/community/posts?user_id=${encodeURIComponent(userId)}`)
+export const fetchCommunityPosts = async (userId?: string) => {
+  const query = userId ? `?user_id=${encodeURIComponent(userId)}` : ''
+  return apiRequest<CommunityPostsResponse>(`/api/v1/community/posts${query}`)
 }
 
 export const createCommunityPost = async (payload: {

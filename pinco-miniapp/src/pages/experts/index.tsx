@@ -18,6 +18,7 @@ const ExpertsPage: React.FC = () => {
   const [selectedJobId, setSelectedJobId] = useState('')
   const [shareContextWithExpert, setShareContextWithExpert] = useState(false)
   const createBookingOrder = usePincoStore((state) => state.createBookingOrder)
+  const bootstrap = usePincoStore((state) => state.bootstrap)
   const jobProgress = usePincoStore((state) => state.jobProgress)
 
   const loadExperts = async () => {
@@ -34,6 +35,20 @@ const ExpertsPage: React.FC = () => {
 
   useDidShow(loadExperts)
   usePullDownRefresh(() => loadExperts().finally(() => Taro.stopPullDownRefresh()))
+
+  const openExpertCenter = async () => {
+    if (!usePincoStore.getState().userProfile?.user_id) await bootstrap()
+    if (!usePincoStore.getState().userProfile?.user_id) {
+      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none' })
+      return
+    }
+    try {
+      await Taro.navigateTo({ url: '/pages/expert-center/index' })
+    } catch (error) {
+      console.error('[Experts] open expert center failed', error)
+      Taro.showToast({ title: '专家工作台未能打开，请重试', icon: 'none' })
+    }
+  }
 
   const close = () => {
     setSelectedExpert(null)
@@ -73,9 +88,9 @@ const ExpertsPage: React.FC = () => {
           : '专家接受后，会在 Pinco 站内信中发送电话或会议链接；接受前不会展示双方联系方式。本次不会扣款。',
         showCancel: false,
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Experts] booking failed', error)
-      Taro.showToast({ title: '提交失败或时段已变化，请刷新重试', icon: 'none' })
+      Taro.showToast({ title: error?.message || '提交失败或时段已变化，请刷新重试', icon: 'none' })
     } finally {
       setLoading(false)
     }
@@ -86,16 +101,17 @@ const ExpertsPage: React.FC = () => {
       <View className={styles.header}>
         <Text className={styles.title}>专家市场</Text>
         <Text className={styles.desc}>首批合作专家开放免费公测预约。可选 Pinco 内图文咨询或电话咨询，求职者默认匿名，暂不开放付费。</Text>
-        <View className={styles.applyButton} onClick={() => Taro.navigateTo({ url: '/pages/expert-center/index' })}>
-          <Text>申请成为专家 / 专家工作台</Text>
+        <View className={styles.applyButton} onClick={openExpertCenter}>
+          <Text>进入专家工作台 / 申请专家</Text>
         </View>
+        <Text className={styles.desc}>已绑定专家从这个入口确认、改期或拒绝预约。</Text>
       </View>
 
       {experts.length === 0 && (
         <View className={styles.emptyPanel}>
           <Text className={styles.emptyTitle}>{loadError || '首批专家正在审核中'}</Text>
           <Text className={styles.emptyDesc}>平台不会用虚构履历填充列表。审核通过、档期可约后才会在这里出现。</Text>
-          <View className={styles.emptyAction} onClick={() => Taro.navigateTo({ url: '/pages/expert-center/index' })}>
+          <View className={styles.emptyAction} onClick={openExpertCenter}>
             <Text>提交专家申请</Text>
           </View>
         </View>

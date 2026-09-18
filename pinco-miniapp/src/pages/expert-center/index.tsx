@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Input, Text, Textarea, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import styles from './index.module.scss'
@@ -44,13 +44,18 @@ const ExpertCenterPage: React.FC = () => {
   const [contactValues, setContactValues] = useState<Record<string, string>>({})
 
   const load = async () => {
-    if (!userProfile?.user_id) {
+    let activeUserId = usePincoStore.getState().userProfile?.user_id
+    if (!activeUserId) {
+      await bootstrap()
+      activeUserId = usePincoStore.getState().userProfile?.user_id
+    }
+    if (!activeUserId) {
       setLoadError('身份正在准备，请返回后稍后再进入。')
       return
     }
     const [statusResult, workspaceResult] = await Promise.allSettled([
-      fetchExpertApplicationStatus(userProfile.user_id),
-      fetchMyExpertWorkspace(userProfile.user_id),
+      fetchExpertApplicationStatus(activeUserId),
+      fetchMyExpertWorkspace(activeUserId),
     ])
     const errors: string[] = []
     if (statusResult.status === 'fulfilled') {
@@ -81,10 +86,6 @@ const ExpertCenterPage: React.FC = () => {
   }
 
   useDidShow(load)
-
-  useEffect(() => {
-    if (userProfile?.user_id) load()
-  }, [userProfile?.user_id])
 
   const submitApplication = async () => {
     if (loading) return
@@ -241,6 +242,12 @@ const ExpertCenterPage: React.FC = () => {
           <Text className={styles.warningText}>{loadError}。申请表仍可填写，点这里重试加载。</Text>
         </View>
       )}
+
+      <View className={styles.card}>
+        <Text className={styles.sectionTitle}>专家在哪里确认预约</Text>
+        <Text className={styles.hint}>专家用自己的微信进入本页并提交申请；平台审核时把账号绑定到 Tiana、Sara 或 Kai。绑定后，新预约会直接出现在下方“预约与交付”，专家可以确认、改期或拒绝。</Text>
+        <Text className={styles.hint}>首批专家完成绑定前，预约会进入平台运营通知，由管理员代确认，不会伪造专家回复。</Text>
+      </View>
 
       {application && (
         <View className={styles.statusCard}>

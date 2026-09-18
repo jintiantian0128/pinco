@@ -80,13 +80,11 @@ const HubPage: React.FC = () => {
   }
 
   const loadPosts = async () => {
-    if (!userProfile) {
-      setPosts([])
-      setLoadError('正在建立你的社区身份，请稍候…')
-      return
-    }
     try {
-      const result = await fetchCommunityPosts(userProfile.user_id)
+      // Official cold-start content is public. Identity is only required when
+      // the user publishes or interacts, so bootstrap failures cannot blank
+      // the entire community page.
+      const result = await fetchCommunityPosts(userProfile?.user_id)
       setPosts(result.posts || [])
       setLoadError('')
     } catch (error) {
@@ -101,7 +99,7 @@ const HubPage: React.FC = () => {
   })
 
   useEffect(() => {
-    if (userProfile?.user_id) loadPosts()
+    loadPosts()
   }, [userProfile?.user_id])
 
   usePullDownRefresh(() => {

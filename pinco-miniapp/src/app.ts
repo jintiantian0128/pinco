@@ -36,7 +36,7 @@ function App(props) {
   }, [loadMessages, loadTodayTasks])
 
   useDidShow(() => {
-    bootstrap()
+    if (!usePincoStore.getState().userProfile?.user_id) bootstrap()
   })
 
   useDidHide(() => {})
