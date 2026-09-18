@@ -15,6 +15,7 @@ const HomePage: React.FC = () => {
   const jobProgress = usePincoStore((state) => state.jobProgress)
   const openConversation = usePincoStore((state) => state.openConversation)
   const seedConversation = usePincoStore((state) => state.seedConversation)
+  const startInterview = usePincoStore((state) => state.startInterview)
   const refreshServiceHealth = usePincoStore((state) => state.refreshServiceHealth)
   const checkInEmotion = usePincoStore((state) => state.checkInEmotion)
   const supportDueFollowUps = usePincoStore((state) => state.supportDueFollowUps)
@@ -45,6 +46,23 @@ const HomePage: React.FC = () => {
     seedConversation(scenario, prompt, subtitle)
   }
 
+  const startTaskInterview = async (task: typeof todayTasks[0]) => {
+    const boundJob = task.relatedJobId ? jobProgress.find((job) => job.id === task.relatedJobId) : null
+    const promptPosition = task.prompt?.match(/围绕(.+?)开始一轮/)?.[1]?.trim()
+    const position = boundJob?.position || promptPosition || '目标岗位'
+    openConversation('interview', '围绕今日任务练一轮')
+    try {
+      await Taro.switchTab({ url: '/pages/conversation/index' })
+      await startInterview(position, 10, {
+        anxietyFocus: task.desc,
+        jobId: boundJob?.id || task.relatedJobId,
+      })
+    } catch (error) {
+      console.error('[Home] task interview failed', error)
+      Taro.showToast({ title: '面试启动失败，请稍后重试', icon: 'none' })
+    }
+  }
+
   const handleTodayTaskAction = (task: typeof todayTasks[0]) => {
     if (task.action === 'booking') {
       Taro.switchTab({ url: '/pages/experts/index' })
@@ -59,7 +77,7 @@ const HomePage: React.FC = () => {
       return
     }
     if (task.action === 'open_interview') {
-      enterConversation('interview', '围绕今日任务练一轮')
+      startTaskInterview(task)
       return
     }
     if (task.action === 'open_jd') {
