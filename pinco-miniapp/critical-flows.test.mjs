@@ -114,6 +114,8 @@ assert.match(article, /const practiceTask = seedConversation[\s\S]{0,220}await T
 assert.match(article, /seedConversation\('garden'/, 'Article practice must seed a real exercise after switching tabs')
 
 assert.match(expertCenter, /Promise\.allSettled/, 'Expert status and workspace loading must not take down the whole page together')
+assert.match(expertCenter, /if \(!userId\)[\s\S]{0,220}await bootstrap\(\)/, 'Expert workbench must recover a cold-start identity before showing a dead end')
+assert.match(expertCenter, /身份初始化失败，请检查网络后点这里重试。/, 'Expert workbench identity failures must be explicit and retryable')
 assert.match(expertCenter, /intro\.trim\(\)\.length < 20/, 'Expert applications must validate minimum intro length before submitting')
 assert.match(expertCenter, /proof.*https?:/is, 'Expert applications must validate proof URLs before submitting')
 assert.match(expertCenter, /真实姓名（仅平台审核可见）/, 'Expert applications must separate legal identity from the public profile')
