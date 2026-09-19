@@ -44,13 +44,23 @@ const ExpertCenterPage: React.FC = () => {
   const [contactValues, setContactValues] = useState<Record<string, string>>({})
 
   const load = async () => {
-    if (!userProfile?.user_id) {
-      setLoadError('身份正在准备，请返回后稍后再进入。')
+    let userId = usePincoStore.getState().userProfile?.user_id
+    if (!userId) {
+      setLoadError('身份正在准备，Pinco 会自动重试。')
+      try {
+        await bootstrap()
+        userId = usePincoStore.getState().userProfile?.user_id
+      } catch (error) {
+        console.error('[ExpertCenter] bootstrap failed', error)
+      }
+    }
+    if (!userId) {
+      setLoadError('身份初始化失败，请检查网络后点这里重试。')
       return
     }
     const [statusResult, workspaceResult] = await Promise.allSettled([
-      fetchExpertApplicationStatus(userProfile.user_id),
-      fetchMyExpertWorkspace(userProfile.user_id),
+      fetchExpertApplicationStatus(userId),
+      fetchMyExpertWorkspace(userId),
     ])
     const errors: string[] = []
     if (statusResult.status === 'fulfilled') {
