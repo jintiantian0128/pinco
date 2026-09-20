@@ -36,6 +36,10 @@ assert.doesNotMatch(hub, /commentInput[\s\S]{0,1800}关联岗位（可选/, 'Com
 assert.match(hub, /经验标签（可选，帮助其他人判断是否适用）/, 'High-value community posts must support round and time metadata')
 assert.doesNotMatch(hub, /请先登录|先登录/, 'Summon must not block anonymous users')
 assert.match(hub, /useEffect\(\(\) => \{[\s\S]{0,120}userProfile\?\.user_id[\s\S]{0,80}loadPosts\(\)/, 'Community must reload after async identity bootstrap')
+assert.match(hub, /ensureCommunityUserId[\s\S]*await bootstrap\(\)[\s\S]*身份初始化失败，请检查网络后重试[\s\S]*return userId/, 'Community actions must recover identity before blocking the user')
+for (const action of ['publishPost', 'handleLike', 'submitComment', 'handleHug', 'handleSummon', 'handleReport', 'turnPostIntoAction']) {
+  assert.match(hub, new RegExp(`const ${action} = async[\\s\\S]{0,900}ensureCommunityUserId\\(\\)`), `${action} must retry identity bootstrap before calling a community endpoint`)
+}
 assert.match(hub, /activeFilter === 'all'[\s\S]{0,100}articles: \[\]/, 'All must be a community feed instead of duplicating the editorial tab')
 assert.match(hub, /activeFilter === 'article'[\s\S]{0,160}isFeatured/, 'Featured must combine editorial knowledge with explicitly featured discussions')
 
