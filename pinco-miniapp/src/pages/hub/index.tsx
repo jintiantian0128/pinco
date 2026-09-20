@@ -52,6 +52,23 @@ const HubPage: React.FC = () => {
   const startInterview = usePincoStore((state) => state.startInterview)
   const bootstrap = usePincoStore((state) => state.bootstrap)
 
+  const ensureCommunityUserId = async () => {
+    let userId = usePincoStore.getState().userProfile?.user_id
+    if (!userId) {
+      try {
+        await bootstrap()
+      } catch (error) {
+        console.error('[Hub] identity bootstrap failed', error)
+      }
+      userId = usePincoStore.getState().userProfile?.user_id
+    }
+    if (!userId) {
+      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none' })
+      return ''
+    }
+    return userId
+  }
+
   const resetPostModal = () => {
     newPostTitleRef.current = ''
     newPostContentRef.current = ''
@@ -63,13 +80,8 @@ const HubPage: React.FC = () => {
   }
 
   const openPostModal = async () => {
-    if (!usePincoStore.getState().userProfile?.user_id) {
-      await bootstrap()
-    }
-    if (!usePincoStore.getState().userProfile?.user_id) {
-      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none' })
-      return
-    }
+    const userId = await ensureCommunityUserId()
+    if (!userId) return
     resetPostModal()
     setShowPostModal(true)
   }
@@ -120,15 +132,13 @@ const HubPage: React.FC = () => {
       Taro.showToast({ title: '标题和内容都不能为空', icon: 'none' })
       return
     }
-    if (!userProfile) {
-      Taro.showToast({ title: '社区身份还在准备，请稍后重试', icon: 'none' })
-      return
-    }
     if (isPublishing) return
+    const userId = await ensureCommunityUserId()
+    if (!userId) return
     setIsPublishing(true)
     try {
       const result = await createCommunityPost({
-        user_id: userProfile.user_id,
+        user_id: userId,
         title,
         content,
         post_type: newPostType,
@@ -181,12 +191,10 @@ const HubPage: React.FC = () => {
   }, [activeFilter, posts, searchQuery])
 
   const handleLike = async (postId: string) => {
-    if (!userProfile) {
-      Taro.showToast({ title: '社区身份还在准备，请稍后重试', icon: 'none' })
-      return
-    }
+    const userId = await ensureCommunityUserId()
+    if (!userId) return
     try {
-      const result = await toggleCommunityLike(postId, userProfile.user_id)
+      const result = await toggleCommunityLike(postId, userId)
       setPosts((prev) => prev.map((item) => (item.id === postId ? result.post : item)))
       Taro.showToast({ title: result.post.isLiked ? '已点赞' : '已取消点赞', icon: 'none' })
     } catch (error) {
@@ -200,12 +208,10 @@ const HubPage: React.FC = () => {
       Taro.showToast({ title: '评论不能为空', icon: 'none' })
       return
     }
-    if (!userProfile) {
-      Taro.showToast({ title: '社区身份还在准备，请稍后重试', icon: 'none' })
-      return
-    }
+    const userId = await ensureCommunityUserId()
+    if (!userId) return
     try {
-      const result = await createCommunityComment(postId, userProfile.user_id, commentText.trim())
+      const result = await createCommunityComment(postId, userId, commentText.trim())
       setPosts((prev) => prev.map((item) => (item.id === postId ? result.post : item)))
       setCommentText('')
       setCommentingPostId(null)
@@ -217,12 +223,10 @@ const HubPage: React.FC = () => {
   }
 
   const handleHug = async (postId: string) => {
-    if (!userProfile) {
-      Taro.showToast({ title: '社区身份还在准备，请稍后重试', icon: 'none' })
-      return
-    }
+    const userId = await ensureCommunityUserId()
+    if (!userId) return
     try {
-      const result = await toggleCommunityHug(postId, userProfile.user_id)
+      const result = await toggleCommunityHug(postId, userId)
       setPosts((prev) => prev.map((item) => (item.id === postId ? result.post : item)))
       Taro.showToast({ title: result.post.isHugged ? '已送出抱抱' : '已收回抱抱', icon: 'none' })
     } catch (error) {
@@ -233,13 +237,11 @@ const HubPage: React.FC = () => {
 
   const handleSummon = async (post: CommunityPost) => {
     if (post.aiCommentLoading) return
-    if (!userProfile) {
-      Taro.showToast({ title: '社区身份还在准备，请稍后重试', icon: 'none' })
-      return
-    }
+    const userId = await ensureCommunityUserId()
+    if (!userId) return
     setPosts((prev) => prev.map((item) => (item.id === post.id ? { ...item, aiCommentLoading: true } : item)))
     try {
-      const result = await summonCommunityReply(post.id, userProfile.user_id)
+      const result = await summonCommunityReply(post.id, userId)
       setPosts((prev) => prev.map((item) => (item.id === post.id ? result.post : item)))
       Taro.showToast({ title: '学姐已经到场', icon: 'success' })
     } catch (error) {
@@ -250,12 +252,13 @@ const HubPage: React.FC = () => {
   }
 
   const handleReport = async (post: CommunityPost) => {
-    if (!userProfile) return
+    const userId = await ensureCommunityUserId()
+    if (!userId) return
     try {
       const options = ['疑似虚假求职信息', '骚扰或攻击', '广告或引流', '隐私泄露']
       const selected = await Taro.showActionSheet({ itemList: options })
       const reason = options[selected.tapIndex]
-      const result = await reportCommunityPost(post.id, userProfile.user_id, reason)
+      const result = await reportCommunityPost(post.id, userId, reason)
       if (result.pending_review) {
         setPosts((current) => current.filter((item) => item.id !== post.id))
       }
@@ -267,10 +270,8 @@ const HubPage: React.FC = () => {
   }
 
   const turnPostIntoAction = async (post: CommunityPost) => {
-    if (!userProfile) {
-      Taro.showToast({ title: '社区身份还在准备，请稍后重试', icon: 'none' })
-      return
-    }
+    const userId = await ensureCommunityUserId()
+    if (!userId) return
     const scenario = post.postType === 'treehole' ? 'emotion' : 'interview'
     const boundJob = jobProgress.find((item) => item.id === post.boundJobId)
     const prompt = post.postType === 'treehole'
@@ -278,7 +279,7 @@ const HubPage: React.FC = () => {
       : `把下面这条学社内容转成一个 5 分钟、可直接完成的求职练习。先说明目标，再一次只给我一道题，等我回答后指出证据是否充分，不要虚构我的经历。\n标题：${post.title}\n内容：${post.content}`
     try {
       await recordCommunityAction(post.id, {
-        user_id: userProfile.user_id,
+        user_id: userId,
         action: 'practice',
         job_id: boundJob?.id,
       })
@@ -287,7 +288,7 @@ const HubPage: React.FC = () => {
       Taro.showToast({ title: '行动记录暂未保存，仍可继续练习', icon: 'none' })
     }
     openConversation(scenario, post.postType === 'treehole' ? '从树洞继续聊' : '从干货开始练')
-    trackProductEvent('community.action_started', userProfile?.user_id, { post_type: post.postType, action: scenario })
+    trackProductEvent('community.action_started', userId, { post_type: post.postType, action: scenario })
     await Taro.switchTab({ url: '/pages/conversation/index' })
     if (post.postType === 'treehole') {
       await seedConversation('emotion', prompt, '从树洞继续聊')
