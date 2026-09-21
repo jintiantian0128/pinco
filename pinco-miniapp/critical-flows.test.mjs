@@ -124,6 +124,12 @@ assert.match(expertCenter, /confirmedSlots/, 'Experts must be able to confirm or
 assert.match(expertCenter, /shareBookingContact/, 'Experts must be able to send a phone number or meeting link after accepting')
 assert.match(expertCenter, /电话号码[\s\S]*会议链接/, 'Phone consultation must let the expert choose the contact method')
 assert.match(expertCenter, /进入图文咨询/, 'Accepted chat consultations must open the in-app thread')
+assert.match(expertCenter, /const ensureExpertUserId = async \(\) => \{[\s\S]{0,180}bootstrap\(\)/, 'Expert workbench write actions must recover identity before submitting')
+assert.match(expertCenter, /saveAvailability[\s\S]{0,220}ensureExpertUserId\(\)/, 'Saving expert availability must not silently fail when identity is cold')
+assert.match(expertCenter, /decide[\s\S]{0,220}ensureExpertUserId\(\)/, 'Accepting or rejecting bookings must recover identity before writing')
+assert.match(expertCenter, /complete[\s\S]{0,420}ensureExpertUserId\(\)/, 'Completing expert bookings must recover identity before writing')
+assert.match(expertCenter, /sendContact[\s\S]{0,220}ensureExpertUserId\(\)/, 'Sending phone consultation contacts must recover identity before writing')
+assert.doesNotMatch(expertCenter, /if \(!userProfile\?\.user_id \|\| loading\) return/, 'Expert workbench actions must not silently return on missing identity')
 
 assert.doesNotMatch(store, /我先基于你发来的岗位描述做本地拆解/, 'JD failure must not look like a completed analysis')
 assert.match(store, /模拟面试没有启动成功/, 'Interview failure must be explicit')
