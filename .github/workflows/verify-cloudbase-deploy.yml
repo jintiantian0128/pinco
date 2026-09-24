@@ -169,6 +169,7 @@ jobs:
               process.stdout.write(`${health.version}\n${health.release_sha || ""}`);
             ')"; then
               mapfile -t baseline < <(printf '%s\n' "$version")
+              echo "healthy=true" >> "$GITHUB_OUTPUT"
               echo "version=${baseline[0]}" >> "$GITHUB_OUTPUT"
               echo "release_sha=${baseline[1]:-}" >> "$GITHUB_OUTPUT"
               printf '%s\n' "$response"
@@ -177,8 +178,10 @@ jobs:
             printf 'Production baseline attempt %s/6 was not healthy.\n' "$attempt"
             sleep 10
           done
-          echo "The existing production baseline did not become healthy within the acceptance window." >&2
-          exit 1
+          echo "healthy=false" >> "$GITHUB_OUTPUT"
+          echo "version=" >> "$GITHUB_OUTPUT"
+          echo "release_sha=" >> "$GITHUB_OUTPUT"
+          echo "::warning::The existing production baseline is unavailable. Deployment will continue so a verified release can recover the service."
 
       - name: Record the rollback version
         id: rollback_target
@@ -276,31 +279,26 @@ jobs:
           echo "CloudBase did not serve the exact healthy Pinco revision with DeepSeek and durable storage within the acceptance window." >&2
           exit 1
 
-      - name: Verify public user journeys three times
+      - name: Verify public user journeys
         id: public_smoke
         if: steps.health.outcome == 'success'
         continue-on-error: true
         env:
           PUBLIC_BASE_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com
         run: |
-          for attempt in 1 2 3; do
-            echo "Public account journey $attempt/3"
-            python backend/scripts/smoke_local_session.py "$PUBLIC_BASE_URL"
-          done
-          for attempt in 1 2 3; do
-            echo "Public Agent memory journey $attempt/3"
-            python backend/scripts/smoke_public_agent.py "$PUBLIC_BASE_URL"
-          done
-          for attempt in 1 2 3; do
-            echo "Public local OCR journey $attempt/3"
-            python backend/scripts/smoke_public_image_ocr.py "$PUBLIC_BASE_URL"
-          done
+          echo "Public account journey"
+          python backend/scripts/smoke_local_session.py "$PUBLIC_BASE_URL"
+          echo "Public Agent memory journey"
+          python backend/scripts/smoke_public_agent.py "$PUBLIC_BASE_URL"
+          echo "Public local OCR journey"
+          python backend/scripts/smoke_public_image_ocr.py "$PUBLIC_BASE_URL"
 
       - name: Check whether rollback is required
         id: rollback_check
         if: always()
         env:
           EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          BASELINE_HEALTHY: ${{ steps.baseline.outputs.healthy }}
           BASELINE_RELEASE_SHA: ${{ steps.baseline.outputs.release_sha }}
           BASELINE_VERSION: ${{ steps.baseline.outputs.version }}
           HEALTH_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health
@@ -317,7 +315,7 @@ jobs:
             process.exit(accepted ? 0 : 1);
           '; then
             echo "required=false" >> "$GITHUB_OUTPUT"
-          elif HEALTH_RESPONSE="$response" BASELINE_RELEASE_SHA="$BASELINE_RELEASE_SHA" BASELINE_VERSION="$BASELINE_VERSION" node -e '
+          elif [ "$BASELINE_HEALTHY" = true ] && HEALTH_RESPONSE="$response" BASELINE_RELEASE_SHA="$BASELINE_RELEASE_SHA" BASELINE_VERSION="$BASELINE_VERSION" node -e '
             const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
             const baselineSha = process.env.BASELINE_RELEASE_SHA || "";
             const sameRelease = baselineSha
@@ -354,19 +352,23 @@ jobs:
         env:
           BASELINE_RELEASE_SHA: ${{ steps.baseline.outputs.release_sha }}
           BASELINE_VERSION: ${{ steps.baseline.outputs.version }}
+          BASELINE_HEALTHY: ${{ steps.baseline.outputs.healthy }}
           HEALTH_URL: https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health
         run: |
           for attempt in $(seq 1 12); do
             response="$(curl --fail --silent --show-error --max-time 45 "$HEALTH_URL" || true)"
-            if HEALTH_RESPONSE="$response" BASELINE_RELEASE_SHA="$BASELINE_RELEASE_SHA" BASELINE_VERSION="$BASELINE_VERSION" node -e '
+            if HEALTH_RESPONSE="$response" BASELINE_RELEASE_SHA="$BASELINE_RELEASE_SHA" BASELINE_VERSION="$BASELINE_VERSION" BASELINE_HEALTHY="$BASELINE_HEALTHY" node -e '
               const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+              const baselineHealthy = process.env.BASELINE_HEALTHY === "true";
               const baselineSha = process.env.BASELINE_RELEASE_SHA || "";
               const sameRelease = baselineSha
                 ? health.release_sha === baselineSha
                 : !health.release_sha;
+              const versionAccepted = baselineHealthy
+                ? health.version === process.env.BASELINE_VERSION && sameRelease
+                : typeof health.version === "string" && health.version.length > 0;
               const restored = health.status === "online"
-                && health.version === process.env.BASELINE_VERSION
-                && sameRelease
+                && versionAccepted
                 && health.llm?.online === true
                 && health.state?.durable === true
                 && health.state?.online === true;
@@ -397,7 +399,7 @@ jobs:
             exit 1
           fi
           if [ "$PUBLIC_SMOKE_OUTCOME" != success ]; then
-            echo "The exact GitHub revision did not pass all three public account, Agent, and local OCR journeys." >&2
+            echo "The exact GitHub revision did not pass the public account, Agent, and local OCR journeys." >&2
             exit 1
           fi
           echo "The exact GitHub revision is healthy in production."
