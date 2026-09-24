@@ -5,7 +5,13 @@ import classnames from 'classnames'
 import styles from './index.module.scss'
 import { homeActions } from '@/data/home'
 import { usePincoStore } from '@/store/usePincoStore'
-import { ConversationScenario } from '@/types/pinco'
+import { BookingItem, ConversationScenario } from '@/types/pinco'
+
+const ACTIVE_BOOKING_STATUS: Array<BookingItem['status_code']> = ['intent_submitted', 'confirmed']
+
+const getCurrentBooking = (bookings: BookingItem[]) => {
+  return bookings.find((booking) => ACTIVE_BOOKING_STATUS.includes(booking.status_code))
+}
 
 const HomePage: React.FC = () => {
   const serviceTimeline = usePincoStore((state) => state.serviceTimeline)
@@ -15,12 +21,20 @@ const HomePage: React.FC = () => {
   const jobProgress = usePincoStore((state) => state.jobProgress)
   const openConversation = usePincoStore((state) => state.openConversation)
   const seedConversation = usePincoStore((state) => state.seedConversation)
+  const startInterview = usePincoStore((state) => state.startInterview)
   const refreshServiceHealth = usePincoStore((state) => state.refreshServiceHealth)
   const checkInEmotion = usePincoStore((state) => state.checkInEmotion)
   const supportDueFollowUps = usePincoStore((state) => state.supportDueFollowUps)
   const respondSupportFollowUp = usePincoStore((state) => state.respondSupportFollowUp)
   const [checkingMood, setCheckingMood] = useState(false)
-  const latestBooking = bookings[0]
+  const currentBooking = getCurrentBooking(bookings)
+  const hasPastBookings = bookings.length > 0
+  const serviceValue = currentBooking?.expertName || (hasPastBookings ? '近期服务已结束' : '还没预约专家')
+  const serviceDesc = currentBooking
+    ? `${currentBooking.status} · ${currentBooking.slot}`
+    : hasPastBookings
+      ? '需要新帮助时再约，不把已结束预约当进行中'
+      : '需要的时候再约，不用硬下单'
   const latestSummary = [...messages].reverse().find((item) => item.role === 'assistant')?.content || '还没开始正式会话，先把你最卡的一件事告诉学姐。'
   const undoneTasks = todayTasks.filter((t) => !t.done)
   const doneCount = todayTasks.filter((t) => t.done).length
@@ -45,6 +59,23 @@ const HomePage: React.FC = () => {
     seedConversation(scenario, prompt, subtitle)
   }
 
+  const startTaskInterview = async (task: typeof todayTasks[0]) => {
+    const boundJob = task.relatedJobId ? jobProgress.find((job) => job.id === task.relatedJobId) : null
+    const promptPosition = task.prompt?.match(/围绕(.+?)开始一轮/)?.[1]?.trim()
+    const position = boundJob?.position || promptPosition || '目标岗位'
+    openConversation('interview', '围绕今日任务练一轮')
+    try {
+      await Taro.switchTab({ url: '/pages/conversation/index' })
+      await startInterview(position, 10, {
+        anxietyFocus: task.desc,
+        jobId: boundJob?.id || task.relatedJobId,
+      })
+    } catch (error) {
+      console.error('[Home] task interview failed', error)
+      Taro.showToast({ title: '面试启动失败，请稍后重试', icon: 'none' })
+    }
+  }
+
   const handleTodayTaskAction = (task: typeof todayTasks[0]) => {
     if (task.action === 'booking') {
       Taro.switchTab({ url: '/pages/experts/index' })
@@ -59,7 +90,7 @@ const HomePage: React.FC = () => {
       return
     }
     if (task.action === 'open_interview') {
-      enterConversation('interview', '围绕今日任务练一轮')
+      startTaskInterview(task)
       return
     }
     if (task.action === 'open_jd') {
@@ -239,8 +270,8 @@ const HomePage: React.FC = () => {
           </View>
           <View className={styles.statusCard} onClick={() => Taro.switchTab({ url: '/pages/experts/index' })}>
             <Text className={styles.statusLabel}>最近服务</Text>
-            <Text className={styles.statusValue}>{latestBooking ? latestBooking.expertName : '还没预约专家'}</Text>
-            <Text className={styles.statusDesc}>{latestBooking ? latestBooking.slot : '需要的时候再约，不用硬下单'}</Text>
+            <Text className={styles.statusValue}>{serviceValue}</Text>
+            <Text className={styles.statusDesc}>{serviceDesc}</Text>
           </View>
         </View>
       </View>

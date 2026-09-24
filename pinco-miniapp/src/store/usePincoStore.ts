@@ -381,7 +381,13 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       return [
         createTask('复盘最近一次被追问的问题', `用5句话写下问题、你的回答、卡住点。可用时间：${time}`, 'interview', 'send_chat', '我刚面完/最近一次面试被追问了几个问题，帮我做一次结构化复盘。'),
         createTask(`准备1个${target}项目深挖故事`, '按STAR写出背景、目标、动作、结果，各不超过2行。', 'interview', 'send_chat', `帮我为${target}准备一个可被深挖15分钟的STAR项目故事。`),
-        createTask('做10分钟模拟面试', '让Pinco只追问一个项目，结束后把复盘归档。', 'interview', 'open_interview'),
+        createTask(
+          '做10分钟模拟面试',
+          '让Pinco只追问一个项目，结束后把复盘归档。',
+          'interview',
+          'open_interview',
+          `围绕${target}开始一轮10分钟结构化模拟面试，重点追问项目深挖。`
+        ),
       ]
     }
     if (stage === 'offer') {

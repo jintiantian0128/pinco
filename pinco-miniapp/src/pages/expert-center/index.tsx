@@ -43,19 +43,36 @@ const ExpertCenterPage: React.FC = () => {
   const [contactTypes, setContactTypes] = useState<Record<string, 'phone' | 'meeting_link'>>({})
   const [contactValues, setContactValues] = useState<Record<string, string>>({})
 
-  const load = async () => {
-    let activeUserId = usePincoStore.getState().userProfile?.user_id
-    if (!activeUserId) {
+  const ensureExpertUserId = async () => {
+    if (!usePincoStore.getState().userProfile?.user_id) {
       await bootstrap()
-      activeUserId = usePincoStore.getState().userProfile?.user_id
     }
-    if (!activeUserId) {
-      setLoadError('身份正在准备，请返回后稍后再进入。')
+    const userId = usePincoStore.getState().userProfile?.user_id
+    if (!userId) {
+      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none' })
+      return ''
+    }
+    return userId
+  }
+
+  const load = async () => {
+    let userId = usePincoStore.getState().userProfile?.user_id
+    if (!userId) {
+      setLoadError('身份正在准备，Pinco 会自动重试。')
+      try {
+        await bootstrap()
+        userId = usePincoStore.getState().userProfile?.user_id
+      } catch (error) {
+        console.error('[ExpertCenter] bootstrap failed', error)
+      }
+    }
+    if (!userId) {
+      setLoadError('身份初始化失败，请检查网络后点这里重试。')
       return
     }
     const [statusResult, workspaceResult] = await Promise.allSettled([
-      fetchExpertApplicationStatus(activeUserId),
-      fetchMyExpertWorkspace(activeUserId),
+      fetchExpertApplicationStatus(userId),
+      fetchMyExpertWorkspace(userId),
     ])
     const errors: string[] = []
     if (statusResult.status === 'fulfilled') {
@@ -89,12 +106,8 @@ const ExpertCenterPage: React.FC = () => {
 
   const submitApplication = async () => {
     if (loading) return
-    if (!usePincoStore.getState().userProfile?.user_id) await bootstrap()
-    const userId = usePincoStore.getState().userProfile?.user_id
-    if (!userId) {
-      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none' })
-      return
-    }
+    const userId = await ensureExpertUserId()
+    if (!userId) return
     const normalizedProofUrls = proofUrls.split('\n').map((item) => item.trim()).filter(Boolean)
     const validationError = realName.trim().length < 2 ? '真实姓名至少填写 2 个字'
       : displayName.trim().length < 2 ? '公开展示名至少填写 2 个字'
@@ -137,12 +150,14 @@ const ExpertCenterPage: React.FC = () => {
   }
 
   const saveAvailability = async () => {
-    if (!expert || !userProfile?.user_id || loading) return
+    if (!expert || loading) return
+    const userId = await ensureExpertUserId()
+    if (!userId) return
     setLoading(true)
     try {
       const result = await updateExpertAvailability(
         expert.id,
-        userProfile.user_id,
+        userId,
         slotText.split(/\n/).map((item) => item.trim()).filter(Boolean),
       )
       setExpert(result.expert)
@@ -156,12 +171,14 @@ const ExpertCenterPage: React.FC = () => {
   }
 
   const decide = async (booking: BookingItem, decision: 'confirmed' | 'rejected') => {
-    if (!userProfile?.user_id || loading) return
+    if (loading) return
+    const userId = await ensureExpertUserId()
+    if (!userId) return
     setLoading(true)
     try {
       const result = await decideExpertBooking(
         booking.id,
-        userProfile.user_id,
+        userId,
         decision,
         '',
         decision === 'confirmed' ? (confirmedSlots[booking.id] || booking.slot) : '',
@@ -178,13 +195,15 @@ const ExpertCenterPage: React.FC = () => {
 
   const complete = async (booking: BookingItem) => {
     const nextActions = deliveryNextActions.split(/\n/).map((item) => item.trim()).filter(Boolean)
-    if (!userProfile?.user_id || deliverySummary.trim().length < 10 || nextActions.length === 0 || loading) {
+    if (deliverySummary.trim().length < 10 || nextActions.length === 0 || loading) {
       Taro.showToast({ title: '请填写交付摘要和至少1条下一步', icon: 'none' })
       return
     }
+    const userId = await ensureExpertUserId()
+    if (!userId) return
     setLoading(true)
     try {
-      const result = await completeExpertBooking(booking.id, userProfile.user_id, deliverySummary.trim(), nextActions)
+      const result = await completeExpertBooking(booking.id, userId, deliverySummary.trim(), nextActions)
       setBookings((prev) => prev.map((item) => item.id === booking.id ? result.booking : item))
       setDeliveryBookingId('')
       setDeliverySummary('')
@@ -203,7 +222,9 @@ const ExpertCenterPage: React.FC = () => {
   }
 
   const sendContact = async (booking: BookingItem) => {
-    if (!userProfile?.user_id || loading) return
+    if (loading) return
+    const userId = await ensureExpertUserId()
+    if (!userId) return
     const contactType = contactTypes[booking.id] || 'phone'
     const contactValue = (contactValues[booking.id] || '').trim()
     const valid = contactType === 'phone'
@@ -215,7 +236,7 @@ const ExpertCenterPage: React.FC = () => {
     }
     setLoading(true)
     try {
-      const result = await shareBookingContact(booking.id, userProfile.user_id, contactType, contactValue)
+      const result = await shareBookingContact(booking.id, userId, contactType, contactValue)
       setBookings((prev) => prev.map((item) => item.id === booking.id ? result.booking : item))
       setContactValues((current) => ({ ...current, [booking.id]: '' }))
       Taro.showToast({ title: '联系方式已通过站内信发送', icon: 'success' })

@@ -38,6 +38,7 @@ const MinePage: React.FC = () => {
   const bookings = usePincoStore((state) => state.bookings)
   const notifications = usePincoStore((state) => state.notifications)
   const refreshServiceHealth = usePincoStore((state) => state.refreshServiceHealth)
+  const bootstrap = usePincoStore((state) => state.bootstrap)
   const userProfile = usePincoStore((state) => state.userProfile)
   const wechatReady = usePincoStore((state) => state.wechatReady)
   const miniappReadiness = usePincoStore((state) => state.miniappReadiness)
@@ -51,6 +52,7 @@ const MinePage: React.FC = () => {
   const generateTasksFromTriage = usePincoStore((state) => state.generateTasksFromTriage)
   const openConversation = usePincoStore((state) => state.openConversation)
   const seedConversation = usePincoStore((state) => state.seedConversation)
+  const startInterview = usePincoStore((state) => state.startInterview)
   const clearMessages = usePincoStore((state) => state.clearMessages)
   const membership = usePincoStore((state) => state.membership)
   const cancelBookingOrder = usePincoStore((state) => state.cancelBookingOrder)
@@ -82,6 +84,19 @@ const MinePage: React.FC = () => {
   const [pilotFeedbackSaved, setPilotFeedbackSaved] = useState(false)
   const [pilotFeedbackSaving, setPilotFeedbackSaving] = useState(false)
 
+  const ensureMineUserId = async () => {
+    let userId = usePincoStore.getState().userProfile?.user_id
+    if (!userId) {
+      await bootstrap()
+      userId = usePincoStore.getState().userProfile?.user_id
+    }
+    if (!userId) {
+      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none' })
+      return ''
+    }
+    return userId
+  }
+
   const loadContribution = async () => {
     if (!userProfile?.user_id) return
     try {
@@ -92,12 +107,14 @@ const MinePage: React.FC = () => {
   }
 
   const submitExpertReview = async (bookingId: string) => {
-    if (!userProfile?.user_id || reviewComment.trim().length < 2) {
+    if (reviewComment.trim().length < 2) {
       Taro.showToast({ title: '请写下真实服务感受', icon: 'none' })
       return
     }
+    const userId = await ensureMineUserId()
+    if (!userId) return
     try {
-      await reviewExpertBooking(bookingId, userProfile.user_id, reviewScore, reviewComment.trim())
+      await reviewExpertBooking(bookingId, userId, reviewScore, reviewComment.trim())
       setReviewBookingId('')
       setReviewComment('')
       await refreshServiceHealth()
@@ -109,7 +126,8 @@ const MinePage: React.FC = () => {
   }
 
   const cancelBooking = async (booking: BookingItem) => {
-    if (!userProfile?.user_id) return
+    const userId = await ensureMineUserId()
+    if (!userId) return
     const confirmed = await Taro.showModal({
       title: '取消预约意向',
       content: '1.0 公测仅收集免费预约意向。取消后若专家已确认，时段会重新释放。',
@@ -127,6 +145,13 @@ const MinePage: React.FC = () => {
 
   const openBookingMessages = (bookingId: string) => {
     Taro.navigateTo({ url: `/pages/booking-chat/index?booking_id=${encodeURIComponent(bookingId)}` })
+  }
+
+  const getBookingMessageLabel = (booking: BookingItem) => {
+    if (booking.consultation_type === 'chat') {
+      return booking.status_code === 'confirmed' ? '进入图文咨询' : '查看预约进展 / 咨询消息'
+    }
+    return '查看联系方式 / 咨询消息'
   }
 
   useEffect(() => {
@@ -152,15 +177,17 @@ const MinePage: React.FC = () => {
   }, [userProfile?.user_id])
 
   const submitPilotFeedback = async () => {
-    if (!userProfile?.user_id || pilotFeedbackSaving) return
+    if (pilotFeedbackSaving) return
     if (!professionalValueScore || !emotionalValueScore || !pilotReturnIntent) {
       Taro.showToast({ title: '请完成三项选择', icon: 'none' })
       return
     }
+    const userId = await ensureMineUserId()
+    if (!userId) return
     setPilotFeedbackSaving(true)
     try {
       await apiRequest('/api/v1/pilot/feedback', 'POST', {
-        user_id: userProfile.user_id,
+        user_id: userId,
         professional_value_score: professionalValueScore,
         emotional_value_score: emotionalValueScore,
         return_intent: pilotReturnIntent,
@@ -178,7 +205,8 @@ const MinePage: React.FC = () => {
   }
 
   const saveSupportPreferences = async (next: { mode?: string; followUp?: boolean; memory?: boolean }) => {
-    if (!userProfile?.user_id) return
+    const userId = await ensureMineUserId()
+    if (!userId) return
     const mode = next.mode ?? supportMode
     const followUp = next.followUp ?? supportFollowUp
     const memory = next.memory ?? supportMemory
@@ -187,7 +215,7 @@ const MinePage: React.FC = () => {
     setSupportMemory(memory)
     try {
       await apiRequest('/api/v1/support/preferences', 'POST', {
-        user_id: userProfile.user_id,
+        user_id: userId,
         mode,
         follow_up_enabled: followUp,
         memory_consent: memory,
@@ -212,9 +240,10 @@ const MinePage: React.FC = () => {
   }
 
   const exportMyData = async () => {
-    if (!userProfile?.user_id) return
+    const userId = await ensureMineUserId()
+    if (!userId) return
     try {
-      const data = await apiRequest<any>(`/api/v1/account/export?user_id=${encodeURIComponent(userProfile.user_id)}`)
+      const data = await apiRequest<any>(`/api/v1/account/export?user_id=${encodeURIComponent(userId)}`)
       const text = JSON.stringify(data, null, 2)
       await Taro.setClipboardData({ data: text })
       const verified = await Taro.getClipboardData()
@@ -227,7 +256,8 @@ const MinePage: React.FC = () => {
   }
 
   const deleteMyAccount = async () => {
-    if (!userProfile?.user_id) return
+    const userId = await ensureMineUserId()
+    if (!userId) return
     const confirmed = await Taro.showModal({
       title: '永久删除账号数据',
       content: '将删除云端会话、岗位、证据、练习、社区内容和服务记录，且无法恢复。建议先导出。确定继续吗？',
@@ -237,7 +267,7 @@ const MinePage: React.FC = () => {
     if (!confirmed.confirm) return
     try {
       await apiRequest('/api/v1/account', 'DELETE', {
-        user_id: userProfile.user_id,
+        user_id: userId,
         confirmation: 'DELETE',
       })
       Taro.clearStorageSync()
@@ -262,13 +292,30 @@ const MinePage: React.FC = () => {
     if (prompt) seedConversation(scenario, prompt)
   }
 
+  const startTaskInterview = async (task: typeof todayTasks[0]) => {
+    const boundJob = task.relatedJobId ? jobProgress.find((job) => job.id === task.relatedJobId) : null
+    const promptPosition = task.prompt?.match(/围绕(.+?)开始一轮/)?.[1]?.trim()
+    const position = boundJob?.position || promptPosition || '目标岗位'
+    openConversation('interview')
+    try {
+      await Taro.switchTab({ url: '/pages/conversation/index' })
+      await startInterview(position, 10, {
+        anxietyFocus: task.desc,
+        jobId: boundJob?.id || task.relatedJobId,
+      })
+    } catch (error) {
+      console.error('[Mine] task interview failed', error)
+      Taro.showToast({ title: '面试启动失败，请稍后重试', icon: 'none' })
+    }
+  }
+
   const handleTaskAction = (task: typeof todayTasks[0]) => {
     if (task.action === 'open_jd') {
       openConversationTab('jd')
     } else if (task.action === 'open_resume') {
       openConversationTab('resume')
     } else if (task.action === 'open_interview') {
-      openConversationTab('interview')
+      startTaskInterview(task)
     } else if (task.action === 'view_progress') {
       Taro.pageScrollTo({ selector: '.job-section', duration: 300 })
     } else if (task.action === 'send_chat' && task.prompt) {
@@ -511,7 +558,7 @@ const MinePage: React.FC = () => {
                     <Text className={styles.bookingHint}>专家已接受，正在通过站内信发送电话或会议链接。</Text>
                   )}
                   <View className={styles.messageLinkButton} onClick={() => openBookingMessages(booking.id)}>
-                    <Text>{booking.consultation_type === 'chat' ? '进入图文咨询' : '查看联系方式 / 咨询消息'}</Text>
+                    <Text>{getBookingMessageLabel(booking)}</Text>
                   </View>
                   {booking.delivery_summary && <Text className={styles.bookingDelivery}>交付摘要：{booking.delivery_summary}</Text>}
                   {(booking.next_actions || []).map((item, index) => <Text key={`next-${index}`} className={styles.bookingDelivery}>下一步 {index + 1}：{item}</Text>)}
