@@ -100,7 +100,7 @@ const ExpertsPage: React.FC = () => {
     <View className={styles.page}>
       <View className={styles.header}>
         <Text className={styles.title}>专家市场</Text>
-        <Text className={styles.desc}>首批合作专家开放免费公测预约。可选 Pinco 内图文咨询或电话咨询，求职者默认匿名，暂不开放付费。</Text>
+        <Text className={styles.desc}>首批专家开放免费公测预约。可选 Pinco 内图文咨询或电话咨询，求职者默认匿名；提交后需专家确认，未绑定账号时由平台运营人工协调，暂不开放付费。</Text>
         <View className={styles.applyButton} onClick={openExpertCenter}>
           <Text>进入专家工作台 / 申请专家</Text>
         </View>
@@ -218,7 +218,7 @@ const ExpertsPage: React.FC = () => {
               </View>
             </View>
             <View className={styles.paySection}>
-              <Text className={styles.payLabel}>专家发布的可约时段（北京时间）</Text>
+              <Text className={styles.payLabel}>希望沟通的时间（北京时间，待专家确认）</Text>
               <View className={styles.slotGrid}>
                 {selectedExpert.slots.map((item) => (
                   <View
@@ -228,6 +228,7 @@ const ExpertsPage: React.FC = () => {
                   ><Text>{item}</Text></View>
                 ))}
               </View>
+              <Text className={styles.detailIntro}>这里选择的是预约意向，不代表专家已确认。提交后会进入待确认流程；未绑定专家账号时由平台运营人工联系协调。</Text>
             </View>
             <View className={styles.paySection}>
               <Text className={styles.payLabel}>这次最想解决的问题</Text>
