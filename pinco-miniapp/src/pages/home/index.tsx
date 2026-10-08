@@ -6,6 +6,7 @@ import styles from './index.module.scss'
 import { homeActions } from '@/data/home'
 import { usePincoStore } from '@/store/usePincoStore'
 import { BookingItem, ConversationScenario } from '@/types/pinco'
+import { buildJobSearchPrompt } from '@/utils/job-search'
 
 const ACTIVE_BOOKING_STATUS: Array<BookingItem['status_code']> = ['intent_submitted', 'confirmed']
 
@@ -58,6 +59,12 @@ const HomePage: React.FC = () => {
     Taro.switchTab({ url: '/pages/conversation/index' })
     seedConversation(scenario, prompt, subtitle)
   }
+
+  const startJobSearch = () => enterConversationWithPrompt(
+    'general',
+    '先对齐目标，再实时找带来源的岗位',
+    buildJobSearchPrompt(),
+  )
 
   const startTaskInterview = async (task: typeof todayTasks[0]) => {
     const boundJob = task.relatedJobId ? jobProgress.find((job) => job.id === task.relatedJobId) : null
@@ -228,12 +235,12 @@ const HomePage: React.FC = () => {
 
       <View className={styles.section}>
         <View className={styles.sectionHeader}>
-          <Text className={styles.sectionTitle}>搜岗位</Text>
-          <Text className={styles.sectionHint}>只展示可验证来源</Text>
+          <Text className={styles.sectionTitle}>和学姐一起找岗位</Text>
+          <Text className={styles.sectionHint} onClick={() => Taro.navigateTo({ url: '/pages/job-search/index' })}>独立筛选</Text>
         </View>
-        <View className={styles.searchEntry} onClick={() => Taro.navigateTo({ url: '/pages/job-search/index' })}>
+        <View className={styles.searchEntry} onClick={startJobSearch}>
           <Text className={styles.searchEntryIcon}>🔍</Text>
-          <Text className={styles.searchEntryPlaceholder}>搜索岗位，如：AI产品经理、前端开发...</Text>
+          <Text className={styles.searchEntryPlaceholder}>告诉学姐你想找什么岗位，先问清条件再实时检索</Text>
           <Text className={styles.searchEntryArrow}>›</Text>
         </View>
       </View>

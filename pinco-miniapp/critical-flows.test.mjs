@@ -21,6 +21,7 @@ const career = read('src/pages/career/index.tsx')
 const expertCenter = read('src/pages/expert-center/index.tsx')
 const bookingChat = read('src/pages/booking-chat/index.tsx')
 const appConfig = read('src/app.config.ts')
+const jobSearchPrompt = read('src/utils/job-search.ts')
 
 const requiredPostTypes = ['treehole', 'help', 'share', 'success']
 
@@ -99,7 +100,7 @@ assert.match(conversation, /我已有目标岗位/, 'Golden path must support a 
 assert.match(conversation, /\/api\/v1\/workspace\/evidence\/draft/, 'Narrated experience must become a reviewable evidence draft')
 assert.match(conversation, /\/api\/v1\/workspace\/evidence['"]/, 'Confirmed evidence must persist through the workspace endpoint')
 assert.match(conversation, /这是待确认草稿|确认后才会保存/, 'The evidence builder must expose the draft truth boundary')
-assert.match(conversation, /roleDirections[\s\S]*pages\/job-search\/index\?q=/, 'Role directions must flow into sourced job search')
+assert.match(conversation, /roleDirections[\s\S]*searchRoleDirection[\s\S]*startConversationalJobSearch/, 'Role directions must flow into the conversational sourced job search')
 assert.match(conversation, /voiceCaptureTargetRef[\s\S]*setEvidenceNarrative/, 'Evidence narration must receive ASR text without sending an unintended chat turn')
 assert.match(store, /从旧简历提炼真实证据[\s\S]*build_evidence/, 'A parsed old resume must continue into evidence extraction')
 
@@ -245,6 +246,11 @@ assert.match(expertCenter, /用户已授权的会前摘要/, 'Experts must see t
 assert.match(expertCenter, /用户下一步行动，每行一条/, 'Expert delivery must capture an actionable follow-up list')
 assert.match(mine, /下一步 \{index \+ 1\}/, 'Buyers must receive expert next actions')
 assert.match(jobSearch, /保存岗位/, 'Verified search results must flow into the job workspace')
+assert.match(jobSearchPrompt, /先结合你记得的职业信息[\s\S]*实时搜索带原始来源链接/, 'Conversational job search must clarify profile gaps before searching')
+assert.match(conversation, /本次实时检索没有返回可核验的职位候选[\s\S]*不得编造/, 'Empty live search results must not be followed by fabricated jobs')
+assert.match(conversation, /打开来源/, 'Conversational search cards must expose the original job source')
+assert.match(conversation, /saveSearchedJob[\s\S]*workspace\/jobs/, 'Only a user-saved search result should be persisted to the job workspace')
+assert.match(home, /和学姐一起找岗位[\s\S]*独立筛选/, 'Home must make chat the primary job-search entry while preserving advanced search')
 assert.doesNotMatch(home, /navigateTo\([\s\S]{0,140}pages\/conversation\/index/, 'Home must not navigateTo the conversation tab')
 assert.match(home, /switchTab\(\{ url: '\/pages\/conversation\/index'/, 'Home must switch to the conversation tab')
 assert.match(home, /enterConversationWithPrompt[\s\S]{0,320}seedConversation/, 'Home quick actions must preserve their prompt across tab switching')
@@ -255,6 +261,7 @@ assert.match(jobSearch, /switchTab\(\{ url: '\/pages\/conversation\/index'[\s\S]
 assert.doesNotMatch(mine, /navigateTo\([\s\S]{0,140}pages\/conversation\/index/, 'Mine must not navigateTo the conversation tab')
 assert.match(mine, /openConversationTab[\s\S]{0,260}switchTab[\s\S]{0,180}seedConversation/, 'Mine must hand prompts to the conversation store when switching tabs')
 assert.match(conversation, /item\.kind === 'progress'[\s\S]{0,140}navigateTo\(\{ url: '\/pages\/career\/index'/, 'Conversation progress recommendations must open the non-tab career page')
-assert.match(conversation, /搜岗位[\s\S]{0,240}navigateTo\(\{ url: '\/pages\/job-search\/index'/, 'Conversation job recommendations must open the non-tab search page')
+assert.match(conversation, /title: '和学姐一起找岗位'[\s\S]{0,180}startConversationalJobSearch/, 'Conversation recommendations must default to the conversational search flow')
+assert.match(conversation, /if \(tab\.isSearch\) \{[\s\S]{0,100}startConversationalJobSearch\(\)/, 'The chat search tab must start a guided conversation instead of a blank search page')
 
 console.log('critical-flows static checks passed')

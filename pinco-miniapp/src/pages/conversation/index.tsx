@@ -4,10 +4,11 @@ import Taro, { useDidHide, useDidShow, useLoad } from '@tarojs/taro'
 import classnames from 'classnames'
 import styles from './index.module.scss'
 import { usePincoStore } from '@/store/usePincoStore'
-import { ConversationScenario, JobProgressItem, MessageItem, MessageQuickAction } from '@/types/pinco'
+import { ConversationScenario, JobProgressItem, JobSearchResult, MessageItem, MessageQuickAction } from '@/types/pinco'
 import { getApiBaseUrl, apiRequest, apiUploadFile } from '@/services/api'
 import { trackProductEvent } from '@/services/analytics'
 import { buildConversationTitle } from '@/utils/format'
+import { buildJobSearchPrompt } from '@/utils/job-search'
 
 const promptMap: Record<ConversationScenario, string> = {
   general: '你先根据我现在的情况，帮我判断今天最值得先做的一步。',
@@ -60,7 +61,7 @@ const scenarioTabs: Array<{ label: string; scenario: ConversationScenario; icon:
   { label: '职业规划', scenario: 'general', icon: '🎯' },
   { label: '模拟面试', scenario: 'interview', icon: '🎤' },
   { label: '情感树洞', scenario: 'emotion', icon: '🌰' },
-  { label: '搜岗位', scenario: 'general', icon: '🔍', isSearch: true },
+  { label: '找岗位', scenario: 'general', icon: '🔍', isSearch: true },
 ]
 
 const pickPriorityJob = (jobs: JobProgressItem[]) => jobs.find((job) => ['interview2', 'interview1', 'hr'].includes(job.status)) || jobs[0]
@@ -140,6 +141,35 @@ const ConversationPage: React.FC = () => {
   const supportFeedbackCheckInId = usePincoStore((state) => state.supportFeedbackCheckInId)
   const submitSupportFeedback = usePincoStore((state) => state.submitSupportFeedback)
   const scrollRef = useRef<any>(null)
+
+  const startConversationalJobSearch = (query = '') => {
+    const prompt = buildJobSearchPrompt(query)
+    openConversation('general', '先对齐目标，再实时找带来源的岗位')
+    void seedConversation('general', prompt, '先对齐目标，再实时找带来源的岗位')
+  }
+
+  const saveSearchedJob = async (job: JobSearchResult) => {
+    const userId = userProfile?.user_id
+    if (!userId || !job.url) {
+      Taro.showToast({ title: '岗位来源暂不可保存，请稍后重试', icon: 'none' })
+      return
+    }
+    try {
+      const result = await apiRequest<{ created?: boolean }>('/api/v1/workspace/jobs', 'POST', {
+        user_id: userId,
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        source: job.source || job.platform || '网络',
+        source_url: job.url,
+        jd_text: job.summary,
+        status: 'saved',
+      })
+      Taro.showToast({ title: result.created ? '已收藏到求职进度' : '这个岗位已收藏', icon: 'none' })
+    } catch (error: any) {
+      Taro.showToast({ title: error?.message || '保存失败，请重试', icon: 'none' })
+    }
+  }
 
   const [showHistory, setShowHistory] = useState(false)
   const [privacyPromptVisible, setPrivacyPromptVisible] = useState(false)
@@ -392,8 +422,10 @@ const ConversationPage: React.FC = () => {
           `${i + 1}. 【${j.source || j.platform || '网络'}】${j.title} - ${j.company} · ${j.location}${j.salary ? ' · ' + j.salary : ''}\n   ${j.summary}\n   来源链接：${j.url}`
         ).join('\n')
         searchContext = `\n\n[系统提示：以下是检索接口刚返回的 ${results.length} 条带可打开来源链接的岗位结果。只能依据链接和摘要推荐，不要扩写公司、薪资或招聘状态：]\n${jobLines}`
+      } else if (searchStatus.ok) {
+        searchContext = '\n\n[系统提示：本次实时检索没有返回可核验的职位候选。请明确告知用户暂时没有找到，不得编造职位、公司、薪资或招聘状态；可以建议调整岗位关键词、城市或经验范围后重试。]'
       } else if (!searchStatus.ok) {
-        searchContext = `\n\n[系统提示：本次岗位搜索接口不可用，错误摘要：${searchStatus.errorMessage || '未知错误'}。请不要编造具体岗位、公司、薪资或招聘状态；先基于用户目标给出可执行的搜索关键词、筛选标准和下一步操作，并提醒用户稍后可从“搜岗位”重新检索。]`
+        searchContext = `\n\n[系统提示：本次岗位搜索接口不可用，错误摘要：${searchStatus.errorMessage || '未知错误'}。请不要编造具体岗位、公司、薪资或招聘状态；说明搜索暂不可用，用户可以在本轮对话调整条件重试，也可以使用“独立筛选”。]`
       }
     }
 
@@ -482,8 +514,7 @@ const ConversationPage: React.FC = () => {
       role: direction.role,
       fit: direction.fit,
     })
-    const query = encodeURIComponent(direction.search_query || direction.role)
-    Taro.navigateTo({ url: `/pages/job-search/index?q=${query}` })
+    startConversationalJobSearch(direction.search_query || direction.role)
   }
 
   const handleChatAction = async (item: { label?: string; prompt?: string; kind?: ChatAction['kind'] }) => {
@@ -502,14 +533,14 @@ const ConversationPage: React.FC = () => {
           source: result.tapIndex === 0 ? 'target_job_paste_jd' : 'target_job_search',
         })
         if (result.tapIndex === 0) setShowJDInput(true)
-        if (result.tapIndex === 1) Taro.navigateTo({ url: '/pages/job-search/index' })
+        if (result.tapIndex === 1) startConversationalJobSearch()
       } catch (error: any) {
         if (!String(error?.errMsg || '').includes('cancel')) console.warn('[GoldenPath] target job choice failed', error)
       }
       return
     }
     if (item.kind === 'search') {
-      Taro.navigateTo({ url: '/pages/job-search/index' })
+      startConversationalJobSearch()
       return
     }
     if (item.kind === 'resume') {
@@ -1165,9 +1196,9 @@ const ConversationPage: React.FC = () => {
     if (scenario === 'general') {
       recs.push({
         icon: '🔍',
-        title: '搜岗位',
-        subtitle: '发现匹配你的真实职位',
-        action: () => Taro.navigateTo({ url: '/pages/job-search/index' }),
+        title: '和学姐一起找岗位',
+        subtitle: '先对齐目标，再实时查带来源的候选',
+        action: () => startConversationalJobSearch(),
       })
     }
 
@@ -1204,7 +1235,7 @@ const ConversationPage: React.FC = () => {
               className={classnames(styles.scenarioTab, !tab.isSearch && conversationMeta.scenario === tab.scenario && styles.scenarioTabActive)}
               onClick={() => {
                 if (tab.isSearch) {
-                  Taro.navigateTo({ url: '/pages/job-search/index' })
+                  startConversationalJobSearch()
                   return
                 }
                 openConversation(tab.scenario, tab.label)
@@ -1516,6 +1547,15 @@ const ConversationPage: React.FC = () => {
                   <Text className={styles.jobSummary}>{job.summary}</Text>
                   <View className={styles.jobCardFooter}>
                     <Text className={styles.jobSource}>来源: {job.source}</Text>
+                    <View
+                      className={styles.jobActionButton}
+                      onClick={() => Taro.navigateTo({ url: `/pages/webview/index?url=${encodeURIComponent(job.url)}` })}
+                    >
+                      <Text className={styles.jobActionText}>打开来源</Text>
+                    </View>
+                    <View className={styles.jobActionButton} onClick={() => saveSearchedJob(job)}>
+                      <Text className={styles.jobActionText}>收藏</Text>
+                    </View>
                     <View
                       className={styles.jobActionButton}
                       onClick={() => {

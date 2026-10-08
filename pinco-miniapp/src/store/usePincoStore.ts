@@ -1392,7 +1392,8 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     try {
       Taro.showLoading({ title: '正在搜索...' })
       const result = await apiSearchJobs({ query, city, limit: 8 })
-      set({ jobSearchResults: result.jobs })
+      const verifiedJobs = result.jobs.filter((job) => job.verified_source && Boolean(job.url))
+      set({ jobSearchResults: verifiedJobs })
       return { ok: true }
     } catch (error) {
       console.error('[Store] search jobs failed', error)

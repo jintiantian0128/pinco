@@ -1215,11 +1215,13 @@
 .jobCardFooter {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 12rpx;
 }
 
 .jobSource {
+  flex-basis: 100%;
   font-size: 18rpx;
   color: $color-text-tertiary;
 }
