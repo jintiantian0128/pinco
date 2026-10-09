@@ -982,6 +982,59 @@ def detect_search_intent(messages: list) -> Optional[str]:
     ]
     return last_user_msg if any(re.search(pattern, normalized) for pattern in patterns) else None
 
+
+JOB_SEARCH_ROLE_PATTERNS = (
+    ("AI产品经理", ("ai产品经理", "ai 产品经理", "人工智能产品经理", "大模型产品经理", "智能产品经理")),
+    ("AI产品运营", ("ai产品运营", "ai 产品运营", "人工智能产品运营", "大模型产品运营")),
+    ("AI运营", ("ai运营", "ai 运营", "人工智能运营", "大模型运营")),
+    ("产品经理", ("产品经理",)),
+    ("产品运营", ("产品运营",)),
+    ("运营", ("运营",)),
+)
+JOB_SEARCH_CITIES = ("上海", "北京", "深圳", "杭州", "广州", "成都", "南京", "武汉", "苏州", "西安", "重庆", "天津", "厦门", "长沙", "远程", "不限")
+
+
+def resolve_job_search_task(user: Dict[str, Any], latest_text: str, explicit_request: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Continue an explicitly requested job search across clarification turns."""
+    existing = deepcopy(user.get("active_agent_task") or {})
+    if not explicit_request and existing.get("type") != "job_search":
+        return None
+    task = existing if existing.get("type") == "job_search" else {
+        "type": "job_search",
+        "created_at": now_iso(),
+        "role": "",
+        "city": "",
+        "years": "",
+    }
+    text = re.sub(r"\s+", "", latest_text or "").lower()
+    for role, aliases in JOB_SEARCH_ROLE_PATTERNS:
+        if any(alias.replace(" ", "") in text for alias in aliases):
+            task["role"] = role
+            break
+    for city in JOB_SEARCH_CITIES:
+        if city.lower() in text:
+            task["city"] = city
+            break
+    years = re.search(r"(应届|校招|在校生|\d+(?:\.\d+)?\s*(?:年以上|年经验|年))", latest_text or "")
+    if years:
+        task["years"] = years.group(1).replace(" ", "")
+
+    profile = user.get("career_profile") or {}
+    memory = user.get("career_memory") or {}
+    remembered_role = (memory.get("target_role") or {}).get("value") if isinstance(memory.get("target_role"), dict) else None
+    remembered_city = (memory.get("target_city") or {}).get("value") if isinstance(memory.get("target_city"), dict) else None
+    if not task.get("role"):
+        task["role"] = "、".join(profile.get("target_roles") or []) or str(remembered_role or "")
+    if not task.get("city"):
+        task["city"] = "、".join(profile.get("cities") or []) or str(remembered_city or "")
+    if not task.get("years") and profile.get("years_experience"):
+        task["years"] = f"{profile['years_experience']}年经验"
+    if not task.get("years"):
+        remembered_years = (memory.get("years_experience") or {}).get("value") if isinstance(memory.get("years_experience"), dict) else ""
+        task["years"] = str(remembered_years or "")
+    task["missing"] = [key for key, value in (("目标岗位", task.get("role")), ("工作城市或‘不限’", task.get("city"))) if not value]
+    return task
+
 RESUME_ANALYSIS_PROMPT = """你是一位资深 HR 和简历优化专家。请分析以下简历文本。
 
 【极其重要】你必须直接输出一个合法的 JSON 对象，不要包含 markdown 代码块标记（如 ```json），不要添加任何解释性文字。
@@ -2242,6 +2295,7 @@ def build_agent_memory_context(user: Dict[str, Any]) -> str:
         "confirmed_evidence": confirmed_evidence,
         "job_progress": jobs,
         "recent_completed_practice": completed_interviews,
+        "active_agent_task": user.get("active_agent_task"),
         "already_prompted_milestones": list((user.get("agent_prompt_history") or {}).keys())[-20:],
     }
     return json.dumps(context, ensure_ascii=False, separators=(",", ":"))
@@ -2355,6 +2409,8 @@ def persist_chat_turn(
     assistant_text: str,
     memory_updates: Optional[List[Dict[str, Any]]] = None,
     progress_suggestion: Optional[Dict[str, Any]] = None,
+    active_agent_task: Optional[Dict[str, Any]] = None,
+    clear_active_agent_task: bool = False,
 ) -> Optional[Dict[str, Any]]:
     if not user_id:
         return progress_suggestion
@@ -2387,6 +2443,10 @@ def persist_chat_turn(
                 "source": "conversation",
                 "updated_at": now_iso(),
             }
+        if clear_active_agent_task:
+            user.pop("active_agent_task", None)
+        elif active_agent_task:
+            user["active_agent_task"] = deepcopy(active_agent_task)
         accepted_progress = progress_suggestion
         if progress_suggestion:
             signature_source = "|".join([
@@ -4852,15 +4912,24 @@ async def chat(request: ChatRequest):
                 for msg in request.messages[-16:]
             ]
 
-        search_query = detect_search_intent(conversation)
+        explicit_search_query = detect_search_intent(conversation)
+        search_task = resolve_job_search_task(user_snapshot, latest_user_text, explicit_search_query)
         search_results = None
         query_analysis = None
+        search_attempted = False
+        search_succeeded = False
 
-        if search_query:
+        if search_task and not search_task.get("missing"):
+            search_query = str(search_task.get("role", ""))
+            if search_task.get("city") == "远程":
+                search_query = f"{search_query} 远程"
+            search_city = search_task.get("city") if search_task.get("city") not in {"不限", "远程"} else None
             try:
-                result = await search_jobs(JobSearchRequest(query=search_query, limit=8, user_id=request.user_id))
-                search_results = [job.model_dump() for job in result.jobs]
+                search_attempted = True
+                result = await search_jobs(JobSearchRequest(query=search_query, city=search_city, limit=8, user_id=request.user_id))
+                search_results = [job.model_dump() for job in result.jobs if job.verified_source and job.url]
                 query_analysis = result.query_analysis
+                search_succeeded = True
             except Exception as e:
                 print(f"[Chat] Auto search failed: {e}")
 
@@ -4904,6 +4973,11 @@ used_memory_keys 用于披露本次实际使用了哪类已持久化上下文，
 
 【已持久化的用户上下文】
 {memory_context}
+
+【当前任务状态】
+{json.dumps(search_task, ensure_ascii=False) if search_task else "无进行中的实时岗位搜索任务。"}
+
+若当前任务是 job_search 且 missing 非空：不要调用/声称已调用搜索，不要猜岗位；只向用户询问缺失字段，并明确允许回答“城市不限”。若岗位和城市已齐，后端会在本轮尝试实时搜索：只依据系统返回的来源候选，不可编造；没有候选就坦诚说明，搜索服务异常则明确说本次未能取回结果，并给出重试或调整关键词/城市的下一步。下一步要可执行、具体。
 
 {expert_context}
 
@@ -4950,12 +5024,25 @@ used_memory_keys 用于披露本次实际使用了哪类已持久化上下文，
                     for i, job in enumerate(search_results[:5])
                 ])
                 response_text = f"我检索到了以下带来源岗位候选，请先打开原页面确认仍在招聘：\n\n{jobs_text}\n\n下面再按现有信息分析匹配度；来源中没有的条件我不会补写。\n\n{response_text}"
+        if search_task and search_task.get("missing"):
+            response_text = agent_result["response"]
+            missing_label = "、".join(search_task["missing"])
+            if not any(label in response_text for label in search_task["missing"]):
+                response_text = f"我先不乱搜，避免给你一堆不匹配的岗位。还需要补充：{missing_label}。你可以直接回复岗位和城市；城市也可以说‘不限’。\n\n{response_text}"
+        elif search_attempted and not search_results:
+            if search_succeeded:
+                response_text = f"我按「{search_task.get('role')} · {search_task.get('city')}」查了实时来源，但这次没有找到符合来源校验条件的岗位卡片。我不会编造职位。可以换一个城市、岗位关键词，或把城市改成‘不限’再试。\n\n{agent_result['response']}"
+            else:
+                response_text = f"我这次尝试检索「{search_task.get('role')} · {search_task.get('city')}」时，岗位来源服务暂时没有返回结果，所以不能确认查到了什么。我会保留这次搜索条件；你可以回复‘重试搜索’，也可以调整岗位或城市。\n\n{agent_result['response']}"
+
         accepted_progress = persist_chat_turn(
             request.user_id,
             latest_user_text,
             response_text,
             memory_updates=agent_result["memory_updates"],
             progress_suggestion=agent_result["progress_suggestion"],
+            active_agent_task=search_task if search_task and not search_succeeded else None,
+            clear_active_agent_task=bool(search_task and search_succeeded),
         )
         return ChatResponse(
             response=response_text,
@@ -4979,57 +5066,24 @@ used_memory_keys 用于披露本次实际使用了哪类已持久化上下文，
 
 @app.post("/api/v1/chat/stream")
 async def chat_stream(request: ChatRequest):
-    """Stream chat response via SSE."""
+    """SSE transport for the same persisted, tool-using agent used by /chat."""
     async def event_generator():
-        conversation = []
-        for msg in request.messages:
-            prefix = "user" if msg.role == "user" else "assistant"
-            conversation.append({"role": prefix, "content": msg.content})
-
-        # Detect search intent and execute search before streaming
-        search_query = detect_search_intent(conversation)
-        search_results = None
-        if search_query:
-            try:
-                result = await search_jobs(JobSearchRequest(query=search_query, limit=8, user_id=request.user_id))
-                search_results = [job.model_dump() for job in result.jobs]
-            except Exception as e:
-                print(f"[Chat Stream] Auto search failed: {e}")
-
-        # Choose system prompt based on mode and content type
-        content_type = detect_content_type(conversation)
-        if request.interview_mode:
-            system = INTERVIEWER_PERSONA
-            if request.interview_position:
-                system += f"\n\n【目标岗位】{request.interview_position}\n请围绕该岗位设计面试问题。"
-        elif content_type == "resume":
-            system = RESUME_ANALYSIS_PERSONA
-        elif content_type == "jd":
-            system = JD_ANALYSIS_PERSONA
-        else:
-            system = PINCO_PERSONA
-
-        # Inject search results into user message for better LLM awareness
-        if search_results:
-            jobs_text = "\n".join([
-                f"{i+1}. {job.get('title', '未知职位')} @ {job.get('company', '未知公司')} | {job.get('location', '')} | {job.get('salary', job.get('predicted_salary', ''))}\n   链接: {job.get('url', '无')}"
-                for i, job in enumerate(search_results[:5])
-            ])
-            if conversation and conversation[-1]["role"] == "user":
-                original = conversation[-1]["content"]
-                conversation[-1]["content"] = f"【用户请求】{original}\n\n【系统已自动搜索到的真实岗位信息】\n{jobs_text}\n\n请直接基于以上搜索结果回答用户，展示具体岗位名称、公司、薪资和链接，并给出匹配度分析。禁止说\"无法搜索\"或\"没法联网\"。"
-            else:
-                system += f"\n\n【实时搜索结果】用户正在找工作，以下是我刚搜到的真实岗位（来自各大公司官网）：\n{jobs_text}\n\n请在回复中自然引用这些岗位信息，帮用户分析匹配度，并给出投递建议。"
-
         try:
-            async for chunk in llm_chat_stream_with_fallback(conversation, system_prompt=system):
-                # SSE format: data: <json>\n\n
-                yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
-            if search_results:
-                yield f"data: {json.dumps({'search_results': search_results}, ensure_ascii=False)}\n\n"
+            result = await chat(request)
+            # Keep transport progressive while retaining one authoritative agent
+            # implementation for memory, tools, progress, and truthful sourcing.
+            for start in range(0, len(result.response), 72):
+                yield f"data: {json.dumps({'chunk': result.response[start:start + 72]}, ensure_ascii=False)}\n\n"
+            if result.search_results:
+                yield f"data: {json.dumps({'search_results': result.search_results}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'agent': result.agent, 'progress_suggestion': result.progress_suggestion}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
         except Exception as error:
-            if is_rate_limit_error(error):
+            if isinstance(error, HTTPException):
+                status_code = error.status_code
+                message = str(error.detail)
+                error_code = "CHAT_AGENT_ERROR"
+            elif is_rate_limit_error(error):
                 status_code = 429
                 error_code = "LLM_RATE_LIMITED"
                 message = "模型服务额度已用完或被限流，请稍后重试或更换可用 API Key。"

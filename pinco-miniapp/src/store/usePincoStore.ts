@@ -628,6 +628,8 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     let useFallback = false
     let requestErrorText = ''
     let progressSuggestion: any = null
+    let agentNextAction = ''
+    let streamBuffer = ''
 
     try {
       const baseUrl = getApiBaseUrl()
@@ -659,7 +661,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           try {
             const chunk = new Uint8Array(res.data)
             const text = new TextDecoder('utf-8').decode(chunk)
-            const lines = text.split('\n')
+            streamBuffer += text
+            const lines = streamBuffer.split('\n')
+            streamBuffer = lines.pop() || ''
             for (const line of lines) {
               if (line.startsWith('data: ')) {
                 try {
@@ -675,6 +679,8 @@ export const usePincoStore = create<PincoState>((set, get) => ({
                     set({ jobSearchResults: data.search_results })
                     console.info('[Chat] stream search results received:', data.search_results.length)
                   }
+                  if (data.agent?.next_action) agentNextAction = String(data.agent.next_action)
+                  if (data.progress_suggestion) progressSuggestion = data.progress_suggestion
                 } catch {}
               }
             }
@@ -709,6 +715,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         content: fullContent,
         type: type === 'interview' ? 'interview' : 'text',
         createdAt: Date.now(),
+        agentNextAction,
       }
 
       set({
@@ -722,6 +729,26 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         isStreaming: false,
         streamingContent: '',
       })
+
+      if (
+        progressSuggestion?.company
+        && progressSuggestion?.position
+        && progressSuggestion?.status in statusLabels
+      ) {
+        const status = progressSuggestion.status as JobStatus
+        set({
+          pendingJobEvent: {
+            id: `agent-progress-${Date.now()}`,
+            company: progressSuggestion.company,
+            position: progressSuggestion.position,
+            status,
+            statusLabel: statusLabels[status],
+            date: new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
+            confidence: 1,
+            rawText: progressSuggestion.prompt || trimmed,
+          },
+        })
+      }
 
       if (interview?.active && interview.round >= 5) {
         set({ interviewState: null })
@@ -756,6 +783,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
             progressSuggestion = fallbackRes.progress_suggestion || null
             console.info('[Chat] fallback success, content length=', fullContent.length)
             const searchResults = fallbackRes?.search_results
+            agentNextAction = String(fallbackRes?.agent?.next_action || '')
             if (searchResults && Array.isArray(searchResults) && searchResults.length > 0) {
               set({ jobSearchResults: searchResults })
               console.info('[Chat] search results received:', searchResults.length)
@@ -778,6 +806,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           content: fullContent,
           type: type === 'interview' ? 'interview' : 'text',
           createdAt: Date.now(),
+          agentNextAction,
         }
         set({
           messages: [...get().messages, assistantMessage],

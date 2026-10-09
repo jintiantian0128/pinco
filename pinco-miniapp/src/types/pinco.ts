@@ -34,6 +34,7 @@ export interface MessageItem {
   createdAt: number
   feedback?: 'like' | 'dislike' | null
   quickActions?: MessageQuickAction[]
+  agentNextAction?: string
 }
 
 export interface InterviewState {

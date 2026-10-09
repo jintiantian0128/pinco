@@ -1050,6 +1050,28 @@
   color: $color-text-secondary;
 }
 
+.agentNextAction {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  margin: 12rpx 4rpx 2rpx;
+  padding: 12rpx 16rpx;
+  border-left: 4rpx solid $color-primary;
+  border-radius: 0 12rpx 12rpx 0;
+  background: rgba(124, 77, 255, 0.06);
+}
+
+.agentNextActionLabel {
+  font-size: 19rpx;
+  color: $color-text-secondary;
+}
+
+.agentNextActionText {
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: $color-text-primary;
+}
+
 .quickActionRow {
   display: flex;
   flex-wrap: wrap;

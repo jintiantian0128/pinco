@@ -1423,9 +1423,15 @@ const ConversationPage: React.FC = () => {
                   ? () => setMessageActionTarget(message)
                   : undefined}
               >
-                <Text className={styles.messageContent} userSelect>
-                  {renderMessageContent(message.content)}
-                </Text>
+              <Text className={styles.messageContent} userSelect>
+                {renderMessageContent(message.content)}
+              </Text>
+              {message.role === 'assistant' && message.agentNextAction && (
+                <View className={styles.agentNextAction}>
+                  <Text className={styles.agentNextActionLabel}>学姐建议的下一步</Text>
+                  <Text className={styles.agentNextActionText}>{message.agentNextAction}</Text>
+                </View>
+              )}
                 {message.type === 'image' && message.mediaUrl && (
                   <Image
                     className={styles.messageImage}
