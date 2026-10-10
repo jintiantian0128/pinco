@@ -541,7 +541,8 @@ class TrustFoundationTests(unittest.TestCase):
                 )
                 self.assertTrue(published["created"])
                 self.assertFalse(repeated["created"])
-                self.assertEqual(published["post"]["author"], "匿名求职者")
+                self.assertRegex(published["post"]["author"], r"^求职者-[A-F0-9]{4}$")
+                self.assertEqual(published["post"]["authorMode"], "anonymous")
                 self.assertIn("原始回答未公开", published["post"]["content"])
                 self.assertNotIn("用户使用率提升了百分之二十", published["post"]["content"])
 

@@ -19,6 +19,7 @@ import { usePincoStore } from '@/store/usePincoStore'
 import { trackProductEvent } from '@/services/analytics'
 
 type FilterTab = 'all' | 'article' | PostType
+const COMMUNITY_FEED_CACHE_KEY = 'pinco_community_feed_v1'
 
 const filterOptions: { key: FilterTab; label: string }[] = [
   { key: 'all', label: '全部' },
@@ -34,6 +35,8 @@ const HubPage: React.FC = () => {
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [showPostModal, setShowPostModal] = useState(false)
   const [newPostType, setNewPostType] = useState<PostType>('treehole')
+  const [authorMode, setAuthorMode] = useState<'anonymous' | 'nickname'>('anonymous')
+  const [displayName, setDisplayName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [commentingPostId, setCommentingPostId] = useState<string | null>(null)
   const [commentText, setCommentText] = useState('')
@@ -73,6 +76,8 @@ const HubPage: React.FC = () => {
     newPostTitleRef.current = ''
     newPostContentRef.current = ''
     setNewPostType('treehole')
+    setAuthorMode('anonymous')
+    setDisplayName('')
     setSelectedJobId('')
     setExperienceRound('')
     setExperienceDate('')
@@ -93,16 +98,25 @@ const HubPage: React.FC = () => {
 
   const loadPosts = async () => {
     try {
+      const cached = Taro.getStorageSync(COMMUNITY_FEED_CACHE_KEY)
+      if (Array.isArray(cached) && cached.length) {
+        setPosts((current) => current.length ? current : cached)
+      }
+    } catch (error) {
+      console.warn('[Hub] cached feed unavailable', error)
+    }
+    try {
       // Official cold-start content is public. Identity is only required when
       // the user publishes or interacts, so bootstrap failures cannot blank
       // the entire community page.
       const result = await fetchCommunityPosts(userProfile?.user_id)
-      setPosts(result.posts || [])
+      const nextPosts = result.posts || []
+      setPosts(nextPosts)
+      if (nextPosts.length) Taro.setStorageSync(COMMUNITY_FEED_CACHE_KEY, nextPosts)
       setLoadError('')
     } catch (error) {
       console.error('[Hub] load posts failed', error)
-      setPosts([])
-      setLoadError('社区内容暂时加载失败，下拉可以重试。')
+      setLoadError('社区内容暂时无法连接，已保留上次加载的内容；下拉可重试。')
     }
   }
 
@@ -131,6 +145,10 @@ const HubPage: React.FC = () => {
       return
     }
     if (isPublishing) return
+    if (authorMode === 'nickname' && displayName.trim().length < 2) {
+      Taro.showToast({ title: '请填写至少 2 个字的公开昵称', icon: 'none' })
+      return
+    }
     const userId = await ensureCommunityUserId()
     if (!userId) return
     setIsPublishing(true)
@@ -140,6 +158,8 @@ const HubPage: React.FC = () => {
         title,
         content,
         post_type: newPostType,
+        author_mode: authorMode,
+        display_name: authorMode === 'nickname' ? displayName.trim() : undefined,
         job_id: selectedJobId || undefined,
         interview_round: experienceRound.trim(),
         experience_date: experienceDate.trim(),
@@ -307,11 +327,10 @@ const HubPage: React.FC = () => {
       <View key={post.id} className={styles.postCard}>
         <View className={styles.postTop}>
           <View className={styles.authorBlock}>
-            <Text className={styles.author}>{isTreehole ? '匿名树洞' : post.author}</Text>
+            <Text className={styles.author}>{post.isExample ? 'Pinco学姐' : post.author}</Text>
             <View style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
               {isTreehole && <Text className={styles.treeholeBadge}>树洞</Text>}
-              {post.isExample && <Text className={styles.exampleBadge}>官方示例</Text>}
-              {post.isFeatured && <Text className={styles.exampleBadge}>人工精选</Text>}
+              {post.authorMode === 'anonymous' && <Text className={styles.treeholeBadge}>匿名</Text>}
               <Text className={styles.meta}>{post.roleTag} · {post.time}</Text>
             </View>
           </View>
@@ -491,6 +510,32 @@ const HubPage: React.FC = () => {
                   </Text>
                 </View>
               ))}
+            </View>
+
+            <View>
+              <Text className={styles.meta}>发布身份（仅影响这条帖子）</Text>
+              <View className={styles.typeSelector}>
+                <View className={classnames(styles.typeChip, authorMode === 'anonymous' && styles.typeChipActive)} onClick={() => setAuthorMode('anonymous')}>
+                  <Text className={styles.typeChipText}>匿名 · 平台虚拟昵称</Text>
+                </View>
+                <View className={classnames(styles.typeChip, authorMode === 'nickname' && styles.typeChipActive)} onClick={() => setAuthorMode('nickname')}>
+                  <Text className={styles.typeChipText}>公开昵称</Text>
+                </View>
+              </View>
+              {authorMode === 'anonymous' ? (
+                <Text className={styles.meta}>将显示为随机“求职者-XXXX”，不会展示微信身份。</Text>
+              ) : (
+                <>
+                  <Input
+                    className={styles.postTitleInput}
+                    value={displayName}
+                    onInput={(event) => setDisplayName(event.detail.value)}
+                    placeholder="手动填写希望公开展示的微信昵称"
+                    maxlength={30}
+                  />
+                  <Text className={styles.meta}>Pinco 不会读取微信昵称；只有你主动填写并发布的昵称会公开显示。</Text>
+                </>
+              )}
             </View>
 
             <Input

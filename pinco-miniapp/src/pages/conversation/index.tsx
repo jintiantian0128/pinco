@@ -99,6 +99,7 @@ function formatTime(ts: number) {
 
 const ConversationPage: React.FC = () => {
   const [draft, setDraft] = useState('')
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [recordHint, setRecordHint] = useState('')
   const [showInterviewInput, setShowInterviewInput] = useState(false)
@@ -126,6 +127,7 @@ const ConversationPage: React.FC = () => {
   const bindLatestMaterialToJob = usePincoStore((state) => state.bindLatestMaterialToJob)
   const openConversation = usePincoStore((state) => state.openConversation)
   const sendMessage = usePincoStore((state) => state.sendMessage)
+  const editAndResendMessage = usePincoStore((state) => state.editAndResendMessage)
   const seedConversation = usePincoStore((state) => state.seedConversation)
   const regenerateMessage = usePincoStore((state) => state.regenerateMessage)
   const startInterview = usePincoStore((state) => state.startInterview)
@@ -374,7 +376,9 @@ const ConversationPage: React.FC = () => {
   const handleMessageQuickAction = async (action: MessageQuickAction) => {
     if (isSending) return
     if (action.kind === 'retry_chat' && action.prompt) {
-      await sendMessage(action.prompt)
+      await sendMessage(action.prompt, 'text', undefined, {
+        replaceFromMessageId: action.replaceFromMessageId,
+      })
       return
     }
     if (action.kind === 'retry_jd' && action.jdText) {
@@ -400,6 +404,16 @@ const ConversationPage: React.FC = () => {
     if (!draft.trim()) return
     const value = draft
     setDraft('')
+    if (editingMessageId) {
+      const targetId = editingMessageId
+      setEditingMessageId(null)
+      try {
+        await editAndResendMessage(targetId, value)
+      } catch (error) {
+        console.error('[Chat] edit and resend failed', error)
+      }
+      return
+    }
 
     const searchTriggers = /找|搜|推荐|有没有|想看|看看|求职|招聘|岗位|职位|工作|机会|实习/
     const jobKeywords = /AI|产品|前端|后端|Java|Python|数据|算法|设计|运营|市场|销售|人力|财务|测试|运维|架构|移动|iOS|Android|Go|C\+\+|全栈|大模型|AIGC|LLM|NLP|CV|推荐|搜索|广告|增长|商业化|出海|电商|社交|内容|社区|SaaS|B端|C端|金融|教育|医疗|游戏/
@@ -1414,12 +1428,12 @@ const ConversationPage: React.FC = () => {
             className={classnames(styles.messageRow, message.role === 'user' && styles.messageRowUser)}
           >
             <View className={classnames(styles.avatar, message.role === 'user' ? styles.avatarUser : styles.avatarAssistant)}>
-              <Text>{message.role === 'user' ? '我' : '姐'}</Text>
+              <Text>{message.role === 'user' ? '我' : 'P'}</Text>
             </View>
             <View className={styles.messageContentWrap}>
               <View
                 className={classnames(styles.messageBubble, message.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant)}
-                onLongPress={message.role === 'assistant' && message.id !== 'welcome'
+                onLongPress={message.role === 'user' || (message.role === 'assistant' && message.id !== 'welcome')
                   ? () => setMessageActionTarget(message)
                   : undefined}
               >
@@ -1539,7 +1553,7 @@ const ConversationPage: React.FC = () => {
         {conversationMeta.scenario !== 'emotion' && jobSearchResults.length > 0 && (
           <View className={styles.messageRow}>
             <View className={classnames(styles.avatar, styles.avatarAssistant)}>
-              <Text>姐</Text>
+              <Text>P</Text>
             </View>
             <View className={styles.recCardWrap}>
               <Text className={styles.recLabel}>🔍 找到 {jobSearchResults.length} 个相关岗位</Text>
@@ -1582,7 +1596,7 @@ const ConversationPage: React.FC = () => {
         {!isStreaming && recommendations.length > 0 && messages.length <= 4 && (
           <View className={styles.messageRow}>
             <View className={classnames(styles.avatar, styles.avatarAssistant)}>
-              <Text>姐</Text>
+              <Text>P</Text>
             </View>
             <View className={styles.recCardWrap}>
               <Text className={styles.recLabel}>相关推荐</Text>
@@ -1604,7 +1618,7 @@ const ConversationPage: React.FC = () => {
         {isStreaming && streamingContent && (
           <View className={styles.messageRow}>
             <View className={classnames(styles.avatar, styles.avatarAssistant)}>
-              <Text>姐</Text>
+              <Text>P</Text>
             </View>
             <View className={classnames(styles.messageBubble, styles.bubbleAssistant)}>
               <Text className={styles.messageContent}>{streamingContent}</Text>
@@ -1794,26 +1808,35 @@ const ConversationPage: React.FC = () => {
       {messageActionTarget && (
         <View className={styles.actionMenuOverlay} onClick={() => setMessageActionTarget(null)}>
           <View className={styles.messageActionSheet} onClick={(event) => event.stopPropagation()}>
-            <Text className={styles.messageActionTitle}>回答操作</Text>
+            <Text className={styles.messageActionTitle}>{messageActionTarget.role === 'user' ? '消息操作' : '回答操作'}</Text>
             <View className={styles.messageActionGrid}>
               <View className={styles.messageActionItem} onClick={() => { handleCopyMessage(messageActionTarget.content); setMessageActionTarget(null) }}>
                 <Text className={styles.messageActionIcon}>⧉</Text><Text>复制</Text>
               </View>
-              <View className={styles.messageActionItem} onClick={() => handleOpenTextSelection(messageActionTarget)}>
+              {messageActionTarget.role === 'user' ? (
+                <View className={styles.messageActionItem} onClick={() => {
+                  setDraft(messageActionTarget.content)
+                  setEditingMessageId(messageActionTarget.id)
+                  setMessageActionTarget(null)
+                  setDraftFocused(true)
+                }}>
+                  <Text className={styles.messageActionIcon}>✎</Text><Text>编辑并重发</Text>
+                </View>
+              ) : <View className={styles.messageActionItem} onClick={() => handleOpenTextSelection(messageActionTarget)}>
                 <Text className={styles.messageActionIcon}>T</Text><Text>选择文本</Text>
-              </View>
-              <View className={styles.messageActionItem} onClick={() => handleRegenerate(messageActionTarget)}>
+              </View>}
+              {messageActionTarget.role === 'assistant' && <View className={styles.messageActionItem} onClick={() => handleRegenerate(messageActionTarget)}>
                 <Text className={styles.messageActionIcon}>↻</Text><Text>重新生成</Text>
-              </View>
-              <View className={styles.messageActionItem} onClick={() => { handleFeedback(messageActionTarget.id, 'like'); setMessageActionTarget(null) }}>
+              </View>}
+              {messageActionTarget.role === 'assistant' && <View className={styles.messageActionItem} onClick={() => { handleFeedback(messageActionTarget.id, 'like'); setMessageActionTarget(null) }}>
                 <Text className={styles.messageActionIcon}>♡</Text><Text>有用</Text>
-              </View>
-              <View className={styles.messageActionItem} onClick={() => { handleFeedback(messageActionTarget.id, 'dislike'); setMessageActionTarget(null) }}>
+              </View>}
+              {messageActionTarget.role === 'assistant' && <View className={styles.messageActionItem} onClick={() => { handleFeedback(messageActionTarget.id, 'dislike'); setMessageActionTarget(null) }}>
                 <Text className={styles.messageActionIcon}>△</Text><Text>无用</Text>
-              </View>
-              <View className={styles.messageActionItem} onClick={() => { handleShare(messageActionTarget); setMessageActionTarget(null) }}>
+              </View>}
+              {messageActionTarget.role === 'assistant' && <View className={styles.messageActionItem} onClick={() => { handleShare(messageActionTarget); setMessageActionTarget(null) }}>
                 <Text className={styles.messageActionIcon}>↗</Text><Text>分享</Text>
-              </View>
+              </View>}
             </View>
           </View>
         </View>
@@ -1871,6 +1894,10 @@ const ConversationPage: React.FC = () => {
       <View className={styles.footer}>
         {draft.length > 0 && (
           <View className={styles.draftTools}>
+            {editingMessageId && <>
+              <Text className={styles.draftCount}>正在编辑上一条消息</Text>
+              <View className={styles.selectAllButton} onClick={() => { setEditingMessageId(null); setDraft('') }}><Text>取消编辑</Text></View>
+            </>}
             <View className={styles.selectAllButton} onClick={handleSelectAllDraft}><Text>全选输入内容</Text></View>
             <Text className={styles.draftCount}>{draft.length}/6000</Text>
           </View>

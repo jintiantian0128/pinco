@@ -441,10 +441,13 @@ async def llm_chat_stream_with_fallback(messages: list, temperature: float = 0.7
 class Message(BaseModel):
     role: str
     content: str
+    id: Optional[str] = None
+    transient: bool = False
 
 class ChatRequest(BaseModel):
     messages: List[Message]
     user_id: Optional[str] = None
+    replace_from_message_id: Optional[str] = None
     scenario: str = "general"
     interview_mode: bool = False
     interview_round: int = 0
@@ -632,6 +635,8 @@ class CommunityPostCreateRequest(BaseModel):
     title: str = Field(min_length=2, max_length=100)
     content: str = Field(min_length=2, max_length=1000)
     post_type: str = "treehole"
+    author_mode: str = "anonymous"
+    display_name: str = Field(default="", max_length=30)
     job_id: Optional[str] = None
     interview_round: str = Field(default="", max_length=40)
     experience_date: str = Field(default="", max_length=40)
@@ -1644,9 +1649,17 @@ def serialize_post(post: Dict[str, Any], user_id: Optional[str]) -> Dict[str, An
     hugged_by = post.get("hugged_by", [])
     comments = post.get("comments", [])
     is_treehole = post.get("postType") == "treehole"
+    is_editorial = bool(post.get("is_example"))
+    legacy_anonymous = not post.get("author_mode") and (is_treehole or post.get("author") == "匿名求职者")
+    is_anonymous = not is_editorial and (post.get("author_mode") == "anonymous" or legacy_anonymous)
+    public_author = "Pinco学姐" if is_editorial else post.get("author", "求职同行者")
+    if legacy_anonymous:
+        alias = hashlib.sha256(str(post.get("id", "community-post")).encode("utf-8")).hexdigest()[:4].upper()
+        public_author = f"求职者-{alias}"
     return {
         "id": post["id"],
-        "author": post["author"],
+        "author": public_author,
+        "authorMode": "editorial" if is_editorial else "anonymous" if is_anonymous else "nickname",
         "roleTag": post["roleTag"],
         "time": community_time_label(post.get("created_at"), post.get("time")),
         "title": post["title"],
@@ -2246,6 +2259,98 @@ def get_agent_user_context(user_id: Optional[str]) -> Dict[str, Any]:
         return deepcopy(user) if user else {}
 
 
+def sync_client_chat_history(
+    user_id: Optional[str],
+    client_messages: List[Message],
+    replace_from_message_id: Optional[str] = None,
+) -> List[Dict[str, str]]:
+    """Persist unsynced client turns before inference so a temporary model error
+    cannot make the next turn lose its context. Transient UI error bubbles are
+    deliberately excluded from both durable and model history.
+    """
+    client = [
+        {"id": message.id, "role": message.role, "content": message.content.strip()}
+        for message in client_messages
+        if message.role in {"user", "assistant"}
+        and not message.transient
+        and message.content.strip()
+        and message.id != "welcome"
+    ][-40:]
+    if not user_id:
+        return [{"role": item["role"], "content": item["content"]} for item in client[-16:]]
+
+    with _state_lock:
+        state = load_beta_state()
+        user = state.get("users", {}).get(user_id)
+        if not user:
+            return [{"role": item["role"], "content": item["content"]} for item in client[-16:]]
+        history = user.setdefault("messages", [])
+
+        if replace_from_message_id:
+            target_index = next(
+                (index for index, item in enumerate(history) if item.get("id") == replace_from_message_id),
+                None,
+            )
+            if target_index is None:
+                client_target = next((item for item in client if item.get("id") == replace_from_message_id), None)
+                if client_target:
+                    target_index = next(
+                        (index for index in range(len(history) - 1, -1, -1)
+                         if history[index].get("role") == "user"
+                         and history[index].get("content") == client_target["content"]),
+                        None,
+                    )
+            if target_index is not None:
+                user["messages"] = history[:target_index]
+                history = user["messages"]
+
+        server_pairs = [
+            (item.get("role"), item.get("content", ""))
+            for item in history
+            if item.get("role") in {"user", "assistant"} and item.get("content")
+        ]
+        client_pairs = [(item["role"], item["content"]) for item in client]
+        overlap = 0
+        overlap_client_end = 0
+        max_overlap = min(len(server_pairs), len(client_pairs))
+        for size in range(1, max_overlap + 1):
+            server_suffix = server_pairs[-size:]
+            for start in range(0, len(client_pairs) - size + 1):
+                if client_pairs[start:start + size] == server_suffix and start + size >= overlap_client_end:
+                    if size > overlap or (size == overlap and start + size > overlap_client_end):
+                        overlap = size
+                        overlap_client_end = start + size
+
+        if not server_pairs:
+            pending = client
+        elif overlap:
+            pending = client[overlap_client_end:]
+        else:
+            # If histories cannot be aligned, only carry the latest user turn;
+            # never duplicate an entire unrelated local transcript on the server.
+            latest_user = next((item for item in reversed(client) if item["role"] == "user"), None)
+            pending = [latest_user] if latest_user and (
+                not history or history[-1].get("role") != "user" or history[-1].get("content") != latest_user["content"]
+            ) else []
+
+        for item in pending:
+            if history and history[-1].get("role") == item["role"] and history[-1].get("content") == item["content"]:
+                continue
+            history.append({
+                "id": item.get("id") or f"{item['role']}-{uuid.uuid4().hex[:10]}",
+                "role": item["role"],
+                "content": item["content"],
+                "createdAt": now_time_label(),
+            })
+        user["messages"] = history[-200:]
+        save_beta_state(state)
+        return [
+            {"role": item.get("role"), "content": item.get("content", "")}
+            for item in user["messages"][-16:]
+            if item.get("role") in {"user", "assistant"} and item.get("content")
+        ]
+
+
 def build_agent_memory_context(user: Dict[str, Any]) -> str:
     if not user:
         return "当前没有已绑定的用户记忆。只使用本轮明确提供的信息，不要假装记得。"
@@ -2411,6 +2516,7 @@ def persist_chat_turn(
     progress_suggestion: Optional[Dict[str, Any]] = None,
     active_agent_task: Optional[Dict[str, Any]] = None,
     clear_active_agent_task: bool = False,
+    user_message_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     if not user_id:
         return progress_suggestion
@@ -2423,7 +2529,7 @@ def persist_chat_turn(
         latest = messages[-1] if messages else None
         if not latest or latest.get("role") != "user" or latest.get("content") != user_text:
             messages.append({
-                "id": f"user-{uuid.uuid4().hex[:10]}",
+                "id": user_message_id or f"user-{uuid.uuid4().hex[:10]}",
                 "role": "user",
                 "content": user_text,
                 "createdAt": now_time_label(),
@@ -3976,6 +4082,17 @@ def list_expert_applications(x_pinco_admin_token: Optional[str] = Header(default
     state = load_beta_state()
     return {"applications": state.get("expert_applications", [])}
 
+@app.get("/api/v1/admin/expert-bookings")
+def list_admin_expert_bookings(x_pinco_admin_token: Optional[str] = Header(default=None)):
+    require_admin_token(x_pinco_admin_token)
+    state = load_beta_state()
+    bookings = sorted(
+        state.get("expert_bookings", []),
+        key=lambda item: str(item.get("created_at", "")),
+        reverse=True,
+    )
+    return {"bookings": [serialize_booking_for_expert(item) for item in bookings]}
+
 @app.post("/api/v1/admin/expert-applications/{application_id}/review")
 def review_expert_application(
     application_id: str,
@@ -4628,6 +4745,12 @@ def create_community_post(request: CommunityPostCreateRequest):
     post_type = request.post_type.strip().lower()
     if post_type not in {"treehole", "help", "share", "success"}:
         raise HTTPException(status_code=422, detail="不支持的帖子类型")
+    author_mode = request.author_mode.strip().lower()
+    if author_mode not in {"anonymous", "nickname"}:
+        raise HTTPException(status_code=422, detail="请选择匿名发布或昵称发布")
+    display_name = request.display_name.strip()
+    if author_mode == "nickname" and len(display_name) < 2:
+        raise HTTPException(status_code=422, detail="公开昵称至少填写 2 个字")
     with _state_lock:
         state = load_beta_state()
         user = community_user(state, request.user_id)
@@ -4636,12 +4759,15 @@ def create_community_post(request: CommunityPostCreateRequest):
             bound_job = next((item for item in user.get("jobs", []) if item.get("id") == request.job_id), None)
             if not bound_job:
                 raise HTTPException(status_code=404, detail="要关联的岗位不存在")
-        nickname = user.get("profile", {}).get("nickname") or "Pinco 用户"
-        is_treehole = post_type == "treehole"
+        # Anonymous author aliases are generated per post and never derived from
+        # the user's WeChat identity. Public display names are explicitly chosen
+        # and supplied by the user for this post only.
+        author = f"求职者-{uuid.uuid4().hex[:4].upper()}" if author_mode == "anonymous" else display_name
         post = {
             "id": f"post-{uuid.uuid4().hex[:12]}",
-            "author": "匿名求职者" if is_treehole else nickname,
-            "roleTag": "树洞" if is_treehole else "求职同行者",
+            "author": author,
+            "author_mode": author_mode,
+            "roleTag": "求职同行者",
             "created_at": now_iso(),
             "title": request.title.strip(),
             "content": request.content.strip(),
@@ -4892,20 +5018,13 @@ def summon_community_reply(post_id: str, request: CommunityActionRequest):
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
+        conversation = sync_client_chat_history(
+            request.user_id,
+            request.messages,
+            request.replace_from_message_id,
+        )
         user_snapshot = get_agent_user_context(request.user_id)
-        latest_user_text = next((msg.content for msg in reversed(request.messages) if msg.role == "user"), "")
-        # 以服务端持久化历史为主，不依赖当前页面是否还留着旧消息。
-        conversation = [
-            {"role": item.get("role"), "content": item.get("content", "")}
-            for item in (user_snapshot.get("messages") or [])[-16:]
-            if item.get("role") in {"user", "assistant"} and item.get("content")
-        ]
-        if latest_user_text and (
-            not conversation
-            or conversation[-1].get("role") != "user"
-            or conversation[-1].get("content") != latest_user_text
-        ):
-            conversation.append({"role": "user", "content": latest_user_text})
+        latest_user_text = next((msg["content"] for msg in reversed(conversation) if msg["role"] == "user"), "")
         if not conversation:
             conversation = [
                 {"role": "user" if msg.role == "user" else "assistant", "content": msg.content}
@@ -5043,6 +5162,7 @@ used_memory_keys 用于披露本次实际使用了哪类已持久化上下文，
             progress_suggestion=agent_result["progress_suggestion"],
             active_agent_task=search_task if search_task and not search_succeeded else None,
             clear_active_agent_task=bool(search_task and search_succeeded),
+            user_message_id=next((msg.id for msg in reversed(request.messages) if msg.role == "user" and not msg.transient), None),
         )
         return ChatResponse(
             response=response_text,

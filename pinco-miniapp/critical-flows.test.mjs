@@ -44,8 +44,18 @@ for (const action of ['publishPost', 'handleLike', 'submitComment', 'handleHug',
 }
 assert.match(hub, /activeFilter === 'all'[\s\S]{0,100}articles: \[\]/, 'All must be a community feed instead of duplicating the editorial tab')
 assert.match(hub, /activeFilter === 'article'[\s\S]{0,160}isFeatured/, 'Featured must combine editorial knowledge with explicitly featured discussions')
+assert.match(hub, /post\.isExample \? 'Pinco学姐'/, 'Editorial posts must use the Pinco mentor identity')
+assert.match(hub, /pinco_community_feed_v1[\s\S]*Taro\.getStorageSync[\s\S]*Taro\.setStorageSync/, 'Community feed must retain a local cache across transient API failures')
+assert.match(hub, /匿名 · 平台虚拟昵称[\s\S]*公开昵称/, 'Community publishing must let users choose anonymous or public identity')
+assert.match(hub, /不会读取微信昵称/, 'Public nickname must be explicitly user supplied')
+assert.doesNotMatch(hub, /官方示例|人工精选/, 'Community must not expose internal curation labels')
 
 assert.match(api, /wx\.cloud\.callContainer/, 'WeChat runtime must use wx.cloud.callContainer')
+assert.match(conversation, /message\.role === 'user' \|\| \(message\.role === 'assistant'/, 'Users must be able to open actions on their own messages')
+assert.match(conversation, /编辑并重发/, 'User message actions must support edit and resend')
+assert.match(conversation, /message\.role === 'user' \? '我' : 'P'/, 'Assistant conversation avatar must use P')
+assert.match(store, /transient: true/, 'Technical error bubbles must be excluded from persisted model context')
+assert.match(store, /replace_from_message_id/, 'Edited turns must replace the old server-side context')
 assert.doesNotMatch(api, /process\.env\.NODE_ENV === 'development'[\s\S]{0,120}127\.0\.0\.1:8090/, 'WeChat development builds must not point real devices at localhost')
 assert.doesNotMatch(
   api,

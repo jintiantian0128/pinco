@@ -76,7 +76,8 @@ interface PincoState {
   refreshServiceHealth: () => Promise<void>
   setLaunchScene: (scene: string) => void
   openConversation: (scenario?: ConversationScenario, subtitle?: string) => void
-  sendMessage: (content: string, type?: MessageItem['type'], media?: Pick<MessageItem, 'mediaUrl' | 'fileName' | 'duration'>) => Promise<void>
+  sendMessage: (content: string, type?: MessageItem['type'], media?: Pick<MessageItem, 'mediaUrl' | 'fileName' | 'duration'>, options?: { replaceFromMessageId?: string }) => Promise<void>
+  editAndResendMessage: (messageId: string, content: string) => Promise<void>
   regenerateMessage: (messageId: string) => Promise<void>
   seedConversation: (scenario: ConversationScenario, prompt: string, subtitle?: string) => Promise<void>
   startInterview: (
@@ -518,7 +519,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     })
   },
 
-  sendMessage: async (content, type = 'text', media) => {
+  sendMessage: async (content, type = 'text', media, options) => {
     const trimmed = content.trim()
     if (!trimmed || get().isSending) return
 
@@ -613,7 +614,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     const payload: any = {
       user_id: get().userProfile?.user_id,
       scenario: get().conversationMeta.scenario,
-      messages: get().messages.filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({
+      replace_from_message_id: options?.replaceFromMessageId,
+      messages: get().messages.filter((m) => (m.role === 'user' || m.role === 'assistant') && !m.transient).map((m) => ({
+        id: m.id,
         role: m.role,
         content: m.content,
       })),
@@ -849,9 +852,16 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       } else {
         // Both failed
         const isRateLimited = /429|Too Many Requests|rate limit|usage limit|quota|额度|限流|exceeded retry/i.test(requestErrorText)
-        const assistantContent = isRateLimited
-          ? `模型服务额度已用完或被限流了，这不是你的输入问题，也不是 WebSocket 问题。\n\n我已经把你刚才的问题保留下来了。等额度恢复或更换可用 API Key 后，直接发「继续回答刚才的问题」，Pinco 会重新用真实模型回答。`
-          : `我现在没有连上真实模型服务，所以不会再用固定模板假装回答你。\n\n请先检查：\n1. 后端是否已启动：${getApiBaseUrl()}/health\n2. 小程序开发工具是否开启「不校验合法域名」或已配置合法 request 域名\n3. 后端 .env 里的 LLM_PROVIDER / API Key / DEFAULT_MODEL 是否可用\n\n你刚才的问题已经保留在会话里。服务恢复后，直接再发一句「继续回答刚才的问题」就能接着聊。`
+        const isAuthFailure = /401|403|unauthorized|invalid api.?key|authentication|鉴权|认证|api.?key/i.test(requestErrorText)
+        const isServiceFailure = /5\d\d|timeout|timed out|network|fail url|连接|服务不可用/i.test(requestErrorText)
+        const reason = isRateLimited
+          ? '模型供应商返回了额度不足或请求限流。'
+          : isAuthFailure
+            ? '模型供应商拒绝了请求，通常与 API Key、权限或模型配置有关。'
+            : isServiceFailure
+              ? '这次请求遇到网络超时或服务暂时不可用。'
+              : '这次请求没有成功，可能是网络、后端或模型供应商的单次故障。'
+        const assistantContent = `${reason}\n\n我把刚才的问题保留在本机对话中。服务恢复后，点“重试上一问”即可；重试成功时，未发送成功的问题会补回对话上下文。此前已成功的对话和简历记忆不会因这次故障清空。${isServiceFailure || !isRateLimited && !isAuthFailure ? `\n\n可先检查后端健康页：${getApiBaseUrl()}/health` : ''}`
 
         set({
           messages: [
@@ -862,17 +872,23 @@ export const usePincoStore = create<PincoState>((set, get) => ({
               content: assistantContent,
               type: type === 'interview' ? 'interview' : 'text',
               createdAt: Date.now(),
+              transient: true,
               quickActions: [
-                { label: isRateLimited ? '稍后重试上一问' : '重试上一问', kind: 'retry_chat', prompt: trimmed },
+                {
+                  label: isRateLimited ? '稍后重试上一问' : '重试上一问',
+                  kind: 'retry_chat',
+                  prompt: trimmed,
+                  replaceFromMessageId: options?.replaceFromMessageId,
+                },
               ],
             }
           ],
           serviceHealth: {
-            online: false,
+          online: !isRateLimited && !isAuthFailure && !isServiceFailure,
             model: get().serviceHealth.model,
             provider: get().serviceHealth.provider,
             mockMode: false,
-            summary: isRateLimited ? '模型服务限流：请稍后重试' : '模型服务未连接：已停止本地模板兜底'
+            summary: isRateLimited ? '模型请求被限流：稍后可重试' : isAuthFailure ? '模型鉴权或配置异常' : isServiceFailure ? '本次请求网络或服务异常' : '本次模型请求失败'
           },
           isStreaming: false,
           streamingContent: '',
@@ -886,6 +902,17 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     } finally {
       set({ isSending: false, isStreaming: false })
     }
+  },
+
+  editAndResendMessage: async (messageId, content) => {
+    const current = get().messages
+    const targetIndex = current.findIndex((item) => item.id === messageId && item.role === 'user')
+    const value = content.trim()
+    if (targetIndex < 0 || !value || get().isSending) return
+    const prefix = current.slice(0, targetIndex)
+    set({ messages: prefix })
+    get().saveMessages()
+    await get().sendMessage(value, 'text', undefined, { replaceFromMessageId: messageId })
   },
 
   regenerateMessage: async (messageId) => {

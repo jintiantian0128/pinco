@@ -21,6 +21,14 @@ const statusText: Record<string, string> = {
   changes_requested: '需要补充资料',
 }
 
+const explainLoadFailure = (error: any) => {
+  if (Number(error?.statusCode)) return `HTTP ${error.statusCode}`
+  const message = String(error?.errMsg || error?.message || '')
+  if (/timeout|timed out/i.test(message)) return '请求超时'
+  if (/request:fail|network|连接|域名/i.test(message)) return '网络或合法域名连接失败'
+  return '接口异常，请稍后重试'
+}
+
 const ExpertCenterPage: React.FC = () => {
   const userProfile = usePincoStore((state) => state.userProfile)
   const bootstrap = usePincoStore((state) => state.bootstrap)
@@ -88,7 +96,7 @@ const ExpertCenterPage: React.FC = () => {
       }
     } else {
       console.error('[ExpertCenter] status load failed', statusResult.reason)
-      errors.push('申请状态暂时无法读取')
+      errors.push(`申请状态读取失败（${explainLoadFailure(statusResult.reason)}）`)
     }
     if (workspaceResult.status === 'fulfilled') {
       const workspace = workspaceResult.value
@@ -97,7 +105,7 @@ const ExpertCenterPage: React.FC = () => {
       if (workspace.expert) setSlotText(workspace.expert.slots.join('\n'))
     } else {
       console.error('[ExpertCenter] workspace load failed', workspaceResult.reason)
-      errors.push('预约工作台暂时无法读取')
+      errors.push(`预约工作台读取失败（${explainLoadFailure(workspaceResult.reason)}）`)
     }
     setLoadError(errors.join('；'))
   }

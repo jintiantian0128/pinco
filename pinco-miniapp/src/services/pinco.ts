@@ -117,6 +117,8 @@ export const createCommunityPost = async (payload: {
   title: string
   content: string
   post_type: CommunityPost['postType']
+  author_mode: 'anonymous' | 'nickname'
+  display_name?: string
   job_id?: string
   interview_round?: string
   experience_date?: string

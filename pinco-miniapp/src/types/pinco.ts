@@ -21,6 +21,7 @@ export interface MessageQuickAction {
     sourcePostId?: string
     jdText?: string
   }
+  replaceFromMessageId?: string
 }
 
 export interface MessageItem {
@@ -35,6 +36,8 @@ export interface MessageItem {
   feedback?: 'like' | 'dislike' | null
   quickActions?: MessageQuickAction[]
   agentNextAction?: string
+  /** Client-only status bubble; never include it in model or server history. */
+  transient?: boolean
 }
 
 export interface InterviewState {
@@ -142,6 +145,7 @@ export type PostType = 'treehole' | 'help' | 'share' | 'success'
 export interface CommunityPost {
   id: string
   author: string
+  authorMode?: 'anonymous' | 'nickname' | 'editorial'
   roleTag: string
   time: string
   title: string

@@ -15,6 +15,89 @@ async def collect_sse(response):
 
 
 class ConversationAgentTests(unittest.TestCase):
+    def test_community_author_choice_uses_generated_alias_or_user_supplied_nickname(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "community-author-device", "微信资料昵称", "weapp")
+            user_id = user["profile"]["user_id"]
+            store.save(state)
+            with patch.object(main, "_state_store", store):
+                anonymous = main.create_community_post(main.CommunityPostCreateRequest(
+                    user_id=user_id, title="匿名帖子", content="匿名内容", post_type="help",
+                    author_mode="anonymous",
+                ))["post"]
+                public = main.create_community_post(main.CommunityPostCreateRequest(
+                    user_id=user_id, title="公开帖子", content="公开内容", post_type="share",
+                    author_mode="nickname", display_name="小明同学",
+                ))["post"]
+
+        self.assertRegex(anonymous["author"], r"^求职者-[A-F0-9]{4}$")
+        self.assertEqual(anonymous["authorMode"], "anonymous")
+        self.assertEqual(public["author"], "小明同学")
+        self.assertEqual(public["authorMode"], "nickname")
+
+    def test_admin_booking_list_is_token_protected_and_keeps_contact_consent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            state["expert_bookings"] = [{
+                "id": "booking-new",
+                "created_at": "2026-10-10T10:00:00",
+                "user_id": "private-user-id",
+                "expert_owner_user_id": "private-expert-id",
+                "candidate_alias": "匿名求职者 ABCD",
+                "share_contact_with_expert": False,
+                "contact_wechat": "should-not-leak",
+                "status_code": "intent_submitted",
+            }]
+            store.save(state)
+            with patch.object(main, "_state_store", store), patch.object(main, "PINCO_ADMIN_TOKEN", "admin-test-token"):
+                with self.assertRaises(main.HTTPException) as denied:
+                    main.list_admin_expert_bookings(None)
+                result = main.list_admin_expert_bookings("admin-test-token")
+
+        self.assertEqual(denied.exception.status_code, 403)
+        self.assertEqual(len(result["bookings"]), 1)
+        self.assertNotIn("user_id", result["bookings"][0])
+        self.assertNotIn("contact_wechat", result["bookings"][0])
+
+    def test_failed_client_turn_is_synced_without_transient_error_and_can_be_edited(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "chat-recovery-device", "小程", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["messages"] = [
+                {"id": "u-ok", "role": "user", "content": "我做过AI客服项目", "createdAt": "10:00"},
+                {"id": "a-ok", "role": "assistant", "content": "我们继续拆这个项目。", "createdAt": "10:01"},
+            ]
+            store.save(state)
+            client = [
+                main.Message(id="u-ok", role="user", content="我做过AI客服项目"),
+                main.Message(id="a-ok", role="assistant", content="我们继续拆这个项目。"),
+                main.Message(id="u-failed", role="user", content="负责知识库召回和评估"),
+                main.Message(id="temporary-error", role="assistant", content="模型断开，请稍后", transient=True),
+                main.Message(id="u-continue", role="user", content="继续帮我完善"),
+            ]
+
+            with patch.object(main, "_state_store", store):
+                context = main.sync_client_chat_history(user_id, client)
+                saved = store.load()["users"][user_id]["messages"]
+                self.assertTrue(any(item["id"] == "u-failed" for item in saved))
+                self.assertFalse(any("模型断开" in item.get("content", "") for item in saved))
+                self.assertTrue(any("负责知识库召回" in item["content"] for item in context))
+
+                edited_client = [client[0], client[1], main.Message(
+                    id="u-failed", role="user", content="负责知识库召回，并搭建离线评估集"
+                )]
+                edited_context = main.sync_client_chat_history(user_id, edited_client, "u-failed")
+
+            saved = store.load()["users"][user_id]["messages"]
+            self.assertEqual([item["id"] for item in saved], ["u-ok", "a-ok", "u-failed"])
+            self.assertEqual(saved[-1]["content"], "负责知识库召回，并搭建离线评估集")
+            self.assertIn("搭建离线评估集", edited_context[-1]["content"])
+
     def test_career_profile_is_source_of_truth_and_memory_can_be_forgotten(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
