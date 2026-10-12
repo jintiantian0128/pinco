@@ -3,6 +3,7 @@ import { ScrollView, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import styles from './index.module.scss'
 import { usePincoStore } from '@/store/usePincoStore'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 import {
   fetchMembershipPlans,
   fetchMembershipStatus,
@@ -15,6 +16,7 @@ import {
 import { MembershipPlan, PaymentOrderStatus, UserMembership } from '@/types/pinco'
 
 const MembershipPage: React.FC = () => {
+  usePageAnalytics('membership')
   const userProfile = usePincoStore((s) => s.userProfile)
   const [plans, setPlans] = useState<MembershipPlan[]>([])
   const [membership, setMembership] = useState<UserMembership | null>(null)

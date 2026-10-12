@@ -4,6 +4,7 @@ import Taro, { useDidShow, usePullDownRefresh, useShareAppMessage } from '@taroj
 import classnames from 'classnames'
 import styles from './index.module.scss'
 import { CommunityPost, PostType } from '@/types/pinco'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 import {
   createCommunityComment,
   createCommunityPost,
@@ -38,6 +39,7 @@ const editorialRoleLabels: Record<PostType, string> = {
 }
 
 const HubPage: React.FC = () => {
+  usePageAnalytics('hub')
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all')
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [showPostModal, setShowPostModal] = useState(false)

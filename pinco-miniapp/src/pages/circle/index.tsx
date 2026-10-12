@@ -5,8 +5,10 @@ import styles from './index.module.scss'
 import { CommunityPost } from '@/types/pinco'
 import { fetchCommunityPosts, summonCommunityReply, toggleCommunityLike } from '@/services/pinco'
 import { usePincoStore } from '@/store/usePincoStore'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
 const CirclePage: React.FC = () => {
+  usePageAnalytics('circle')
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const userProfile = usePincoStore((state) => state.userProfile)
 

@@ -5,12 +5,14 @@ import styles from './index.module.scss'
 import { BookingMessage, BookingThreadResponse } from '@/types/pinco'
 import { fetchBookingMessages, sendBookingMessage } from '@/services/pinco'
 import { usePincoStore } from '@/store/usePincoStore'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
 declare const wx: any
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 
 const BookingChatPage: React.FC = () => {
+  usePageAnalytics('booking-chat')
   const router = useRouter()
   const bookingId = String(router.params.booking_id || '')
   const userProfile = usePincoStore((state) => state.userProfile)

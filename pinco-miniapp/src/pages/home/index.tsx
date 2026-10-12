@@ -7,6 +7,7 @@ import { homeActions } from '@/data/home'
 import { usePincoStore } from '@/store/usePincoStore'
 import { BookingItem, ConversationScenario } from '@/types/pinco'
 import { buildJobSearchPrompt } from '@/utils/job-search'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
 const ACTIVE_BOOKING_STATUS: Array<BookingItem['status_code']> = ['intent_submitted', 'confirmed']
 
@@ -15,6 +16,7 @@ const getCurrentBooking = (bookings: BookingItem[]) => {
 }
 
 const HomePage: React.FC = () => {
+  usePageAnalytics('home')
   const serviceTimeline = usePincoStore((state) => state.serviceTimeline)
   const bookings = usePincoStore((state) => state.bookings)
   const messages = usePincoStore((state) => state.messages)

@@ -60,6 +60,9 @@ PINCO_RELEASE_SHA = read_release_sha()
 
 load_dotenv(os.path.join(BACKEND_DIR, ".env"), override=False)
 
+PINCO_ADMIN_USERNAME = os.environ.get("PINCO_ADMIN_USERNAME", "").strip()
+PINCO_ADMIN_PASSWORD = os.environ.get("PINCO_ADMIN_PASSWORD", "")
+
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "anthropic").strip().lower()  # mock | openai | anthropic
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.moonshot.cn/v1").rstrip("/")
@@ -539,6 +542,10 @@ class ConfigUpdateRequest(BaseModel):
     api_key: str
     base_url: Optional[str] = None
     model: Optional[str] = None
+
+class AdminLoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=256)
 
 class MiniappBootstrapRequest(BaseModel):
     device_id: str
@@ -1129,6 +1136,8 @@ WECHAT_APP_ID = os.environ.get("WECHAT_APP_ID")
 WECHAT_APP_SECRET = os.environ.get("WECHAT_APP_SECRET")
 WECHAT_REQUEST_DOMAIN = os.environ.get("WECHAT_REQUEST_DOMAIN")
 _state_lock = Lock()
+_admin_login_lock = Lock()
+_admin_login_failures: Dict[str, List[float]] = {}
 _state_store: Optional[StateStore] = None
 
 # --- Helpers ---
@@ -1965,8 +1974,8 @@ def build_miniapp_readiness() -> Dict[str, Any]:
         {
             "key": "admin_governance",
             "label": "专家与内容审核",
-            "ready": bool(PINCO_ADMIN_TOKEN and len(PINCO_ADMIN_TOKEN) >= 32),
-            "detail": "管理员令牌已配置" if PINCO_ADMIN_TOKEN and len(PINCO_ADMIN_TOKEN) >= 32 else "PINCO_ADMIN_TOKEN 未配置或少于 32 位",
+            "ready": bool(PINCO_ADMIN_TOKEN and len(PINCO_ADMIN_TOKEN) >= 32 and PINCO_ADMIN_USERNAME and len(PINCO_ADMIN_PASSWORD) >= 12),
+            "detail": "管理员账号已配置" if PINCO_ADMIN_TOKEN and len(PINCO_ADMIN_TOKEN) >= 32 and PINCO_ADMIN_USERNAME and len(PINCO_ADMIN_PASSWORD) >= 12 else "请配置 PINCO_ADMIN_TOKEN、PINCO_ADMIN_USERNAME 和至少 12 位 PINCO_ADMIN_PASSWORD",
         },
         {
             "key": "wechat_pay",
@@ -2110,11 +2119,61 @@ def get_config():
         base = OPENAI_BASE_URL
     return ConfigResponse(provider=LLM_PROVIDER, mock_mode=MOCK_MODE, base_url=base, model=DEFAULT_MODEL)
 
+@app.get("/api/v1/admin/config")
+def get_admin_config(x_pinco_admin_token: Optional[str] = Header(default=None)):
+    require_admin_token(x_pinco_admin_token)
+    base = ANTHROPIC_BASE_URL if LLM_PROVIDER == "anthropic" else OPENAI_BASE_URL
+    key_configured = bool(ANTHROPIC_API_KEY if LLM_PROVIDER == "anthropic" else OPENAI_API_KEY)
+    return {
+        "provider": LLM_PROVIDER,
+        "mock_mode": MOCK_MODE,
+        "base_url": base,
+        "model": DEFAULT_MODEL,
+        "api_key_configured": key_configured,
+        "note": "在线修改仅对当前进程生效；容器重启后以云托管环境变量为准。密钥不会回传。",
+    }
+
+@app.post("/api/v1/admin/login")
+def admin_login(request: AdminLoginRequest, http_request: Request):
+    if not PINCO_ADMIN_TOKEN or len(PINCO_ADMIN_TOKEN) < 32:
+        raise HTTPException(status_code=503, detail="后台签名密钥未正确配置")
+    if not PINCO_ADMIN_USERNAME or len(PINCO_ADMIN_PASSWORD) < 12:
+        raise HTTPException(status_code=503, detail="请在云托管配置 PINCO_ADMIN_USERNAME 和至少 12 位 PINCO_ADMIN_PASSWORD")
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    now = time.time()
+    with _admin_login_lock:
+        attempts = [stamp for stamp in _admin_login_failures.get(client_ip, []) if now - stamp < 300]
+        if len(attempts) >= 5:
+            _admin_login_failures[client_ip] = attempts
+            raise HTTPException(status_code=429, detail="登录尝试过多，请 5 分钟后重试")
+    username_ok = secrets_compare(request.username.strip(), PINCO_ADMIN_USERNAME)
+    password_ok = secrets_compare(request.password, PINCO_ADMIN_PASSWORD)
+    if not (username_ok and password_ok):
+        with _admin_login_lock:
+            _admin_login_failures[client_ip] = [*attempts, now]
+        raise HTTPException(status_code=401, detail="账号或密码错误")
+    with _admin_login_lock:
+        _admin_login_failures.pop(client_ip, None)
+    expires_at = int(now + 8 * 60 * 60)
+    payload = base64.urlsafe_b64encode(json.dumps({
+        "sub": PINCO_ADMIN_USERNAME,
+        "exp": expires_at,
+        "nonce": secrets.token_urlsafe(12),
+    }, separators=(",", ":")).encode("utf-8")).decode("ascii").rstrip("=")
+    signing_key = f"{PINCO_ADMIN_TOKEN}:{PINCO_ADMIN_PASSWORD}".encode("utf-8")
+    signature = base64.urlsafe_b64encode(hmac.new(signing_key, payload.encode("ascii"), hashlib.sha256).digest()).decode("ascii").rstrip("=")
+    return {"access_token": f"{payload}.{signature}", "expires_in": 8 * 60 * 60, "token_type": "Bearer"}
+
 @app.post("/api/v1/config")
 def update_config(request: ConfigUpdateRequest, x_pinco_admin_token: Optional[str] = Header(default=None)):
     require_admin_token(x_pinco_admin_token)
+    provider = request.provider.strip().lower()
+    if provider not in {"openai", "anthropic"}:
+        raise HTTPException(status_code=422, detail="provider 仅支持 openai 或 anthropic")
+    if not request.api_key.strip():
+        raise HTTPException(status_code=422, detail="API Key 不能为空")
     global LLM_PROVIDER, OPENAI_API_KEY, OPENAI_BASE_URL, ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, DEFAULT_MODEL, MOCK_MODE, _openai_client, _anthropic_client, _llm_probe_cache
-    LLM_PROVIDER = request.provider.strip().lower()
+    LLM_PROVIDER = provider
     DEFAULT_MODEL = request.model or DEFAULT_MODEL
     if LLM_PROVIDER == "anthropic":
         ANTHROPIC_API_KEY = request.api_key
@@ -2850,6 +2909,38 @@ def get_pmf_metrics(x_pinco_admin_token: Optional[str] = Header(default=None)):
             },
         },
         "note": "这里只报告真实记录数；样本不足时不计算或包装 PMF 成功率。",
+    }
+
+@app.get("/api/v1/admin/events")
+def list_admin_events(
+    limit: int = 200,
+    x_pinco_admin_token: Optional[str] = Header(default=None),
+):
+    """Return behavior-event metadata only; never expose event properties or message contents."""
+    require_admin_token(x_pinco_admin_token)
+    state = load_beta_state()
+    events = state.get("events", [])
+    bounded_limit = max(1, min(int(limit), 500))
+    counts: Dict[str, int] = {}
+    for item in events:
+        name = str(item.get("name") or "unknown")[:64]
+        counts[name] = counts.get(name, 0) + 1
+    recent = []
+    for item in reversed(events[-bounded_limit:]):
+        user_id = str(item.get("user_id") or "")
+        session_id = str(item.get("session_id") or "")
+        recent.append({
+            "id": str(item.get("id") or ""),
+            "name": str(item.get("name") or "unknown")[:64],
+            "created_at": str(item.get("created_at") or ""),
+            "user_ref": hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:10] if user_id else "匿名",
+            "session_ref": hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:8] if session_id else "",
+        })
+    return {
+        "total_events": len(events),
+        "event_counts": dict(sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))),
+        "events": recent,
+        "privacy_note": "仅展示事件名、时间和不可逆匿名标识；不展示聊天、简历、JD、录音等内容或事件属性。",
     }
 
 SUPPORT_MODES = {
@@ -4022,7 +4113,25 @@ def append_developer_notification(state: Dict[str, Any], notification: Dict[str,
 def require_admin_token(token: Optional[str]) -> None:
     if not PINCO_ADMIN_TOKEN:
         raise HTTPException(status_code=503, detail="专家审核后台尚未配置 PINCO_ADMIN_TOKEN")
-    if not token or not secrets_compare(token, PINCO_ADMIN_TOKEN):
+    if token and secrets_compare(token, PINCO_ADMIN_TOKEN):
+        return
+    if token:
+        try:
+            payload, supplied_signature = token.split(".", 1)
+            signing_key = f"{PINCO_ADMIN_TOKEN}:{PINCO_ADMIN_PASSWORD}".encode("utf-8")
+            expected_signature = base64.urlsafe_b64encode(hmac.new(signing_key, payload.encode("ascii"), hashlib.sha256).digest()).decode("ascii").rstrip("=")
+            if not secrets_compare(supplied_signature, expected_signature):
+                raise ValueError("invalid signature")
+            decoded = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
+            claims = json.loads(decoded.decode("utf-8"))
+            if claims.get("sub") != PINCO_ADMIN_USERNAME or int(claims.get("exp", 0)) < int(time.time()):
+                raise ValueError("expired or invalid session")
+            return
+        except (ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError):
+            pass
+    if not token:
+        raise HTTPException(status_code=403, detail="管理员凭证无效")
+    else:
         raise HTTPException(status_code=403, detail="管理员凭证无效")
 
 def secrets_compare(left: str, right: str) -> bool:

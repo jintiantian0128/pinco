@@ -4,8 +4,10 @@ import Taro, { useLoad, useShareAppMessage } from '@tarojs/taro'
 import styles from './index.module.scss'
 import { gardenArticles } from '@/data/articles'
 import { usePincoStore } from '@/store/usePincoStore'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
 const ArticlePage: React.FC = () => {
+  usePageAnalytics('article')
   const [articleId, setArticleId] = React.useState(gardenArticles[0]?.id)
   const seedConversation = usePincoStore((state) => state.seedConversation)
 

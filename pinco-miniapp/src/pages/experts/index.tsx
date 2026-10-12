@@ -5,8 +5,10 @@ import styles from './index.module.scss'
 import { ExpertProfile } from '@/types/pinco'
 import { fetchExperts } from '@/services/pinco'
 import { usePincoStore } from '@/store/usePincoStore'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
 const ExpertsPage: React.FC = () => {
+  usePageAnalytics('experts')
   const [experts, setExperts] = useState<ExpertProfile[]>([])
   const [selectedExpert, setSelectedExpert] = useState<ExpertProfile | null>(null)
   const [showBookingForm, setShowBookingForm] = useState(false)

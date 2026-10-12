@@ -5,6 +5,7 @@ import { apiRequest } from '@/services/api'
 import { usePincoStore } from '@/store/usePincoStore'
 import { CareerWorkspace, WorkspaceJob } from '@/types/pinco'
 import styles from './index.module.scss'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
 const emptyWorkspace: CareerWorkspace = {
   career_profile: { target_roles: [], years_experience: 0, cities: [], strengths: [] },
@@ -34,6 +35,7 @@ const memoryLabels: Record<string, string> = {
 }
 
 const CareerPage: React.FC = () => {
+  usePageAnalytics('career')
   const userId = usePincoStore((state) => state.userProfile?.user_id)
   const bootstrap = usePincoStore((state) => state.bootstrap)
   const openConversation = usePincoStore((state) => state.openConversation)

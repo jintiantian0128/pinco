@@ -41,6 +41,8 @@ MYSQL_DATABASE=pinco
 MYSQL_STATE_TABLE=pinco_state
 
 PINCO_ADMIN_TOKEN=<至少32位随机值>
+PINCO_ADMIN_USERNAME=<管理员账号，例如 admin>
+PINCO_ADMIN_PASSWORD=<至少12位且未在其他网站使用的强密码>
 WECHAT_APP_ID=<小程序 AppID>
 WECHAT_APP_SECRET=<小程序 AppSecret>
 
@@ -136,13 +138,13 @@ readiness 至少应满足：真实模型在线、`durable_state` 为 ready、微
 
 `https://<公网域名>/admin`
 
-输入 `PINCO_ADMIN_TOKEN` 可处理专家申请、学社举报并查看 PMF 指标。令牌仅保存在当前页面内存，刷新或关闭页面即清除；不要把令牌放在 URL、浏览器书签、截图或小程序代码中。
+使用 `PINCO_ADMIN_USERNAME` 和 `PINCO_ADMIN_PASSWORD` 登录，可处理专家申请、学社举报并查看 PMF 指标。`PINCO_ADMIN_TOKEN` 仍作为至少 32 位的会话签名密钥，不能删除。会话有效期 8 小时；前端只在当前页面内存保存会话，刷新或关闭页面即清除。不要把密码、签名密钥放在 URL、浏览器书签、截图或小程序代码中。
 
 如需直接调用 API：
 
 管理员接口必须带请求头：
 
-`X-Pinco-Admin-Token: <PINCO_ADMIN_TOKEN>`
+`X-Pinco-Admin-Token: <登录接口返回的 access_token>`
 
 使用：
 

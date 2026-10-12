@@ -7,6 +7,7 @@ import { usePincoStore } from '@/store/usePincoStore'
 import { ConversationScenario, JobProgressItem, JobSearchResult, MessageItem, MessageQuickAction } from '@/types/pinco'
 import { getApiBaseUrl, apiRequest, apiUploadFile } from '@/services/api'
 import { trackProductEvent } from '@/services/analytics'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 import { buildConversationTitle } from '@/utils/format'
 import { buildJobSearchPrompt } from '@/utils/job-search'
 
@@ -98,6 +99,7 @@ function formatTime(ts: number) {
 }
 
 const ConversationPage: React.FC = () => {
+  usePageAnalytics('conversation')
   const [draft, setDraft] = useState('')
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -288,27 +290,39 @@ const ConversationPage: React.FC = () => {
       Taro.showToast({ title: '内容为空，无法复制', icon: 'none' })
       return
     }
+    trackProductEvent('chat.message.copied', userProfile?.user_id, { characters: text.length })
 
-    // 始终走 Taro 适配层；直接调用全局 wx 在开发者工具/H5 兼容层会出现
-    // “回调成功但剪贴板为空”的情况。
+    // 以系统剪贴板 API 的 success/fail 回调为准；紧接着 getClipboardData
+    // 会与原生剪贴板写入竞争，在部分微信端读到旧值并误报复制失败。
     Taro.setClipboardData({
       data: text,
-      success: async () => {
-        try {
-          const result = await Taro.getClipboardData()
-          if (result.data !== text) throw new Error('clipboard content mismatch')
-          console.info('[Copy] verified, length=', text.length)
-          Taro.showToast({ title: '已复制', icon: 'success' })
-        } catch (error) {
-          console.error('[Copy] verification failed', error)
-          Taro.showToast({ title: '复制未完成，可长按正文复制', icon: 'none', duration: 2500 })
-        }
-      },
+      success: () => Taro.showToast({ title: '已复制', icon: 'success' }),
       fail: (err) => {
         console.error('[Copy] failed', err)
         Taro.showToast({ title: '复制失败，可长按正文复制', icon: 'none', duration: 2500 })
       }
     })
+  }
+
+  const handleEditUserMessage = (message: MessageItem) => {
+    trackProductEvent('chat.message.edit_started', userProfile?.user_id)
+    setDraft(message.content)
+    setEditingMessageId(message.id)
+    setDraftFocused(true)
+    setMessageActionTarget(null)
+    setTimeout(() => setDraftFocused(true), 80)
+  }
+
+  const handleRetryUserMessage = async (message: MessageItem) => {
+    if (isSending || isStreaming) return
+    trackProductEvent('chat.message.retry_started', userProfile?.user_id)
+    setMessageActionTarget(null)
+    try {
+      await editAndResendMessage(message.id, message.content)
+    } catch (error) {
+      console.error('[Chat] retry failed', error)
+      Taro.showToast({ title: '重试失败，请稍后再试', icon: 'none' })
+    }
   }
 
   const handleFeedback = (messageId: string, type: 'like' | 'dislike') => {
@@ -1469,6 +1483,19 @@ const ConversationPage: React.FC = () => {
                 )}
                 <Text className={styles.timeText}>{formatTime(message.createdAt)}</Text>
               </View>
+              {/* 用户消息提供常驻操作入口，不依赖长按手势（部分 iOS/微信版本会优先触发原生文本选择）。 */}
+              {message.role === 'user' && message.content?.trim() && (
+                <View className={styles.messageActions}>
+                  <View className={styles.actionBtn} onClick={() => handleCopyMessage(message.content)}>
+                    <Text className={styles.actionBtnIcon}>⧉</Text>
+                    <Text className={styles.actionBtnText}>复制</Text>
+                  </View>
+                  <View className={styles.actionBtn} onClick={() => handleRetryUserMessage(message)}>
+                    <Text className={styles.actionBtnIcon}>↻</Text>
+                    <Text className={styles.actionBtnText}>重试</Text>
+                  </View>
+                </View>
+              )}
               {/* AI消息操作按钮 */}
               {message.role === 'assistant' && message.id !== 'welcome' && !isStreaming && (
                 <View className={styles.messageActions}>
@@ -1814,12 +1841,7 @@ const ConversationPage: React.FC = () => {
                 <Text className={styles.messageActionIcon}>⧉</Text><Text>复制</Text>
               </View>
               {messageActionTarget.role === 'user' ? (
-                <View className={styles.messageActionItem} onClick={() => {
-                  setDraft(messageActionTarget.content)
-                  setEditingMessageId(messageActionTarget.id)
-                  setMessageActionTarget(null)
-                  setDraftFocused(true)
-                }}>
+                <View className={styles.messageActionItem} onClick={() => handleEditUserMessage(messageActionTarget)}>
                   <Text className={styles.messageActionIcon}>✎</Text><Text>编辑并重发</Text>
                 </View>
               ) : <View className={styles.messageActionItem} onClick={() => handleOpenTextSelection(messageActionTarget)}>

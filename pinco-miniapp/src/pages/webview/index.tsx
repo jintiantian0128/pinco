@@ -1,8 +1,10 @@
 import React from 'react'
 import { WebView } from '@tarojs/components'
 import Taro, { useLoad } from '@tarojs/taro'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
 const WebviewPage: React.FC = () => {
+  usePageAnalytics('webview')
   const [url, setUrl] = React.useState('')
 
   useLoad((options) => {

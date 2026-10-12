@@ -6,6 +6,7 @@ import { searchJobsByPlatform } from '@/services/pinco'
 import { JobSearchResult, JobPlatform } from '@/types/pinco'
 import { usePincoStore } from '@/store/usePincoStore'
 import { apiRequest } from '@/services/api'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
 const PLATFORM_TABS: Array<{ label: string; value: JobPlatform | 'all'; icon: string }> = [
   { label: '全部', value: 'all', icon: '🔍' },
@@ -16,6 +17,7 @@ const PLATFORM_TABS: Array<{ label: string; value: JobPlatform | 'all'; icon: st
 const CITY_OPTIONS = ['不限', '北京', '上海', '杭州', '深圳', '广州', '成都']
 
 const JobSearchPage: React.FC = () => {
+  usePageAnalytics('job-search')
   const [query, setQuery] = useState('')
   const [city, setCity] = useState('不限')
   const [platform, setPlatform] = useState<JobPlatform | 'all'>('all')

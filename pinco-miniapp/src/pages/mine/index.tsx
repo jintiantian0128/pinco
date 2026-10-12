@@ -4,7 +4,7 @@ import Taro, { useDidShow, usePullDownRefresh, useShareAppMessage } from '@taroj
 import classnames from 'classnames'
 import styles from './index.module.scss'
 import { usePincoStore } from '@/store/usePincoStore'
-import { buildWechatSetupChecklist } from '@/utils/wechat'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 import { BookingItem, ContributionStatus, ConversationScenario, TriageStage } from '@/types/pinco'
 import { apiRequest } from '@/services/api'
 import {
@@ -34,15 +34,12 @@ type PilotFeedback = {
 }
 
 const MinePage: React.FC = () => {
-  const serviceHealth = usePincoStore((state) => state.serviceHealth)
+  usePageAnalytics('mine')
   const bookings = usePincoStore((state) => state.bookings)
   const notifications = usePincoStore((state) => state.notifications)
   const refreshServiceHealth = usePincoStore((state) => state.refreshServiceHealth)
   const bootstrap = usePincoStore((state) => state.bootstrap)
   const userProfile = usePincoStore((state) => state.userProfile)
-  const wechatReady = usePincoStore((state) => state.wechatReady)
-  const miniappReadiness = usePincoStore((state) => state.miniappReadiness)
-  const runtimeInfo = usePincoStore((state) => state.runtimeInfo)
   const jobProgress = usePincoStore((state) => state.jobProgress)
   const todayTasks = usePincoStore((state) => state.todayTasks)
   const toggleTodayTask = usePincoStore((state) => state.toggleTodayTask)
@@ -68,7 +65,6 @@ const MinePage: React.FC = () => {
   const [triageTime, setTriageTime] = useState('2小时')
   const [triageMaterials, setTriageMaterials] = useState<string[]>(['简历'])
   const [triageAnxiety, setTriageAnxiety] = useState('简历没回音')
-  const [showDebugInfo, setShowDebugInfo] = useState(false)
   const [supportMode, setSupportMode] = useState('listen_then_action')
   const [supportFollowUp, setSupportFollowUp] = useState(true)
   const [supportMemory, setSupportMemory] = useState(false)
@@ -227,40 +223,12 @@ const MinePage: React.FC = () => {
     }
   }
 
-  const handleCopyChecklist = async () => {
-    try {
-      await Taro.setClipboardData({
-        data: buildWechatSetupChecklist(runtimeInfo, miniappReadiness)
-      })
-      Taro.showToast({ title: '接入清单已复制', icon: 'none' })
-    } catch (error) {
-      console.error('[Mine] copy checklist failed', error)
-      Taro.showToast({ title: '复制失败，请稍后再试', icon: 'none' })
-    }
-  }
-
-  const exportMyData = async () => {
-    const userId = await ensureMineUserId()
-    if (!userId) return
-    try {
-      const data = await apiRequest<any>(`/api/v1/account/export?user_id=${encodeURIComponent(userId)}`)
-      const text = JSON.stringify(data, null, 2)
-      await Taro.setClipboardData({ data: text })
-      const verified = await Taro.getClipboardData()
-      if (verified.data !== text) throw new Error('CLIPBOARD_VERIFY_FAILED')
-      Taro.showToast({ title: '个人数据已复制', icon: 'success' })
-    } catch (error) {
-      console.error('[Mine] export account failed', error)
-      Taro.showToast({ title: '导出失败，请稍后重试', icon: 'none' })
-    }
-  }
-
   const deleteMyAccount = async () => {
     const userId = await ensureMineUserId()
     if (!userId) return
     const confirmed = await Taro.showModal({
       title: '永久删除账号数据',
-      content: '将删除云端会话、岗位、证据、练习、社区内容和服务记录，且无法恢复。建议先导出。确定继续吗？',
+      content: '将删除云端会话、岗位、证据、练习、社区内容和服务记录，且无法恢复。确定继续吗？',
       confirmText: '永久删除',
       confirmColor: '#DC2626',
     })
@@ -745,10 +713,6 @@ const MinePage: React.FC = () => {
               <Text className={styles.settingLabel}>诊断历史</Text>
               <Text className={styles.settingArrow}>›</Text>
             </View>
-            <View className={styles.settingRow} onClick={() => openConversationTab('general', '帮我解释当前模型配置，并告诉我怎样获得更稳定的回复。')}>
-              <Text className={styles.settingLabel}>模型配置</Text>
-              <Text className={styles.settingArrow}>›</Text>
-            </View>
             <View className={styles.settingRow} onClick={() => {
               Taro.showModal({
                 title: '清空对话',
@@ -769,103 +733,12 @@ const MinePage: React.FC = () => {
               <Text className={styles.settingLabel}>清空对话</Text>
               <Text className={styles.settingDanger}>清空</Text>
             </View>
-            <View className={styles.settingRow} onClick={exportMyData}>
-              <Text className={styles.settingLabel}>导出我的数据</Text>
-              <Text className={styles.settingArrow}>›</Text>
-            </View>
             <View className={styles.settingRow} onClick={deleteMyAccount}>
               <Text className={styles.settingLabel}>删除账号与云端数据</Text>
               <Text className={styles.settingDanger}>删除</Text>
             </View>
-            <View className={styles.settingRow}>
-              <Text className={styles.settingLabel}>调试信息</Text>
-              <Switch checked={showDebugInfo} onChange={(e) => setShowDebugInfo(e.detail.value)} color="#EC4899" />
-            </View>
           </View>
         </View>
-
-        {showDebugInfo && (
-          <>
-            <View className={styles.card}>
-              <Text className={styles.cardTitle}>模型服务状态</Text>
-              <Text className={styles.cardDesc}>{serviceHealth.summary}</Text>
-              <View className={styles.statusRow}>
-                <Text className={classnames(styles.statusBadge, serviceHealth.online ? styles.online : styles.offline)}>
-                  {serviceHealth.online ? '服务在线' : '服务不可达'}
-                </Text>
-                <View className={styles.inlineButton} onClick={() => refreshServiceHealth()}>
-                  <Text>刷新状态</Text>
-                </View>
-              </View>
-            </View>
-
-            <View className={styles.card}>
-              <Text className={styles.cardTitle}>微信内测准备度</Text>
-              <Text className={styles.cardDesc}>{miniappReadiness?.summary || '正在检查小程序接入条件...'}</Text>
-              <View className={styles.checklist}>
-                {(miniappReadiness?.items || []).map((item) => (
-                  <View key={item.key} className={styles.checkItem}>
-                    <View className={classnames(styles.checkMark, item.ready ? styles.checkMarkReady : styles.checkMarkPending)}>
-                      <Text>{item.ready ? '✓' : '!'}</Text>
-                    </View>
-                    <View>
-                      <Text className={styles.checkLabel}>{item.label}</Text>
-                      <Text className={styles.checkDetail}>{item.detail}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <View className={styles.card}>
-              <Text className={styles.cardTitle}>当前运行态</Text>
-              <Text className={styles.cardDesc}>这里展示的是开发者工具当前真正跑起来的环境。</Text>
-              <View className={styles.runtimeList}>
-                <View className={styles.runtimeRow}>
-                  <Text className={styles.runtimeLabel}>平台</Text>
-                  <Text className={styles.runtimeValue}>{runtimeInfo.platform}</Text>
-                </View>
-                <View className={styles.runtimeRow}>
-                  <Text className={styles.runtimeLabel}>AppID</Text>
-                  <Text className={styles.runtimeValue}>{runtimeInfo.isTouristAppId ? 'touristappid（待替换）' : runtimeInfo.appId}</Text>
-                </View>
-                <View className={styles.runtimeRow}>
-                  <Text className={styles.runtimeLabel}>环境版本</Text>
-                  <Text className={styles.runtimeValue}>{runtimeInfo.envVersion}</Text>
-                </View>
-                <View className={styles.runtimeRow}>
-                  <Text className={styles.runtimeLabel}>API域名</Text>
-                  <Text className={styles.runtimeValue}>{runtimeInfo.apiBaseUrl}</Text>
-                </View>
-                <View className={styles.runtimeRow}>
-                  <Text className={styles.runtimeLabel}>登录code</Text>
-                  <Text className={styles.runtimeValue}>{runtimeInfo.loginCodeReady ? '已获取' : '未获取'}</Text>
-                </View>
-              </View>
-              <View className={styles.actionRow}>
-                <View className={styles.inlineButton} onClick={handleCopyChecklist}>
-                  <Text>复制接入清单</Text>
-                </View>
-              </View>
-            </View>
-
-            <View className={styles.card}>
-              <Text className={styles.cardTitle}>微信接入状态</Text>
-              <Text className={styles.cardDesc}>{wechatReady ? '后端和域名条件已齐，可以进入更稳定的真机内测。' : '后端微信凭证已接入，但还没完成全部内测条件时，状态会继续显示未完成。'}</Text>
-              <View className={styles.runtimeList}>
-                <View className={styles.runtimeRow}>
-                  <Text className={styles.runtimeLabel}>当前用户微信态</Text>
-                  <Text className={styles.runtimeValue}>{userProfile?.wechat_bound ? `已拿到openid线索 · ${userProfile?.wechat_openid_hint || ''}` : '还没确认成功换到openid'}</Text>
-                </View>
-              </View>
-            </View>
-
-            <View className={styles.card}>
-              <Text className={styles.cardTitle}>内测用户标识</Text>
-              <Text className={styles.cardDesc}>{userProfile?.user_id || '尚未拿到用户标识'}</Text>
-            </View>
-          </>
-        )}
 
       </View>
 

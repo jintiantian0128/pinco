@@ -2,8 +2,10 @@ import React from 'react';
 import { View, Text } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import styles from './index.module.scss';
+import { usePageAnalytics } from '@/hooks/usePageAnalytics';
 
 const Index: React.FC = () => {
+  usePageAnalytics('index');
   const handleClick = () => {
     Taro.showToast({ title: '开始体验', icon: 'success' });
   };

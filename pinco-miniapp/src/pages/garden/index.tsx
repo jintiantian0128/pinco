@@ -3,8 +3,10 @@ import { ScrollView, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import styles from './index.module.scss'
 import { gardenArticles } from '@/data/articles'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
 const GardenPage: React.FC = () => {
+  usePageAnalytics('garden')
   const categories = Array.from(new Set(gardenArticles.map((item) => item.category)))
 
   return (

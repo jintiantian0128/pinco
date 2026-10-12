@@ -3,6 +3,7 @@ import { Input, Text, Textarea, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import styles from './index.module.scss'
 import { BookingItem, ExpertApplication, ExpertProfile } from '@/types/pinco'
+import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 import {
   applyAsExpert,
   completeExpertBooking,
@@ -30,6 +31,7 @@ const explainLoadFailure = (error: any) => {
 }
 
 const ExpertCenterPage: React.FC = () => {
+  usePageAnalytics('expert-center')
   const userProfile = usePincoStore((state) => state.userProfile)
   const bootstrap = usePincoStore((state) => state.bootstrap)
   const [application, setApplication] = useState<ExpertApplication | null>(null)
