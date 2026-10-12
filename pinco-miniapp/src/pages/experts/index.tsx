@@ -24,15 +24,23 @@ const ExpertsPage: React.FC = () => {
 
   const loadExperts = async () => {
     setExpertsLoading(true)
+    setLoadError('')
+    // A stalled mini-program network request must not leave the core booking
+    // screen in an endless spinner. Keep the request alive so a late success
+    // can still populate the list, while exposing a retry state to the user.
+    const loadingTimeout = setTimeout(() => {
+      setExpertsLoading(false)
+      setLoadError('连接专家服务超时，请检查网络后重试。')
+    }, 12000)
     try {
       const result = await fetchExperts()
       setExperts(result.experts || [])
       setLoadError('')
     } catch (error) {
       console.error('[Experts] load failed', error)
-      setExperts([])
-      setLoadError('专家列表暂时加载失败，下拉可以重试。')
+      setLoadError('专家列表暂时加载失败，请下拉或点击重试。')
     } finally {
+      clearTimeout(loadingTimeout)
       setExpertsLoading(false)
     }
   }

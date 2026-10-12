@@ -178,32 +178,45 @@ export const apiUploadFile = async <T>(
 export const apiRequest = async <T>(
   path: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
-  data?: Record<string, unknown>
+  data?: Record<string, unknown>,
+  options: { preferPublicHttps?: boolean } = {}
 ): Promise<T> => {
-  return apiRequestInternal<T>(path, method, data, true)
+  return apiRequestInternal<T>(path, method, data, true, Boolean(options.preferPublicHttps))
 }
 
 const apiRequestInternal = async <T>(
   path: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   data: Record<string, unknown> | undefined,
-  allowSessionRecovery: boolean
+  allowSessionRecovery: boolean,
+  preferPublicHttps = false
 ): Promise<T> => {
-  const useCallContainer = canUseCallContainer()
+  const useCallContainer = canUseCallContainer() && !preferPublicHttps
 
   if (useCallContainer) {
     console.info('[API] callContainer', method, path, 'env=', CLOUD_ENV, 'service=', CLOUD_SERVICE)
     try {
-      const res = await wx.cloud.callContainer({
-        config: { env: CLOUD_ENV },
-        path,
-        header: {
-          'X-WX-SERVICE': CLOUD_SERVICE,
-          'Content-Type': 'application/json',
-          ...(apiSessionToken ? { 'X-Pinco-Session': apiSessionToken } : {}),
-        },
-        method,
-        data
+      // callContainer has no dependable timeout on every DevTools/base-library
+      // combination. Bound it so a stalled private-network route can fall back
+      // to the configured public HTTPS domain instead of leaving pages loading.
+      let callContainerTimeout: ReturnType<typeof setTimeout> | undefined
+      const res = await Promise.race([
+        wx.cloud.callContainer({
+          config: { env: CLOUD_ENV },
+          path,
+          header: {
+            'X-WX-SERVICE': CLOUD_SERVICE,
+            'Content-Type': 'application/json',
+            ...(apiSessionToken ? { 'X-Pinco-Session': apiSessionToken } : {}),
+          },
+          method,
+          data
+        }),
+        new Promise<never>((_, reject) => {
+          callContainerTimeout = setTimeout(() => reject(new Error('callContainer timed out after 6 seconds')), 6000)
+        })
+      ]).finally(() => {
+        if (callContainerTimeout) clearTimeout(callContainerTimeout)
       })
 
       if (res.statusCode >= 400) {
@@ -212,7 +225,7 @@ const apiRequestInternal = async <T>(
           console.warn('[API] session expired, recovering once', path)
           const recovery = await recoverApiSession()
           const retry = remapRecoveredIdentity(path, data, recovery)
-          return apiRequestInternal<T>(retry.path, method, retry.data, false)
+          return apiRequestInternal<T>(retry.path, method, retry.data, false, preferPublicHttps)
         }
         throw new ApiResponseError(getErrorMessage(res.data, '服务暂时不可用'), res.statusCode)
       }
@@ -247,7 +260,7 @@ const apiRequestInternal = async <T>(
       console.warn('[API] session expired, recovering once', path)
       const recovery = await recoverApiSession()
       const retry = remapRecoveredIdentity(path, data, recovery)
-      return apiRequestInternal<T>(retry.path, method, retry.data, false)
+      return apiRequestInternal<T>(retry.path, method, retry.data, false, preferPublicHttps)
     }
     throw new ApiResponseError(getErrorMessage(response.data, '服务暂时不可用'), response.statusCode)
   }

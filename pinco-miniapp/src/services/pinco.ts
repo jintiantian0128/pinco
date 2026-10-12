@@ -242,7 +242,10 @@ export const closePaymentOrder = async (orderId: string, userId: string) => {
 }
 
 export const fetchExperts = async () => {
-  return apiRequest<{ experts: ExpertProfile[] }>('/api/v1/experts')
+  // This directory is public catalogue data. Use the configured, domain-whitelisted
+  // HTTPS host directly so a slow callContainer handshake cannot leave the core
+  // booking page blank for several seconds.
+  return apiRequest<{ experts: ExpertProfile[] }>('/api/v1/experts', 'GET', undefined, { preferPublicHttps: true })
 }
 
 export const fetchExpertApplicationStatus = async (userId: string) => {
