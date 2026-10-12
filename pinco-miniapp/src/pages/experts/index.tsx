@@ -14,6 +14,7 @@ const ExpertsPage: React.FC = () => {
   const [topic, setTopic] = useState('')
   const [consultationType, setConsultationType] = useState<'chat' | 'phone'>('chat')
   const [loading, setLoading] = useState(false)
+  const [expertsLoading, setExpertsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [selectedJobId, setSelectedJobId] = useState('')
   const [shareContextWithExpert, setShareContextWithExpert] = useState(false)
@@ -22,6 +23,7 @@ const ExpertsPage: React.FC = () => {
   const jobProgress = usePincoStore((state) => state.jobProgress)
 
   const loadExperts = async () => {
+    setExpertsLoading(true)
     try {
       const result = await fetchExperts()
       setExperts(result.experts || [])
@@ -30,6 +32,8 @@ const ExpertsPage: React.FC = () => {
       console.error('[Experts] load failed', error)
       setExperts([])
       setLoadError('专家列表暂时加载失败，下拉可以重试。')
+    } finally {
+      setExpertsLoading(false)
     }
   }
 
@@ -109,11 +113,17 @@ const ExpertsPage: React.FC = () => {
 
       {experts.length === 0 && (
         <View className={styles.emptyPanel}>
-          <Text className={styles.emptyTitle}>{loadError || '首批专家正在审核中'}</Text>
-          <Text className={styles.emptyDesc}>平台不会用虚构履历填充列表。审核通过、档期可约后才会在这里出现。</Text>
-          <View className={styles.emptyAction} onClick={openExpertCenter}>
-            <Text>提交专家申请</Text>
-          </View>
+          <Text className={styles.emptyTitle}>{expertsLoading ? '正在加载专家信息…' : loadError || '首批专家正在审核中'}</Text>
+          <Text className={styles.emptyDesc}>
+            {expertsLoading
+              ? '正在读取已审核专家和可约时段，请稍候。'
+              : loadError
+                ? '请检查网络连接后重试；如果仍无法加载，可以稍后再来。'
+                : '平台不会用虚构履历填充列表。审核通过、档期可约后才会在这里出现。'}
+          </Text>
+          {!expertsLoading && (loadError
+            ? <View className={styles.emptyAction} onClick={loadExperts}><Text>重新加载</Text></View>
+            : <View className={styles.emptyAction} onClick={openExpertCenter}><Text>提交专家申请</Text></View>)}
         </View>
       )}
 

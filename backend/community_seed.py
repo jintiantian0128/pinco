@@ -6,6 +6,7 @@ The AI-product material is adapted from the owner's supplied AI PM knowledge
 base and Q&A assets for short-form learning in the mini app.
 """
 
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 
@@ -18,12 +19,14 @@ def _post(
     *,
     featured: bool = False,
 ) -> Dict[str, Any]:
-    day = ((number - 1) % 10) + 9
+    created_at = (datetime.utcnow() - timedelta(days=(number - 1) % 10)).replace(
+        hour=4, minute=0, second=0, microsecond=0
+    )
     return {
         "id": f"editorial-{post_type}-{number:02d}",
         "author": "Pinco 学姐" if post_type in {"treehole", "help"} else "Pinco 编辑部",
         "roleTag": role_tag,
-        "created_at": f"2026-09-{day:02d}T04:00:00",
+        "created_at": created_at.isoformat(),
         "title": title,
         "content": content,
         "liked_by": [],
@@ -53,7 +56,7 @@ def default_community_posts() -> List[Dict[str, Any]]:
         ("今天什么都不想做，但又很内疚", "求职不是每天都能满功率。今天可以只做一个十分钟动作：保存一条 JD、补一句项目结果、或把最怕的问题写下来。完成最小动作后就停，也算在保护长期节奏。"),
     ]
     for index, (title, content) in enumerate(treeholes, 1):
-        posts.append(_post(index, "treehole", title, content, "官方树洞引导"))
+        posts.append(_post(index, "treehole", title, content, "情绪支持"))
 
     helps = [
         ("没有 AI 项目经验，怎么转 AI 产品经理？", "先别把“没有正式 AI 岗位”误写成“没有可迁移证据”。盘点你做过的需求判断、数据闭环、自动化、推荐/搜索、客服或工作流项目，再补一个可演示的小型 AI 作品，说明能力边界、评测和风险。"),
@@ -68,7 +71,7 @@ def default_community_posts() -> List[Dict[str, Any]]:
         ("回答总是很散，怎样快速改善？", "先用四句骨架：面对什么问题；你做了什么判断；你亲自推动了什么；结果和边界是什么。每次只练一道题，录音后检查是否有事实、因果和岗位关联，再改一处。"),
     ]
     for index, (title, content) in enumerate(helps, 1):
-        posts.append(_post(index, "help", title, content, "官方问答", featured=index <= 3))
+        posts.append(_post(index, "help", title, content, "AI产品求职答疑", featured=index <= 3))
 
     shares = [
         ("AI 产品和传统软件产品，真正不同在哪里？", "AI 输出具有概率性，产品不能只设计理想路径，还要设计期望管理、错误恢复、用户接管和持续评测。功能上线不是终点，数据与失败样本会继续决定产品质量。"),
@@ -83,7 +86,7 @@ def default_community_posts() -> List[Dict[str, Any]]:
         ("从 Demo 到生产，AI PM 真正要交付什么", "真正的工作是可靠系统：真实数据下的质量门槛、监控、评测、权限、异常恢复和反馈闭环。面试时能讲清一次失败如何被发现和修复，往往比展示一个顺利 Demo 更有说服力。"),
     ]
     for index, (title, content) in enumerate(shares, 1):
-        posts.append(_post(index, "share", title, content, "AI 产品干货", featured=True))
+        posts.append(_post(index, "share", title, content, "AI产品方法", featured=True))
 
     successes = [
         ("上岸复盘模板：先写适用边界", "不要只写“我拿到 Offer 了”。建议记录目标岗位、经验年限、求职周期、最有效的一次调整、哪些方法依赖你的背景，以及一条后来者今天就能执行的动作。"),
@@ -98,6 +101,6 @@ def default_community_posts() -> List[Dict[str, Any]]:
         ("Offer 选择也需要证据表", "把薪资福利、成长空间、直属上级与团队、业务前景、工作方式和风险红线分别列事实与待确认项。最后按你未来一年的优先级排序，而不是让单一薪资数字替你决定。"),
     ]
     for index, (title, content) in enumerate(successes, 1):
-        posts.append(_post(index, "success", title, content, "上岸行动模板", featured=index <= 2))
+        posts.append(_post(index, "success", title, content, "求职复盘指南", featured=index <= 2))
 
     return posts

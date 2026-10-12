@@ -743,6 +743,42 @@ class TrustFoundationTests(unittest.TestCase):
             self.assertTrue(all(post["is_example"] for post in main.default_community_posts()))
             self.assertTrue(all(not post["liked_by"] and not post["comments"] for post in main.default_community_posts()))
 
+    def test_community_and_expert_lists_tolerate_legacy_incomplete_records(self):
+        post = main.serialize_post({
+            "post_type": "help",
+            "title": "旧版求助帖",
+            "content": "一条缺少新版可选字段的历史帖子",
+            "comments": None,
+            "liked_by": None,
+        }, None)
+        self.assertTrue(post["id"].startswith("legacy-"))
+        self.assertEqual(post["postType"], "help")
+        self.assertEqual(post["roleTag"], "求职交流")
+        self.assertEqual(post["comments"], [])
+
+        expert = main.serialize_expert(
+            {"expert_reviews": [{"expert_id": "legacy-expert", "score": "bad"}]},
+            {"id": "legacy-expert", "slots": [], "tags": None},
+        )
+        self.assertEqual(expert["name"], "Pinco 合作专家")
+        self.assertEqual(expert["tags"], [])
+        self.assertEqual(expert["rating"], 0)
+        self.assertEqual(expert["reviews"], [])
+
+    def test_empty_persisted_community_still_serves_ten_cold_start_posts_per_tab(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            state["community_posts"] = []
+            store.save(state)
+            with patch.object(main, "_state_store", store):
+                posts = main.get_community_posts()["posts"]
+            counts = {
+                post_type: sum(1 for item in posts if item["postType"] == post_type)
+                for post_type in {"treehole", "help", "share", "success"}
+            }
+            self.assertTrue(all(count >= 10 for count in counts.values()), counts)
+
     def test_expert_market_requires_review_then_supports_delivery_and_real_review(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)

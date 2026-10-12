@@ -14,6 +14,8 @@ export default {
     'pages/booking-chat/index',
     'pages/webview/index'
   ],
+  // 微信小程序仅按当前页面所需的自定义组件注入代码，减少启动时注入量。
+  lazyCodeLoading: 'requiredComponents',
   window: {
     backgroundTextStyle: 'light',
     backgroundColor: '#FAFAFA',

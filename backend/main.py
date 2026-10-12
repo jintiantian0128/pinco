@@ -1531,7 +1531,11 @@ def load_beta_state() -> Dict[str, Any]:
     data = get_state_store().load()
     data.setdefault("schema_version", 2)
     data.setdefault("users", {})
-    posts = data.setdefault("community_posts", default_community_posts())
+    posts = data.get("community_posts")
+    if not isinstance(posts, list):
+        posts = []
+    posts = [post for post in posts if isinstance(post, dict)]
+    data["community_posts"] = posts
     # Remove the original seed personas. They looked like real users and must not
     # survive upgrades as apparently organic community activity.
     legacy_seed_ids = {"post-1", "post-2", "post-3"}
@@ -1540,13 +1544,26 @@ def load_beta_state() -> Dict[str, Any]:
         existing_ids = {post.get("id") for post in real_posts}
         posts[:] = real_posts + [post for post in default_community_posts() if post["id"] not in existing_ids]
     existing_post_ids = {post.get("id") for post in posts}
-    posts.extend(post for post in default_community_posts() if post["id"] not in existing_post_ids)
+    curated_posts = default_community_posts()
+    posts.extend(post for post in curated_posts if post["id"] not in existing_post_ids)
+    curated_by_id = {post["id"]: post for post in curated_posts}
+    for post in posts:
+        source = curated_by_id.get(post.get("id"))
+        if source:
+            # Keep editorial records current while preserving authentic user
+            # reactions and comments accumulated on those records.
+            for field in ("author", "roleTag", "title", "content", "postType", "is_example", "is_featured", "source_asset"):
+                post[field] = source[field]
     data.setdefault("events", [])
     data.setdefault("orders", [])
     expert_applications = data.setdefault("expert_applications", [])
     for application in expert_applications:
         application.setdefault("display_name", application.get("real_name", ""))
-    experts = data.setdefault("experts", [])
+    experts = data.get("experts")
+    if not isinstance(experts, list):
+        experts = []
+    experts = [expert for expert in experts if isinstance(expert, dict)]
+    data["experts"] = experts
     default_experts = {item["id"]: item for item in default_expert_profiles()}
     existing_expert_ids = {item.get("id") for item in experts}
     experts.extend(item for item in default_experts.values() if item["id"] not in existing_expert_ids)
@@ -1645,25 +1662,33 @@ def issue_user_session(user: Dict[str, Any]) -> str:
     return token
 
 def serialize_post(post: Dict[str, Any], user_id: Optional[str]) -> Dict[str, Any]:
-    liked_by = post.get("liked_by", [])
-    hugged_by = post.get("hugged_by", [])
-    comments = post.get("comments", [])
-    is_treehole = post.get("postType") == "treehole"
+    # Old persisted snapshots may predate the current schema. Normalize each
+    # field at the API boundary so one incomplete legacy post cannot blank the
+    # entire community feed (or crash a filtered tab).
+    liked_by = post.get("liked_by") if isinstance(post.get("liked_by"), list) else []
+    hugged_by = post.get("hugged_by") if isinstance(post.get("hugged_by"), list) else []
+    comments = post.get("comments") if isinstance(post.get("comments"), list) else []
+    comments = [comment for comment in comments if isinstance(comment, dict)]
+    post_type = post.get("postType") or post.get("post_type") or "share"
+    post_id = str(post.get("id") or "legacy-" + hashlib.sha256(
+        f"{post.get('title', '')}|{post.get('content', '')}".encode("utf-8")
+    ).hexdigest()[:12])
+    is_treehole = post_type == "treehole"
     is_editorial = bool(post.get("is_example"))
     legacy_anonymous = not post.get("author_mode") and (is_treehole or post.get("author") == "匿名求职者")
     is_anonymous = not is_editorial and (post.get("author_mode") == "anonymous" or legacy_anonymous)
     public_author = "Pinco学姐" if is_editorial else post.get("author", "求职同行者")
     if legacy_anonymous:
-        alias = hashlib.sha256(str(post.get("id", "community-post")).encode("utf-8")).hexdigest()[:4].upper()
+        alias = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:4].upper()
         public_author = f"求职者-{alias}"
     return {
-        "id": post["id"],
+        "id": post_id,
         "author": public_author,
         "authorMode": "editorial" if is_editorial else "anonymous" if is_anonymous else "nickname",
-        "roleTag": post["roleTag"],
+        "roleTag": post.get("roleTag") or post.get("role_tag") or "求职交流",
         "time": community_time_label(post.get("created_at"), post.get("time")),
-        "title": post["title"],
-        "content": post["content"],
+        "title": post.get("title") or "求职经验分享",
+        "content": post.get("content") or "这条内容正在整理中。",
         "likes": len(liked_by),
         "isLiked": bool(user_id and user_id in liked_by),
         "hugs": len(hugged_by),
@@ -1671,7 +1696,7 @@ def serialize_post(post: Dict[str, Any], user_id: Optional[str]) -> Dict[str, An
         "aiCommentLoading": False,
         "hasAiComment": any(comment.get("isAi") for comment in comments),
         "comments": comments,
-        "postType": post.get("postType", "share"),
+        "postType": post_type,
         "isExample": bool(post.get("is_example")),
         "moderationStatus": post.get("moderation_status", "published"),
         "boundJobId": post.get("job_id") if post.get("created_by") == user_id else None,
@@ -3907,9 +3932,12 @@ def miniapp_message(request: MiniappMessageRequest):
 def serialize_expert(state: Dict[str, Any], expert: Dict[str, Any]) -> Dict[str, Any]:
     reviews = [
         review for review in state.get("expert_reviews", [])
-        if review.get("expert_id") == expert.get("id") and review.get("status", "published") == "published"
+        if isinstance(review, dict)
+        and review.get("expert_id") == expert.get("id")
+        and review.get("status", "published") == "published"
     ]
-    rating = round(sum(review["score"] for review in reviews) / len(reviews), 1) if reviews else 0
+    scored_reviews = [review for review in reviews if isinstance(review.get("score"), (int, float))]
+    rating = round(sum(review["score"] for review in scored_reviews) / len(scored_reviews), 1) if scored_reviews else 0
     completed_count = sum(
         1 for booking in state.get("expert_bookings", [])
         if booking.get("expertId") == expert.get("id") and booking.get("status_code") == "completed"
@@ -3924,11 +3952,11 @@ def serialize_expert(state: Dict[str, Any], expert: Dict[str, Any]) -> Dict[str,
             continue
         slots.append(slot)
     return {
-        "id": expert["id"],
-        "name": expert["name"],
-        "title": expert["title"],
-        "intro": expert["intro"],
-        "tags": expert.get("tags", []),
+        "id": str(expert.get("id") or ""),
+        "name": str(expert.get("name") or "Pinco 合作专家"),
+        "title": str(expert.get("title") or "求职指导专家"),
+        "intro": str(expert.get("intro") or "为求职者提供专业建议。"),
+        "tags": expert.get("tags") if isinstance(expert.get("tags"), list) else [],
         "price": expert.get("reference_price", 0),
         "nextSlot": slots[0] if slots else "暂无可约时段",
         "slots": slots,
@@ -3944,12 +3972,12 @@ def serialize_expert(state: Dict[str, Any], expert: Dict[str, Any]) -> Dict[str,
         "durationMinutes": int(expert.get("duration_minutes", 30)),
         "reviews": [
             {
-                "id": review["id"],
+                "id": str(review.get("id") or f"review-{index}"),
                 "score": review["score"],
-                "comment": review["comment"],
-                "created_at": review["created_at"],
+                "comment": str(review.get("comment") or ""),
+                "created_at": str(review.get("created_at") or ""),
             }
-            for review in reviews[-10:]
+            for index, review in enumerate(scored_reviews[-10:])
         ],
     }
 

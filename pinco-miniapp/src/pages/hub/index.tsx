@@ -30,6 +30,13 @@ const filterOptions: { key: FilterTab; label: string }[] = [
   { key: 'success', label: '🎉 上岸' },
 ]
 
+const editorialRoleLabels: Record<PostType, string> = {
+  treehole: '求职情绪支持',
+  help: 'AI 产品求职答疑',
+  share: 'AI 产品方法',
+  success: '求职复盘指南',
+}
+
 const HubPage: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all')
   const [posts, setPosts] = useState<CommunityPost[]>([])
@@ -84,9 +91,9 @@ const HubPage: React.FC = () => {
     setPostModalKey((key) => key + 1)
   }
 
-  const openPostModal = async () => {
-    const userId = await ensureCommunityUserId()
-    if (!userId) return
+  const openPostModal = () => {
+    // Publishing UI should remain available even when identity bootstrap is
+    // slow or temporarily offline. Identity is recovered when the user submits.
     resetPostModal()
     setShowPostModal(true)
   }
@@ -331,7 +338,9 @@ const HubPage: React.FC = () => {
             <View style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
               {isTreehole && <Text className={styles.treeholeBadge}>树洞</Text>}
               {post.authorMode === 'anonymous' && <Text className={styles.treeholeBadge}>匿名</Text>}
-              <Text className={styles.meta}>{post.roleTag} · {post.time}</Text>
+              <Text className={styles.meta}>
+                {post.isExample ? editorialRoleLabels[post.postType] : `${post.roleTag} · ${post.time}`}
+              </Text>
             </View>
           </View>
           <View className={styles.summonButton} onClick={() => handleSummon(post)}>

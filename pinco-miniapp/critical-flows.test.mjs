@@ -39,12 +39,14 @@ assert.doesNotMatch(hub, /请先登录|先登录/, 'Summon must not block anonym
 assert.match(hub, /fetchCommunityPosts\(userProfile\?\.user_id\)/, 'Official community content must load before identity bootstrap finishes')
 assert.doesNotMatch(hub, /if \(!userProfile\) \{[\s\S]{0,120}setPosts\(\[\]\)/, 'Missing identity must not blank the public community feed')
 assert.match(hub, /ensureCommunityUserId[\s\S]*await bootstrap\(\)[\s\S]*身份初始化失败，请检查网络后重试[\s\S]*return userId/, 'Community actions must recover identity before blocking the user')
+assert.match(hub, /const openPostModal = \(\) => \{[\s\S]{0,220}setShowPostModal\(true\)/, 'Publish composer must open immediately without waiting for network identity bootstrap')
 for (const action of ['publishPost', 'handleLike', 'submitComment', 'handleHug', 'handleSummon', 'handleReport', 'turnPostIntoAction']) {
   assert.match(hub, new RegExp(`const ${action} = async[\\s\\S]{0,900}ensureCommunityUserId\\(\\)`), `${action} must retry identity bootstrap before calling a community endpoint`)
 }
 assert.match(hub, /activeFilter === 'all'[\s\S]{0,100}articles: \[\]/, 'All must be a community feed instead of duplicating the editorial tab')
 assert.match(hub, /activeFilter === 'article'[\s\S]{0,160}isFeatured/, 'Featured must combine editorial knowledge with explicitly featured discussions')
 assert.match(hub, /post\.isExample \? 'Pinco学姐'/, 'Editorial posts must use the Pinco mentor identity')
+assert.match(hub, /editorialRoleLabels:[\s\S]*AI 产品求职答疑[\s\S]*求职复盘指南/, 'Editorial cold-start content must have clear operational labels independent of stale API records')
 assert.match(hub, /pinco_community_feed_v1[\s\S]*Taro\.getStorageSync[\s\S]*Taro\.setStorageSync/, 'Community feed must retain a local cache across transient API failures')
 assert.match(hub, /匿名 · 平台虚拟昵称[\s\S]*公开昵称/, 'Community publishing must let users choose anonymous or public identity')
 assert.match(hub, /不会读取微信昵称/, 'Public nickname must be explicitly user supplied')
