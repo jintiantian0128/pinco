@@ -98,6 +98,28 @@ class ConversationAgentTests(unittest.TestCase):
             self.assertEqual(saved[-1]["content"], "负责知识库召回，并搭建离线评估集")
             self.assertIn("搭建离线评估集", edited_context[-1]["content"])
 
+    def test_new_conversation_does_not_inherit_old_chat_or_job_search_task(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "chat-isolation-device", "小程", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["messages"] = [
+                {"id": "old-u", "role": "user", "content": "帮我找AI产品经理岗位", "createdAt": "10:00"},
+                {"id": "old-a", "role": "assistant", "content": "请补充工作城市。", "createdAt": "10:01"},
+            ]
+            user["active_agent_task"] = {"type": "job_search", "role": "AI产品经理", "city": "", "missing": ["工作城市或‘不限’"]}
+            store.save(state)
+            fresh_client = [main.Message(id="new-u", role="user", content="请回答：2+2等于几？只回复数字。")]
+
+            with patch.object(main, "_state_store", store):
+                context = main.sync_client_chat_history(user_id, fresh_client)
+                saved = store.load()["users"][user_id]
+
+            self.assertEqual(context, [{"role": "user", "content": "请回答：2+2等于几？只回复数字。"}])
+            self.assertNotIn("active_agent_task", saved)
+            self.assertEqual(len(saved["messages"]), 3)
+
     def test_career_profile_is_source_of_truth_and_memory_can_be_forgotten(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
@@ -187,7 +209,7 @@ class ConversationAgentTests(unittest.TestCase):
                     with patch.object(main, "search_jobs", side_effect=fake_search) as search_mock:
                         first = asyncio.run(main.chat(main.ChatRequest(
                             user_id=user_id,
-                            messages=[main.Message(role="user", content="帮我找一些岗位")],
+                            messages=[main.Message(id="search-start", role="user", content="帮我找一些岗位")],
                         )))
                         self.assertFalse(search_mock.called)
                         self.assertIn("目标岗位", first.response)
@@ -195,7 +217,11 @@ class ConversationAgentTests(unittest.TestCase):
 
                         second = asyncio.run(main.chat(main.ChatRequest(
                             user_id=user_id,
-                            messages=[main.Message(role="user", content="AI产品经理，上海，3年经验")],
+                            messages=[
+                                main.Message(id="search-start", role="user", content="帮我找一些岗位"),
+                                main.Message(role="assistant", content=first.response),
+                                main.Message(id="search-followup", role="user", content="AI产品经理，上海，3年经验"),
+                            ],
                         )))
 
             self.assertEqual(search_mock.call_count, 1)
@@ -262,7 +288,7 @@ class ConversationAgentTests(unittest.TestCase):
         self.assertEqual(used, ["years_experience", "target_role", "target_city"])
         self.assertNotIn("current_company", used)
 
-    def test_agent_uses_server_history_resume_memory_and_deduplicates_progress(self):
+    def test_agent_uses_resume_memory_without_leaking_prior_chat_and_deduplicates_progress(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
             state = main.default_beta_state()
@@ -305,7 +331,8 @@ class ConversationAgentTests(unittest.TestCase):
                 first = asyncio.run(main.chat(request))
                 second = asyncio.run(main.chat(request))
 
-            self.assertTrue(any("三年产品经验" in item["content"] for item in captured["messages"]))
+            self.assertFalse(any("三年产品经验" in item["content"] for item in captured["messages"]))
+            self.assertTrue(any("继续帮我优化项目经历" in item["content"] for item in captured["messages"]))
             self.assertIn("负责大模型评测产品", captured["system"])
             self.assertTrue(first.agent["memory_updated"])
             self.assertIsNotNone(first.progress_suggestion)

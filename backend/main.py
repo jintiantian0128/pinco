@@ -2405,6 +2405,13 @@ def sync_client_chat_history(
                         overlap = size
                         overlap_client_end = start + size
 
+        # Keep model context scoped to the client conversation currently open.
+        # The durable user message log may contain many separate conversations;
+        # returning its global suffix here leaks stale tasks and unrelated turns
+        # into a newly-created conversation.
+        if server_pairs and not overlap:
+            user.pop("active_agent_task", None)
+
         if not server_pairs:
             pending = client
         elif overlap:
@@ -2429,9 +2436,8 @@ def sync_client_chat_history(
         user["messages"] = history[-200:]
         save_beta_state(state)
         return [
-            {"role": item.get("role"), "content": item.get("content", "")}
-            for item in user["messages"][-16:]
-            if item.get("role") in {"user", "assistant"} and item.get("content")
+            {"role": item["role"], "content": item["content"]}
+            for item in client[-16:]
         ]
 
 
