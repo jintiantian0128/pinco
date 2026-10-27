@@ -136,7 +136,6 @@ const ConversationPage: React.FC = () => {
   const requestInterviewRescue = usePincoStore((state) => state.requestInterviewRescue)
   const endInterview = usePincoStore((state) => state.endInterview)
   const jobSearchResults = usePincoStore((state) => state.jobSearchResults)
-  const searchJobs = usePincoStore((state) => state.searchJobs)
   const conversationHistory = usePincoStore((state) => state.conversationHistory)
   const createNewConversation = usePincoStore((state) => state.createNewConversation)
   const switchToConversation = usePincoStore((state) => state.switchToConversation)
@@ -429,35 +428,9 @@ const ConversationPage: React.FC = () => {
       return
     }
 
-    const searchTriggers = /找|搜|推荐|有没有|想看|看看|求职|招聘|岗位|职位|工作|机会|实习/
-    const jobKeywords = /AI|产品|前端|后端|Java|Python|数据|算法|设计|运营|市场|销售|人力|财务|测试|运维|架构|移动|iOS|Android|Go|C\+\+|全栈|大模型|AIGC|LLM|NLP|CV|推荐|搜索|广告|增长|商业化|出海|电商|社交|内容|社区|SaaS|B端|C端|金融|教育|医疗|游戏/
-    let searchContext = ''
-
-    // 情绪场景下不触发岗位搜索
-    if (conversationMeta.scenario !== 'emotion' && searchTriggers.test(value) && jobKeywords.test(value)) {
-      const cityMatch = value.match(/(?:北京|上海|广州|深圳|杭州|成都|武汉|西安|南京|苏州|长沙|重庆|厦门|青岛|大连|天津|合肥|郑州|济南|沈阳|珠海)/)
-      let query = value
-        .replace(/帮我|请|能不能|可以|想|要|我|你|给|在|的|了|吗|呢|啊|吧|一下|一些|有没有|推荐|搜索|找|看看|想看|什么|哪些|那些|这个|那个|相关|合适|好|不错|新|最新|近期|最近|工作|岗位|职位|招聘|机会|实习/g, '')
-        .trim()
-      if (!query || query.length < 2) {
-        const kwMatch = value.match(jobKeywords)
-        query = kwMatch ? kwMatch[0] : '产品经理'
-      }
-      const searchStatus = await searchJobs(query, cityMatch?.[0])
-      const results = usePincoStore.getState().jobSearchResults
-      if (searchStatus.ok && results.length > 0) {
-        const jobLines = results.slice(0, 6).map((j, i) =>
-          `${i + 1}. 【${j.source || j.platform || '网络'}】${j.title} - ${j.company} · ${j.location}${j.salary ? ' · ' + j.salary : ''}\n   ${j.summary}\n   来源链接：${j.url}`
-        ).join('\n')
-        searchContext = `\n\n[系统提示：以下是检索接口刚返回的 ${results.length} 条带可打开来源链接的岗位结果。只能依据链接和摘要推荐，不要扩写公司、薪资或招聘状态：]\n${jobLines}`
-      } else if (searchStatus.ok) {
-        searchContext = '\n\n[系统提示：本次实时检索没有返回可核验的职位候选。请明确告知用户暂时没有找到，不得编造职位、公司、薪资或招聘状态；可以建议调整岗位关键词、城市或经验范围后重试。]'
-      } else if (!searchStatus.ok) {
-        searchContext = `\n\n[系统提示：本次岗位搜索接口不可用，错误摘要：${searchStatus.errorMessage || '未知错误'}。请不要编造具体岗位、公司、薪资或招聘状态；说明搜索暂不可用，用户可以在本轮对话调整条件重试，也可以使用“独立筛选”。]`
-      }
-    }
-
-    await sendMessage(value + searchContext)
+    // Search now runs only inside the server-side task plan after explicit
+    // confirmation; avoid an invisible client-side pre-search before approval.
+    await sendMessage(value)
   }
 
   const resumeUpload = usePincoStore((state) => state.resumeUpload)
