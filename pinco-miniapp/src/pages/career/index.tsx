@@ -10,6 +10,7 @@ import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 const emptyWorkspace: CareerWorkspace = {
   career_profile: { target_roles: [], years_experience: 0, cities: [], strengths: [] },
   career_memory: {},
+  conversation_profile: { fields: {}, confirmed_facts: [], assumptions: [], open_questions: [], user_declined_to_answer: [] },
   evidence: [],
   jobs: [],
   interview_sessions: [],
@@ -31,7 +32,14 @@ const memoryLabels: Record<string, string> = {
   current_role: '当前岗位', current_company: '当前公司', key_skills: '关键技能',
   salary_expectation: '期望薪资', job_search_stage: '求职阶段', preferred_industry: '目标行业',
   education: '学历', graduation_year: '毕业年份', work_preference: '工作偏好',
-  interview_preference: '面试偏好',
+  interview_preference: '面试偏好', current_status: '当前状态', industry_or_background: '行业/背景',
+}
+
+const conversationProfileLabels: Record<string, string> = {
+  target_role: '目标岗位', years_of_experience: '工作年限', current_status: '当前状态',
+  need_type: '本轮需求', city: '目标城市', industry_or_background: '行业/背景',
+  expected_salary_range: '期望薪资', resume_content: '简历材料', interview_round: '面试轮次',
+  job_description: '目标 JD', offer_details: 'Offer 条件',
 }
 
 const CareerPage: React.FC = () => {
@@ -143,6 +151,7 @@ const CareerPage: React.FC = () => {
         ...current,
         career_memory: response.career_memory,
         career_profile: response.career_profile,
+        conversation_profile: response.conversation_profile || current.conversation_profile,
       }))
       setTargetRoles(response.career_profile.target_roles.join('、'))
       setYears(String(response.career_profile.years_experience || 0))
@@ -407,6 +416,16 @@ const CareerPage: React.FC = () => {
             <View className={styles.secondaryButton} onClick={() => forgetMemory(key)}><Text>忘记这条</Text></View>
           </View>
         ))}
+        {Object.entries(workspace.conversation_profile?.fields || {}).map(([key, item]) => (
+          <View key={`conversation-${key}`} className={styles.item}>
+            <Text className={styles.itemTitle}>{conversationProfileLabels[key] || key} · {item.status === 'assumption' ? '学姐的假设，可纠正' : item.status === 'inferred' ? '本轮意图' : '你确认过'}</Text>
+            <Text className={styles.itemText}>{item.value}</Text>
+            <View className={styles.secondaryButton} onClick={() => forgetMemory(key)}><Text>忘记这条</Text></View>
+          </View>
+        ))}
+        {(workspace.conversation_profile?.assumptions || []).length > 0 && <Text className={styles.desc}>当前假设：{workspace.conversation_profile?.assumptions?.join('；')}</Text>}
+        {(workspace.conversation_profile?.user_declined_to_answer || []).length > 0 && <Text className={styles.desc}>你选择暂不回答：{workspace.conversation_profile?.user_declined_to_answer?.map((key) => conversationProfileLabels[key] || key).join('、')}；学姐不会重复追问。</Text>}
+        {workspace.conversation_profile?.summary && <Text className={styles.desc}>最近对话摘要：{workspace.conversation_profile.summary}</Text>}
       </View>
 
       <View className={styles.card}>

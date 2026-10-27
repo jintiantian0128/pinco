@@ -414,6 +414,14 @@ export interface WorkspaceJob {
 export interface CareerWorkspace {
   career_profile: CareerProfile
   career_memory: Record<string, { value: string; confidence: number; source: string; updated_at?: string }>
+  conversation_profile?: {
+    fields?: Record<string, { value: string; status: 'confirmed' | 'assumption' | 'inferred'; source?: string }>
+    confirmed_facts?: string[]
+    assumptions?: string[]
+    open_questions?: Array<{ field: string; question?: string; reason?: string }>
+    user_declined_to_answer?: string[]
+    summary?: string
+  }
   evidence: CareerEvidence[]
   jobs: WorkspaceJob[]
   interview_sessions: any[]

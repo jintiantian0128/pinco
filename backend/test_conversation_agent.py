@@ -174,6 +174,16 @@ class ConversationAgentTests(unittest.TestCase):
         self.assertEqual(continued["years"], "3年经验")
         self.assertEqual(continued["missing"], [])
 
+    def test_job_search_accepts_unlimited_city_as_an_explicit_answer(self):
+        user = {"career_profile": {"target_roles": [], "cities": [], "years_experience": 0}}
+        task = main.resolve_job_search_task(
+            {**user, "active_agent_task": {"type": "job_search", "role": "AI产品经理", "city": "", "years": ""}},
+            "城市不限",
+            None,
+        )
+        self.assertEqual(task["city"], "不限")
+        self.assertEqual(task["missing"], [])
+
     def test_chat_persists_search_clarification_and_uses_verified_results(self):
         async def fake_search(request):
             captured["search_request"] = request
@@ -355,6 +365,153 @@ class ConversationAgentTests(unittest.TestCase):
         })
         self.assertEqual(result["memory_updates"], [{"key": "target_role", "value": "AI 产品运营", "confidence": 0.9}])
         self.assertIsNone(result["progress_suggestion"])
+
+    def test_conversation_profile_keeps_confirmed_facts_and_assumptions_separate(self):
+        updated, question = main.apply_conversation_profile_update(
+            None,
+            {
+                "need_type": "job_selection",
+                "confirmed_facts": [{"field": "years_of_experience", "value": "2年", "confidence": 0.95}],
+                "assumptions": [{"field": "target_role", "value": "AI产品运营"}],
+                "ask_field": "target_role",
+            },
+            "我做了2年运营，但不知道想做什么岗位",
+        )
+        self.assertEqual(updated["fields"]["years_of_experience"]["status"], "confirmed")
+        self.assertEqual(updated["fields"]["target_role"]["status"], "assumption")
+        self.assertEqual(updated["confirmed_facts"], ["years_of_experience: 2年"])
+        self.assertEqual(updated["assumptions"], ["target_role: AI产品运营"])
+        self.assertIsNone(question)
+
+    def test_clarification_is_single_bounded_and_does_not_repeat_declined_field(self):
+        profile = main.default_conversation_profile()
+        profile["need_type"] = "interview_prep"
+        profile["fields"]["need_type"] = {"value": "interview_prep", "status": "inferred"}
+        profile, question = main.apply_conversation_profile_update(
+            profile, {"need_type": "interview_prep", "ask_field": "target_role"}, "帮我准备面试"
+        )
+        self.assertEqual(question, main.CLARIFICATION_QUESTIONS["target_role"])
+        self.assertEqual(profile["clarification_turns"], 1)
+
+        profile, repeated = main.apply_conversation_profile_update(
+            profile, {"need_type": "interview_prep", "ask_field": "target_role"}, "不知道"
+        )
+        self.assertIsNone(repeated)
+        self.assertIsNone(profile["pending_field"])
+
+        profile = main.default_conversation_profile()
+        profile["need_type"] = "interview_prep"
+        profile["clarification_turns"] = 3
+        capped, question = main.apply_conversation_profile_update(
+            profile, {"need_type": "interview_prep", "ask_field": "interview_round"}, "准备面试"
+        )
+        self.assertIsNone(question)
+        self.assertEqual(capped["clarification_turns"], 3)
+
+        profile = main.default_conversation_profile()
+        profile["need_type"] = "interview_prep"
+        profile["pending_field"] = "interview_round"
+        profile["asked_fields"] = ["interview_round"]
+        declined, question = main.apply_conversation_profile_update(
+            profile, {"need_type": "interview_prep", "ask_field": "interview_round"}, "这项不方便说"
+        )
+        self.assertIsNone(question)
+        self.assertIn("interview_round", declined["user_declined_to_answer"])
+
+    def test_conflicting_explicit_profile_value_is_not_silently_overwritten(self):
+        profile = main.default_conversation_profile()
+        profile["need_type"] = "job_selection"
+        profile["fields"]["target_role"] = {"value": "AI产品经理", "status": "confirmed"}
+        updated, question = main.apply_conversation_profile_update(
+            profile,
+            {
+                "need_type": "job_selection",
+                "confirmed_facts": [{"field": "target_role", "value": "AI产品运营", "confidence": 0.96}],
+            },
+            "我现在想找AI产品运营",
+        )
+        self.assertEqual(updated["fields"]["target_role"]["value"], "AI产品经理")
+        self.assertEqual(updated["open_questions"][0]["reason"], "conflict")
+        self.assertIn("这次应该以哪个为准", question)
+
+    def test_long_conversation_summary_is_saved_only_after_eight_turns(self):
+        early, _ = main.apply_conversation_profile_update(
+            None, {"need_type": "career_planning", "summary": "太早"}, "继续", turn_count=7
+        )
+        self.assertEqual(early["summary"], "")
+        due, _ = main.apply_conversation_profile_update(
+            early, {"need_type": "career_planning", "summary": "确认的事实和待办"}, "继续", turn_count=8
+        )
+        self.assertEqual(due["summary"], "确认的事实和待办")
+        self.assertEqual(due["last_summary_turn"], 8)
+
+    def test_sensitive_questions_are_not_allowlisted_and_question_sentences_can_be_removed(self):
+        update = main.normalize_conversation_profile_update({
+            "need_type": "job_selection",
+            "ask_field": "age",
+            "confirmed_facts": [{"field": "age", "value": "28", "confidence": 0.99}],
+        })
+        self.assertEqual(update["ask_field"], "")
+        self.assertEqual(update["confirmed_facts"], [])
+        self.assertEqual(main._strip_question_sentences("你多大？先看你做过的项目，再判断可迁移能力。"), "先看你做过的项目，再判断可迁移能力。")
+
+    def test_conversation_profile_fields_can_be_forgotten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "profile-forget-device", "用户", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["conversation_profile"] = {
+                **main.default_conversation_profile(),
+                "fields": {"current_status": {"value": "在职", "status": "confirmed"}},
+                "confirmed_facts": ["current_status: 在职"],
+            }
+            store.save(state)
+            with patch.object(main, "_state_store", store):
+                result = main.forget_career_memory(main.CareerMemoryForgetRequest(
+                    user_id=user_id, key="current_status"
+                ))
+            self.assertTrue(result["removed"])
+            self.assertNotIn("current_status", result["conversation_profile"]["fields"])
+            self.assertEqual(result["conversation_profile"]["confirmed_facts"], [])
+
+    def test_chat_persists_profile_update_and_backend_question_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "profile-loop-device", "小程", "weapp")
+            user_id = user["profile"]["user_id"]
+            store.save(state)
+
+            def fake_llm(_messages, **_kwargs):
+                return json.dumps({
+                    "response": "你有运营经验，可以先从相邻岗位盘点可迁移能力。请问你想找哪类岗位？另外几年经验？",
+                    "intent": "job_selection",
+                    "next_action": "确认目标岗位",
+                    "used_memory_keys": [],
+                    "memory_updates": [],
+                    "profile_update": {
+                        "need_type": "job_selection",
+                        "confirmed_facts": [{"field": "years_of_experience", "value": "2年", "confidence": 0.95}],
+                        "assumptions": [],
+                        "user_declined_to_answer": [],
+                        "ask_field": "target_role",
+                        "summary": "",
+                    },
+                    "progress_suggestion": None,
+                }, ensure_ascii=False)
+
+            with patch.object(main, "_state_store", store), patch.object(main, "llm_chat_with_fallback", side_effect=fake_llm):
+                response = asyncio.run(main.chat(main.ChatRequest(
+                    user_id=user_id,
+                    messages=[main.Message(id="profile-loop-u1", role="user", content="我有2年运营经验，帮我想想转什么岗位")],
+                )))
+            saved = store.load()["users"][user_id]["conversation_profile"]
+            self.assertEqual(saved["fields"]["years_of_experience"]["value"], "2年")
+            self.assertEqual(saved["fields"]["years_of_experience"]["status"], "confirmed")
+            self.assertEqual(saved["pending_field"], "target_role")
+            self.assertEqual(response.response.count("？") + response.response.count("?"), 1)
+            self.assertIn("为了给你更贴合的建议", response.response)
 
 
 if __name__ == "__main__":
