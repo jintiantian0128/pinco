@@ -78,6 +78,21 @@ class AgenticWorkflowTests(unittest.TestCase):
                 verified = main._verify_resume_draft({"resume_bullets": [bullet]}, evidence)
                 self.assertEqual(bool(verified["resume_bullets"]), expected)
 
+    def test_old_uploaded_resume_can_ground_drafts_without_evidence_card(self):
+        user = {"resume_memory": {
+            "filename": "old-resume.pdf",
+            "text_excerpt": "负责搭建智能客服知识库召回，推动转化率提升18%。",
+        }}
+        source = main._agent_task_source_evidence(user)
+        self.assertEqual(source[0]["id"], "resume-memory-latest")
+        self.assertEqual(source[0]["source_type"], "uploaded_resume_unconfirmed")
+        verified = main._verify_resume_draft(
+            {"resume_bullets": [{"text": "搭建智能客服知识库召回，转化率提升18%", "evidence_ids": ["resume-memory-latest"]}]},
+            source,
+        )
+        self.assertEqual(len(verified["resume_bullets"]), 1)
+        self.assertEqual(main._agent_task_source_evidence({}), [])
+
     def test_job_task_requires_confirmation_then_persists_each_step(self):
         async def fake_search(_request):
             return SimpleNamespace(jobs=[main.JobResult(
