@@ -1,188 +1,29 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Input, ScrollView, Text, Textarea, View } from '@tarojs/components'
-import Taro, { useDidShow, usePullDownRefresh, useShareAppMessage } from '@tarojs/taro'
-import classnames from 'classnames'
+import React, { useMemo, useState } from 'react'
+import { ScrollView, Text, Textarea, View } from '@tarojs/components'
+import Taro, { useShareAppMessage } from '@tarojs/taro'
 import styles from './index.module.scss'
-import { CommunityPost, PostType } from '@/types/pinco'
 import { usePageAnalytics } from '@/hooks/usePageAnalytics'
-import {
-  createCommunityComment,
-  createCommunityPost,
-  fetchCommunityPosts,
-  reportCommunityPost,
-  recordCommunityAction,
-  summonCommunityReply,
-  toggleCommunityHug,
-  toggleCommunityLike,
-} from '@/services/pinco'
 import { gardenArticles } from '@/data/articles'
-import { usePincoStore } from '@/store/usePincoStore'
-import { trackProductEvent } from '@/services/analytics'
-
-type FilterTab = 'all' | 'article' | PostType
-const COMMUNITY_FEED_CACHE_KEY = 'pinco_community_feed_v1'
-
-const filterOptions: { key: FilterTab; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: 'article', label: '📖 精选' },
-  { key: 'treehole', label: '🌰 树洞' },
-  { key: 'help', label: '❓ 问答' },
-  { key: 'share', label: '💡 干货' },
-  { key: 'success', label: '🎉 上岸' },
-]
-
-const editorialRoleLabels: Record<PostType, string> = {
-  treehole: '求职情绪支持',
-  help: 'AI 产品求职答疑',
-  share: 'AI 产品方法',
-  success: '求职复盘指南',
-}
 
 const HubPage: React.FC = () => {
   usePageAnalytics('hub')
-  const [activeFilter, setActiveFilter] = useState<FilterTab>('all')
-  const [posts, setPosts] = useState<CommunityPost[]>([])
-  const [showPostModal, setShowPostModal] = useState(false)
-  const [newPostType, setNewPostType] = useState<PostType>('treehole')
-  const [authorMode, setAuthorMode] = useState<'anonymous' | 'nickname'>('anonymous')
-  const [displayName, setDisplayName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [commentingPostId, setCommentingPostId] = useState<string | null>(null)
-  const [commentText, setCommentText] = useState('')
-  const [isPublishing, setIsPublishing] = useState(false)
-  const [loadError, setLoadError] = useState('')
-  const [selectedJobId, setSelectedJobId] = useState('')
-  const [experienceRound, setExperienceRound] = useState('')
-  const [experienceDate, setExperienceDate] = useState('')
-  const [postModalKey, setPostModalKey] = useState(0)
-  const newPostTitleRef = useRef('')
-  const newPostContentRef = useRef('')
-  const userProfile = usePincoStore((state) => state.userProfile)
-  const jobProgress = usePincoStore((state) => state.jobProgress)
-  const openConversation = usePincoStore((state) => state.openConversation)
-  const seedConversation = usePincoStore((state) => state.seedConversation)
-  const startInterview = usePincoStore((state) => state.startInterview)
-  const bootstrap = usePincoStore((state) => state.bootstrap)
-
-  const ensureCommunityUserId = async () => {
-    let userId = usePincoStore.getState().userProfile?.user_id
-    if (!userId) {
-      try {
-        await bootstrap()
-      } catch (error) {
-        console.error('[Hub] identity bootstrap failed', error)
-      }
-      userId = usePincoStore.getState().userProfile?.user_id
-    }
-    if (!userId) {
-      Taro.showToast({ title: '身份初始化失败，请检查网络后重试', icon: 'none' })
-      return ''
-    }
-    return userId
-  }
-
-  const resetPostModal = () => {
-    newPostTitleRef.current = ''
-    newPostContentRef.current = ''
-    setNewPostType('treehole')
-    setAuthorMode('anonymous')
-    setDisplayName('')
-    setSelectedJobId('')
-    setExperienceRound('')
-    setExperienceDate('')
-    setPostModalKey((key) => key + 1)
-  }
-
-  const openPostModal = () => {
-    // Publishing UI should remain available even when identity bootstrap is
-    // slow or temporarily offline. Identity is recovered when the user submits.
-    resetPostModal()
-    setShowPostModal(true)
-  }
-
-  const closePostModal = () => {
-    setShowPostModal(false)
-    resetPostModal()
-  }
-
-  const loadPosts = async () => {
-    try {
-      const cached = Taro.getStorageSync(COMMUNITY_FEED_CACHE_KEY)
-      if (Array.isArray(cached) && cached.length) {
-        setPosts((current) => current.length ? current : cached)
-      }
-    } catch (error) {
-      console.warn('[Hub] cached feed unavailable', error)
-    }
-    try {
-      // Official cold-start content is public. Identity is only required when
-      // the user publishes or interacts, so bootstrap failures cannot blank
-      // the entire community page.
-      const result = await fetchCommunityPosts(userProfile?.user_id)
-      const nextPosts = result.posts || []
-      setPosts(nextPosts)
-      if (nextPosts.length) Taro.setStorageSync(COMMUNITY_FEED_CACHE_KEY, nextPosts)
-      setLoadError('')
-    } catch (error) {
-      console.error('[Hub] load posts failed', error)
-      setLoadError('社区内容暂时无法连接，已保留上次加载的内容；下拉可重试。')
-    }
-  }
-
-  useDidShow(() => {
-    loadPosts()
-  })
-
-  useEffect(() => {
-    loadPosts()
-  }, [userProfile?.user_id])
-
-  usePullDownRefresh(() => {
-    loadPosts().finally(() => Taro.stopPullDownRefresh())
-  })
 
   useShareAppMessage(() => ({
-    title: '来 Pinco 学社，知识 + 圈子一起学',
-    path: '/pages/hub/index'
+    title: 'Pinco学姐精选：AI 求职与职业成长干货',
+    path: '/pages/hub/index',
   }))
 
-  const publishPost = async () => {
-    const title = newPostTitleRef.current.trim()
-    const content = newPostContentRef.current.trim()
-    if (!title || !content) {
-      Taro.showToast({ title: '标题和内容都不能为空', icon: 'none' })
-      return
-    }
-    if (isPublishing) return
-    if (authorMode === 'nickname' && displayName.trim().length < 2) {
-      Taro.showToast({ title: '请填写至少 2 个字的公开昵称', icon: 'none' })
-      return
-    }
-    const userId = await ensureCommunityUserId()
-    if (!userId) return
-    setIsPublishing(true)
-    try {
-      const result = await createCommunityPost({
-        user_id: userId,
-        title,
-        content,
-        post_type: newPostType,
-        author_mode: authorMode,
-        display_name: authorMode === 'nickname' ? displayName.trim() : undefined,
-        job_id: selectedJobId || undefined,
-        interview_round: experienceRound.trim(),
-        experience_date: experienceDate.trim(),
-      })
-      setPosts((prev) => [result.post, ...prev])
-      closePostModal()
-      Taro.showToast({ title: '已发布到学社', icon: 'success' })
-    } catch (error) {
-      console.error('[Hub] publish failed', error)
-      Taro.showToast({ title: '发布失败，内容已保留', icon: 'none' })
-    } finally {
-      setIsPublishing(false)
-    }
-  }
+  const articles = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return gardenArticles
+    return gardenArticles.filter((article) =>
+      [article.title, article.subtitle, article.category, article.content.join(' ')]
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    )
+  }, [searchQuery])
 
   const getArticleIcon = (category: string) => {
     if (/AI|人工智能|大模型/.test(category)) return '🤖'
@@ -195,234 +36,12 @@ const HubPage: React.FC = () => {
     return '📄'
   }
 
-  const filteredContent = useMemo(() => {
-    let filteredPosts = posts
-    if (activeFilter !== 'all' && activeFilter !== 'article') {
-      filteredPosts = posts.filter((p) => p.postType === activeFilter)
-    }
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filteredPosts = filteredPosts.filter((p) =>
-        p.title.toLowerCase().includes(query) ||
-        p.content.toLowerCase().includes(query) ||
-        p.author.toLowerCase().includes(query)
-      )
-    }
-    if (activeFilter === 'all') {
-      return { articles: [], posts: filteredPosts }
-    }
-    if (activeFilter === 'article') {
-      return { articles: gardenArticles, posts: filteredPosts.filter((post) => post.isFeatured) }
-    }
-    return { articles: [], posts: filteredPosts }
-  }, [activeFilter, posts, searchQuery])
-
-  const handleLike = async (postId: string) => {
-    const userId = await ensureCommunityUserId()
-    if (!userId) return
-    try {
-      const result = await toggleCommunityLike(postId, userId)
-      setPosts((prev) => prev.map((item) => (item.id === postId ? result.post : item)))
-      Taro.showToast({ title: result.post.isLiked ? '已点赞' : '已取消点赞', icon: 'none' })
-    } catch (error) {
-      console.error('[Hub] like failed', error)
-      Taro.showToast({ title: '操作失败，请重试', icon: 'none' })
-    }
-  }
-
-  const submitComment = async (postId: string) => {
-    if (!commentText.trim()) {
-      Taro.showToast({ title: '评论不能为空', icon: 'none' })
-      return
-    }
-    const userId = await ensureCommunityUserId()
-    if (!userId) return
-    try {
-      const result = await createCommunityComment(postId, userId, commentText.trim())
-      setPosts((prev) => prev.map((item) => (item.id === postId ? result.post : item)))
-      setCommentText('')
-      setCommentingPostId(null)
-      Taro.showToast({ title: '评论已发布', icon: 'success' })
-    } catch (error) {
-      console.error('[Hub] comment failed', error)
-      Taro.showToast({ title: '评论失败，内容已保留', icon: 'none' })
-    }
-  }
-
-  const handleHug = async (postId: string) => {
-    const userId = await ensureCommunityUserId()
-    if (!userId) return
-    try {
-      const result = await toggleCommunityHug(postId, userId)
-      setPosts((prev) => prev.map((item) => (item.id === postId ? result.post : item)))
-      Taro.showToast({ title: result.post.isHugged ? '已送出抱抱' : '已收回抱抱', icon: 'none' })
-    } catch (error) {
-      console.error('[Hub] hug failed', error)
-      Taro.showToast({ title: '抱抱没有送达，请重试', icon: 'none' })
-    }
-  }
-
-  const handleSummon = async (post: CommunityPost) => {
-    if (post.aiCommentLoading) return
-    const userId = await ensureCommunityUserId()
-    if (!userId) return
-    setPosts((prev) => prev.map((item) => (item.id === post.id ? { ...item, aiCommentLoading: true } : item)))
-    try {
-      const result = await summonCommunityReply(post.id, userId)
-      setPosts((prev) => prev.map((item) => (item.id === post.id ? result.post : item)))
-      Taro.showToast({ title: '学姐已经到场', icon: 'success' })
-    } catch (error) {
-      console.error('[Hub] summon failed', error)
-      setPosts((prev) => prev.map((item) => (item.id === post.id ? { ...item, aiCommentLoading: false } : item)))
-      Taro.showToast({ title: '这次召唤失败了，再点一次', icon: 'none' })
-    }
-  }
-
-  const handleReport = async (post: CommunityPost) => {
-    const userId = await ensureCommunityUserId()
-    if (!userId) return
-    try {
-      const options = ['疑似虚假求职信息', '骚扰或攻击', '广告或引流', '隐私泄露']
-      const selected = await Taro.showActionSheet({ itemList: options })
-      const reason = options[selected.tapIndex]
-      const result = await reportCommunityPost(post.id, userId, reason)
-      if (result.pending_review) {
-        setPosts((current) => current.filter((item) => item.id !== post.id))
-      }
-      Taro.showToast({ title: '已提交人工审核', icon: 'none' })
-    } catch (error: any) {
-      if (String(error?.errMsg || '').includes('cancel')) return
-      Taro.showToast({ title: error?.message || '举报未提交', icon: 'none' })
-    }
-  }
-
-  const turnPostIntoAction = async (post: CommunityPost) => {
-    const userId = await ensureCommunityUserId()
-    if (!userId) return
-    const scenario = post.postType === 'treehole' ? 'emotion' : 'interview'
-    const boundJob = jobProgress.find((item) => item.id === post.boundJobId)
-    const prompt = post.postType === 'treehole'
-      ? `我在学社看到/写下了这段话：\n标题：${post.title}\n内容：${post.content}\n请先听我说，不要急着给大道理；再问我此刻更想被陪伴，还是一起找一个最小行动。`
-      : `把下面这条学社内容转成一个 5 分钟、可直接完成的求职练习。先说明目标，再一次只给我一道题，等我回答后指出证据是否充分，不要虚构我的经历。\n标题：${post.title}\n内容：${post.content}`
-    try {
-      await recordCommunityAction(post.id, {
-        user_id: userId,
-        action: 'practice',
-        job_id: boundJob?.id,
-      })
-    } catch (error) {
-      console.error('[Hub] action attribution failed', error)
-      Taro.showToast({ title: '行动记录暂未保存，仍可继续练习', icon: 'none' })
-    }
-    openConversation(scenario, post.postType === 'treehole' ? '从树洞继续聊' : '从干货开始练')
-    trackProductEvent('community.action_started', userId, { post_type: post.postType, action: scenario })
-    await Taro.switchTab({ url: '/pages/conversation/index' })
-    if (post.postType === 'treehole') {
-      await seedConversation('emotion', prompt, '从树洞继续聊')
-      return
-    }
-    await startInterview(boundJob?.position || 'AI 求职面试', 5, {
-      company: boundJob?.company || '',
-      jobId: boundJob?.id,
-      sourcePostId: post.id,
-      anxietyFocus: `把《${post.title}》转成可练习的行动`,
-      practiceStyle: 'warmup',
-    })
-  }
-
-  const renderPost = (post: CommunityPost) => {
-    const isTreehole = post.postType === 'treehole'
-    return (
-      <View key={post.id} className={styles.postCard}>
-        <View className={styles.postTop}>
-          <View className={styles.authorBlock}>
-            <Text className={styles.author}>{post.isExample ? 'Pinco学姐' : post.author}</Text>
-            <View style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-              {isTreehole && <Text className={styles.treeholeBadge}>树洞</Text>}
-              {post.authorMode === 'anonymous' && <Text className={styles.treeholeBadge}>匿名</Text>}
-              <Text className={styles.meta}>
-                {post.isExample ? editorialRoleLabels[post.postType] : `${post.roleTag} · ${post.time}`}
-              </Text>
-            </View>
-          </View>
-          <View className={styles.summonButton} onClick={() => handleSummon(post)}>
-            <Text>{post.aiCommentLoading ? '学姐组织语言中' : '召唤学姐'}</Text>
-          </View>
-        </View>
-        <Text className={styles.titleText}>{post.title}</Text>
-        <Text className={styles.contentText}>{post.content}</Text>
-        {post.boundJobLabel && <Text className={styles.meta}>关联岗位：{post.boundJobLabel}</Text>}
-        {(post.experienceRound || post.experienceDate) && <Text className={styles.meta}>经验标签：{[post.experienceRound, post.experienceDate].filter(Boolean).join(' · ')}</Text>}
-        <View className={styles.practiceButton} onClick={() => turnPostIntoAction(post)}>
-          <Text>{isTreehole ? '和学姐继续聊 →' : '把这条转成 5 分钟练习 →'}</Text>
-        </View>
-        <View className={styles.actions}>
-          {isTreehole ? (
-            <View className={styles.hugButton} onClick={() => handleHug(post.id)}>
-              <Text className={classnames(styles.actionText, post.isHugged && styles.actionTextActive)}>
-                {post.isHugged ? '🤗 已抱抱' : '🤗 抱抱'} · {post.hugs || 0}
-              </Text>
-            </View>
-          ) : (
-            <Text
-              className={classnames(styles.actionText, post.isLiked && styles.actionTextActive)}
-              onClick={() => handleLike(post.id)}
-            >
-              {post.isLiked ? '已点赞' : '点赞'} · {post.likes}
-            </Text>
-          )}
-          <Text className={styles.actionText}>评论 · {post.comments.length}</Text>
-          {!post.isExample && <Text className={styles.actionText} onClick={() => handleReport(post)}>举报</Text>}
-        </View>
-        {post.comments.length > 0 && (
-          <View className={styles.commentList}>
-            {post.comments.map((comment) => (
-              <View key={comment.id} className={styles.commentCard}>
-                <Text className={styles.commentAuthor}>{comment.isAi ? 'Pinco学姐' : comment.author}</Text>
-                <Text className={styles.commentText}>{comment.text}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-        {commentingPostId === post.id ? (
-          <View className={styles.commentInputBar}>
-            <Textarea
-              className={styles.commentInput}
-              value={commentText}
-              onInput={(e) => setCommentText(e.detail.value)}
-              placeholder="写下你的评论..."
-              maxlength={200}
-              autoHeight
-              showConfirmBar={false}
-            />
-
-            <View className={styles.commentActions}>
-              <View className={styles.commentCancel} onClick={() => { setCommentingPostId(null); setCommentText(''); }}>
-                <Text>取消</Text>
-              </View>
-              <View className={styles.commentSubmit} onClick={() => submitComment(post.id)}>
-                <Text>发布</Text>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View className={styles.commentTrigger} onClick={() => setCommentingPostId(post.id)}>
-            <Text className={styles.commentTriggerText}>💬 写评论...</Text>
-          </View>
-        )}
-      </View>
-    )
-  }
-
   return (
     <View className={styles.page}>
       <View className={styles.header}>
         <View>
           <Text className={styles.title}>学社</Text>
-          <Text className={styles.desc}>{gardenArticles.length} 篇干货 · {posts.length} 条讨论</Text>
-        </View>
-        <View className={styles.headerPostButton} onClick={openPostModal}>
-          <Text>✎ 发布</Text>
+          <Text className={styles.desc}>Pinco学姐精选干货 · {gardenArticles.length} 篇</Text>
         </View>
       </View>
 
@@ -431,180 +50,42 @@ const HubPage: React.FC = () => {
         <Textarea
           className={styles.searchInput}
           value={searchQuery}
-          onInput={(e) => setSearchQuery(e.detail.value)}
-          placeholder="搜索帖子标题或内容..."
+          onInput={(event) => setSearchQuery(event.detail.value)}
+          placeholder="搜索精选文章..."
           maxlength={50}
           autoHeight
           showConfirmBar={false}
         />
-        {searchQuery && (
+        {!!searchQuery && (
           <View className={styles.searchClear} onClick={() => setSearchQuery('')}>
             <Text>✕</Text>
           </View>
         )}
       </View>
 
-      <ScrollView className={styles.filterBar} scrollX enhanced showScrollbar={false}>
-        <View className={styles.filterBarInner}>
-          {filterOptions.map((opt) => (
-            <View
-              key={opt.key}
-              className={classnames(styles.filterChip, activeFilter === opt.key && styles.filterChipActive)}
-              onClick={() => setActiveFilter(opt.key)}
-            >
-              <Text>{opt.label}</Text>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-
-      {filteredContent.articles.length > 0 && (
-        <>
-          <Text className={styles.sectionTitle}>精选干货</Text>
-          {filteredContent.articles.map((article) => (
-            <View
-              key={article.id}
-              className={styles.articleCard}
-              onClick={() => Taro.navigateTo({ url: `/pages/article/index?id=${article.id}` })}
-            >
-              <View className={styles.articleIconBox}>
-                <Text>{getArticleIcon(article.category)}</Text>
-              </View>
-              <View className={styles.articleBody}>
-                <View className={styles.articleMeta}>
-                  <Text className={styles.articleType}>📚 干货</Text>
-                  <Text className={styles.articleCategory}>{article.category}</Text>
-                  <Text className={styles.articleReads}>{article.reads}</Text>
-                </View>
-                <Text className={styles.articleTitle}>{article.title}</Text>
-                <Text className={styles.articleSubtitle}>{article.subtitle}</Text>
-              </View>
-            </View>
-          ))}
-        </>
-      )}
-
-      {filteredContent.posts.length > 0 && (
-        <>
-          <View className={styles.postSectionHeader}>
-            <Text className={styles.sectionTitle}>社区动态</Text>
-            <View className={styles.postButton} onClick={openPostModal}>
-              <Text className={styles.postButtonText}>+ 发布</Text>
-            </View>
+      <Text className={styles.sectionTitle}>精选干货</Text>
+      {articles.length > 0 ? articles.map((article) => (
+        <View
+          key={article.id}
+          className={styles.articleCard}
+          onClick={() => Taro.navigateTo({ url: `/pages/article/index?id=${article.id}` })}
+        >
+          <View className={styles.articleIconBox}>
+            <Text>{getArticleIcon(article.category)}</Text>
           </View>
-          {filteredContent.posts.map(renderPost)}
-        </>
-      )}
-
-      {filteredContent.articles.length === 0 && filteredContent.posts.length === 0 && (
+          <View className={styles.articleBody}>
+            <View className={styles.articleMeta}>
+              <Text className={styles.articleType}>📚 Pinco学姐</Text>
+              <Text className={styles.articleCategory}>{article.category}</Text>
+              <Text className={styles.articleReads}>精选干货</Text>
+            </View>
+            <Text className={styles.articleTitle}>{article.title}</Text>
+            <Text className={styles.articleSubtitle}>{article.subtitle}</Text>
+          </View>
+        </View>
+      )) : (
         <View className={styles.emptyState}>
-          <Text>{loadError || '这个分类下还没有内容，成为第一个分享的人吧。'}</Text>
-        </View>
-      )}
-
-      {/* 发帖弹层 */}
-      {showPostModal && (
-        <View className={styles.postModalOverlay} onClick={closePostModal}>
-          <View className={styles.postModal} onClick={(e) => e.stopPropagation()}>
-            <Text className={styles.postModalTitle}>发布新帖</Text>
-
-            <ScrollView className={styles.postModalBody} scrollY enhanced showScrollbar={false}>
-            <View className={styles.typeSelector}>
-              {(['treehole', 'help', 'share', 'success'] as PostType[]).map((t) => (
-                <View
-                  key={t}
-                  className={classnames(styles.typeChip, newPostType === t && styles.typeChipActive)}
-                  onClick={() => setNewPostType(t)}
-                >
-                  <Text className={styles.typeChipText}>
-                    {t === 'treehole' ? '🌰 树洞' : t === 'help' ? '❓ 问答' : t === 'share' ? '💡 干货' : '🎉 上岸'}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            <View>
-              <Text className={styles.meta}>发布身份（仅影响这条帖子）</Text>
-              <View className={styles.typeSelector}>
-                <View className={classnames(styles.typeChip, authorMode === 'anonymous' && styles.typeChipActive)} onClick={() => setAuthorMode('anonymous')}>
-                  <Text className={styles.typeChipText}>匿名 · 平台虚拟昵称</Text>
-                </View>
-                <View className={classnames(styles.typeChip, authorMode === 'nickname' && styles.typeChipActive)} onClick={() => setAuthorMode('nickname')}>
-                  <Text className={styles.typeChipText}>公开昵称</Text>
-                </View>
-              </View>
-              {authorMode === 'anonymous' ? (
-                <Text className={styles.meta}>将显示为随机“求职者-XXXX”，不会展示微信身份。</Text>
-              ) : (
-                <>
-                  <Input
-                    className={styles.postTitleInput}
-                    value={displayName}
-                    onInput={(event) => setDisplayName(event.detail.value)}
-                    placeholder="手动填写希望公开展示的微信昵称"
-                    maxlength={30}
-                  />
-                  <Text className={styles.meta}>Pinco 不会读取微信昵称；只有你主动填写并发布的昵称会公开显示。</Text>
-                </>
-              )}
-            </View>
-
-            <Input
-              key={`post-title-${postModalKey}`}
-              className={styles.postTitleInput}
-              onInput={(e) => { newPostTitleRef.current = e.detail.value }}
-              placeholder="标题"
-              maxlength={100}
-            />
-            <Textarea
-              key={`post-content-${postModalKey}`}
-              className={styles.postContentInput}
-              onInput={(e) => { newPostContentRef.current = e.detail.value }}
-              placeholder={newPostType === 'treehole' ? '这里很安全，想说就说...' : newPostType === 'help' ? '详细描述你的问题，大家一起来帮你...' : newPostType === 'share' ? '分享你的求职干货、面试技巧...' : '恭喜上岸！分享你的成功经验，给学弟学妹们一点鼓励...'}
-              maxlength={1000}
-              fixed
-              cursorSpacing={24}
-              disableDefaultPadding
-              showConfirmBar={false}
-            />
-            <Text className={styles.inputCount}>最多 1000 字</Text>
-
-            {jobProgress.length > 0 && (
-              <View>
-                <Text className={styles.meta}>关联岗位（可选，便于后续练习与复盘沉淀到同一岗位）</Text>
-                <ScrollView className={styles.filterBar} scrollX enhanced showScrollbar={false}>
-                  <View className={styles.filterBarInner}>
-                    <View className={classnames(styles.typeChip, !selectedJobId && styles.typeChipActive)} onClick={() => setSelectedJobId('')}><Text>不关联</Text></View>
-                    {jobProgress.map((job) => (
-                      <View key={job.id} className={classnames(styles.typeChip, selectedJobId === job.id && styles.typeChipActive)} onClick={() => setSelectedJobId(job.id)}>
-                        <Text>{job.company} · {job.position}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
-            )}
-            {['share', 'success'].includes(newPostType) && (
-              <View>
-                <Text className={styles.meta}>经验标签（可选，帮助其他人判断是否适用）</Text>
-                <Input className={styles.postTitleInput} value={experienceRound} onInput={(e) => setExperienceRound(e.detail.value)} placeholder="面试轮次 / 场景，如：业务一面、项目深挖" maxlength={40} />
-                <Input className={styles.postTitleInput} value={experienceDate} onInput={(e) => setExperienceDate(e.detail.value)} placeholder="发生时间，如：2026年8月" maxlength={40} />
-              </View>
-            )}
-            </ScrollView>
-
-            <View className={styles.postModalButtons}>
-              <View className={styles.postModalCancel} onClick={closePostModal}>
-                <Text>取消</Text>
-              </View>
-              <View
-                className={classnames(styles.postModalConfirm, isPublishing && styles.postModalConfirmDisabled)}
-                onClick={publishPost}
-              >
-                <Text>{isPublishing ? '发布中…' : '发布'}</Text>
-              </View>
-            </View>
-          </View>
+          <Text>没有找到相关文章，试试其他关键词。</Text>
         </View>
       )}
     </View>

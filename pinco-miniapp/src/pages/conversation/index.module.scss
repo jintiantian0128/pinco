@@ -22,43 +22,24 @@
   border-bottom: 2rpx solid rgba(0, 0, 0, 0.04);
 }
 
-/* ---- 顶部场景 Tab 横排 ---- */
-.scenarioTabBar {
+/* ---- 综合求职助手说明：场景是同一段对话中的子任务，不是切换会话的 Tab ---- */
+.scenarioContext {
   display: flex;
-  gap: 12rpx;
-  padding: 0 0 16rpx;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  flex-direction: column;
+  gap: 4rpx;
+  padding: 8rpx 4rpx 14rpx;
 }
 
-.scenarioTab {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-  padding: 10rpx 18rpx;
-  background: $color-bg-card;
-  border-radius: 28rpx;
-  box-shadow: $shadow-card;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.scenarioTabActive {
-  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
-}
-
-.scenarioTabActive .scenarioTabLabel {
-  color: $color-text-white;
-}
-
-.scenarioTabIcon {
+.scenarioContextTitle {
   font-size: 24rpx;
-}
-
-.scenarioTabLabel {
-  font-size: 22rpx;
   color: $color-text-primary;
   font-weight: $font-weight-semibold;
+}
+
+.scenarioContextDesc {
+  font-size: 20rpx;
+  color: $color-text-secondary;
+  line-height: 1.5;
 }
 
 /* ---- 对话操作栏 ---- */

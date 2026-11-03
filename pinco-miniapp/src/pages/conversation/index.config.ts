@@ -1,1 +1,1 @@
-export default definePageConfig({ navigationBarTitleText: '专属会话' })
+export default definePageConfig({ navigationBarTitleText: '升职加薪' })

@@ -88,6 +88,13 @@ JSEARCH_BASE_URL = "https://jsearch.p.rapidapi.com"
 IMAGE_OCR_PROVIDER = os.environ.get("IMAGE_OCR_PROVIDER", "local").strip().lower()
 IMAGE_OCR_DEVICE_VERIFIED = os.environ.get("IMAGE_OCR_DEVICE_VERIFIED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
+# The public community feed is temporarily editorial-only for the 1.0 review
+# build. Re-enable user posts/comments only after the required service category
+# and filing qualifications are in place.
+COMMUNITY_USER_CONTENT_ENABLED = os.environ.get(
+    "COMMUNITY_USER_CONTENT_ENABLED", "false"
+).strip().lower() in {"1", "true", "yes", "on"}
+
 # WeChat Pay is opt-in and fail-closed. Public sales require both the feature
 # switch and a completed live pay + callback + refund verification. Before that,
 # only explicitly allow-listed internal user ids can create real test orders.
@@ -5293,6 +5300,8 @@ def review_expert_booking(booking_id: str, request: ExpertBookingReviewRequest):
 
 @app.get("/api/v1/community/posts")
 def get_community_posts(user_id: Optional[str] = None):
+    if not COMMUNITY_USER_CONTENT_ENABLED:
+        return {"posts": []}
     state = load_beta_state()
     visible = [
         post for post in state.get("community_posts", [])
@@ -5302,6 +5311,8 @@ def get_community_posts(user_id: Optional[str] = None):
 
 @app.post("/api/v1/community/posts")
 def create_community_post(request: CommunityPostCreateRequest):
+    if not COMMUNITY_USER_CONTENT_ENABLED:
+        raise HTTPException(status_code=403, detail="学社暂未开放用户发帖；当前仅展示 Pinco 学姐精选内容")
     post_type = request.post_type.strip().lower()
     if post_type not in {"treehole", "help", "share", "success"}:
         raise HTTPException(status_code=422, detail="不支持的帖子类型")
@@ -5527,6 +5538,8 @@ def toggle_community_hug(post_id: str, request: CommunityActionRequest):
 
 @app.post("/api/v1/community/posts/{post_id}/comments")
 def create_community_comment(post_id: str, request: CommunityCommentCreateRequest):
+    if not COMMUNITY_USER_CONTENT_ENABLED:
+        raise HTTPException(status_code=403, detail="精选内容暂未开放用户评论")
     with _state_lock:
         state = load_beta_state()
         user = community_user(state, request.user_id)

@@ -705,7 +705,9 @@ class TrustFoundationTests(unittest.TestCase):
     def test_community_actions_persist_only_after_real_user_bootstrap(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
-            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None):
+            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None), patch.object(
+                main, "COMMUNITY_USER_CONTENT_ENABLED", True
+            ):
                 state = main.default_beta_state()
                 user = main.ensure_user(state, "community-device", "小林", "weapp")
                 store.save(state)
@@ -773,11 +775,29 @@ class TrustFoundationTests(unittest.TestCase):
             store.save(state)
             with patch.object(main, "_state_store", store):
                 posts = main.get_community_posts()["posts"]
+            self.assertEqual(posts, [])
+            with patch.object(main, "COMMUNITY_USER_CONTENT_ENABLED", True), patch.object(main, "_state_store", store):
+                posts = main.get_community_posts()["posts"]
             counts = {
                 post_type: sum(1 for item in posts if item["postType"] == post_type)
                 for post_type in {"treehole", "help", "share", "success"}
             }
             self.assertTrue(all(count >= 10 for count in counts.values()), counts)
+
+    def test_review_build_hides_public_posts_and_rejects_user_posting(self):
+        self.assertFalse(main.COMMUNITY_USER_CONTENT_ENABLED)
+        self.assertEqual(main.get_community_posts()["posts"], [])
+        with self.assertRaises(HTTPException) as post_error:
+            main.create_community_post(main.CommunityPostCreateRequest(
+                user_id="review-user", title="测试发帖", content="不应公开", post_type="share"
+            ))
+        self.assertEqual(post_error.exception.status_code, 403)
+        with self.assertRaises(HTTPException) as comment_error:
+            main.create_community_comment(
+                "editorial-share-01",
+                main.CommunityCommentCreateRequest(user_id="review-user", text="不应公开"),
+            )
+        self.assertEqual(comment_error.exception.status_code, 403)
 
     def test_expert_market_requires_review_then_supports_delivery_and_real_review(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1083,7 +1103,9 @@ class TrustFoundationTests(unittest.TestCase):
     def test_community_three_unique_reports_hold_content_for_review(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
-            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None):
+            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None), patch.object(
+                main, "COMMUNITY_USER_CONTENT_ENABLED", True
+            ):
                 state = main.default_beta_state()
                 author = main.ensure_user(state, "report-author", "作者", "weapp")
                 reporters = [main.ensure_user(state, f"reporter-{index}", f"用户{index}", "weapp") for index in range(3)]
@@ -1122,6 +1144,8 @@ class TrustFoundationTests(unittest.TestCase):
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
             with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None), patch.object(
                 main, "PINCO_ADMIN_TOKEN", "a" * 32
+            ), patch.object(
+                main, "COMMUNITY_USER_CONTENT_ENABLED", True
             ):
                 state = main.default_beta_state()
                 author = main.ensure_user(state, "points-author", "作者", "weapp")
@@ -1181,7 +1205,9 @@ class TrustFoundationTests(unittest.TestCase):
     def test_weak_retry_binds_job_and_post_and_returns_before_after_comparison(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
-            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None):
+            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None), patch.object(
+                main, "COMMUNITY_USER_CONTENT_ENABLED", True
+            ):
                 state = main.default_beta_state()
                 user = main.ensure_user(state, "retry-device", "复练用户", "weapp")
                 store.save(state)

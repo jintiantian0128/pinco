@@ -11,16 +11,6 @@ import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 import { buildConversationTitle } from '@/utils/format'
 import { buildJobSearchPrompt } from '@/utils/job-search'
 
-const promptMap: Record<ConversationScenario, string> = {
-  general: '你先根据我现在的情况，帮我判断今天最值得先做的一步。',
-  resume: '我想做一轮简历诊断，请先问我最关键的背景信息。',
-  interview: '帮我开始一轮模拟面试，从自我介绍开始。',
-  emotion: '我最近在求职里有点内耗，你先接住我的情绪，再给我两个今天能做的动作。',
-  expert: '请帮我生成一份专家连线前的 15 分钟备战清单。',
-  garden: '请把我刚看的内容转成今天就能做的动作清单。',
-  jd: '请帮我解读这段岗位描述，提取核心要求、面试重点和谈薪建议。'
-}
-
 type ChatAction = { label: string; prompt?: string; kind?: 'prompt' | 'resume' | 'jd' | 'interview' | 'progress' | 'bind' | 'review' | 'search' | 'evidence_new' | 'evidence_direction' | 'target_job' }
 
 const quickStartCards: Array<{ title: string; desc: string; scenario: ConversationScenario; kind?: ChatAction['kind']; prompt: string }> = [
@@ -56,14 +46,6 @@ type EvidenceDraftResponse = {
   source_boundary: string
   expert_knowledge?: { version?: string; cards_used?: string[] }
 }
-
-const scenarioTabs: Array<{ label: string; scenario: ConversationScenario; icon: string; isSearch?: boolean }> = [
-  { label: '简历诊断', scenario: 'resume', icon: '📄' },
-  { label: '职业规划', scenario: 'general', icon: '🎯' },
-  { label: '模拟面试', scenario: 'interview', icon: '🎤' },
-  { label: '情感树洞', scenario: 'emotion', icon: '🌰' },
-  { label: '找岗位', scenario: 'general', icon: '🔍', isSearch: true },
-]
 
 const pickPriorityJob = (jobs: JobProgressItem[]) => jobs.find((job) => ['interview2', 'interview1', 'hr'].includes(job.status)) || jobs[0]
 
@@ -260,7 +242,7 @@ const ConversationPage: React.FC = () => {
     const sourcePostId = typeof options?.source_post_id === 'string' ? decodeURIComponent(options.source_post_id) : ''
     const duration = Number(options?.duration)
     openConversation(scenario, '把问题交给学姐一起拆')
-    Taro.setNavigationBarTitle({ title: buildConversationTitle(scenario) })
+    Taro.setNavigationBarTitle({ title: '升职加薪' })
     if (scenario === 'interview' && (position || jobId || sourcePostId)) {
       setInterviewInput(position || 'AI 求职面试')
       setInterviewCompany(company)
@@ -1227,28 +1209,11 @@ const ConversationPage: React.FC = () => {
 
   return (
     <View className={styles.page}>
-      {/* 顶部场景 Tab 横排 —— 固定在顶部，不随对话滚动 */}
+      {/* 综合助手不再按子意图切换会话，避免简历、岗位和面试上下文被割裂。 */}
       <View className={styles.stickyHeader}>
-        <View className={styles.scenarioTabBar}>
-          {scenarioTabs.map((tab) => (
-            <View
-              key={tab.label}
-              className={classnames(styles.scenarioTab, !tab.isSearch && conversationMeta.scenario === tab.scenario && styles.scenarioTabActive)}
-              onClick={() => {
-                if (tab.isSearch) {
-                  startConversationalJobSearch()
-                  return
-                }
-                openConversation(tab.scenario, tab.label)
-                Taro.setNavigationBarTitle({ title: buildConversationTitle(tab.scenario) })
-                const prompt = promptMap[tab.scenario]
-                if (prompt) seedConversation(tab.scenario, prompt, tab.label)
-              }}
-            >
-              <Text className={styles.scenarioTabIcon}>{tab.icon}</Text>
-              <Text className={styles.scenarioTabLabel}>{tab.label}</Text>
-            </View>
-          ))}
+        <View className={styles.scenarioContext}>
+          <Text className={styles.scenarioContextTitle}>综合求职助手</Text>
+          <Text className={styles.scenarioContextDesc}>简历、岗位、面试和职业情绪都可以接着聊，学姐会结合这段对话帮你推进。</Text>
         </View>
 
         {/* 对话操作栏 */}

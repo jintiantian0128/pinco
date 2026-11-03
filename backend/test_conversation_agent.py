@@ -22,7 +22,7 @@ class ConversationAgentTests(unittest.TestCase):
             user = main.ensure_user(state, "community-author-device", "微信资料昵称", "weapp")
             user_id = user["profile"]["user_id"]
             store.save(state)
-            with patch.object(main, "_state_store", store):
+            with patch.object(main, "_state_store", store), patch.object(main, "COMMUNITY_USER_CONTENT_ENABLED", True):
                 anonymous = main.create_community_post(main.CommunityPostCreateRequest(
                     user_id=user_id, title="匿名帖子", content="匿名内容", post_type="help",
                     author_mode="anonymous",
