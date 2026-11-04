@@ -1164,6 +1164,10 @@ PINCO_ADMIN_TOKEN = os.environ.get("PINCO_ADMIN_TOKEN", "").strip()
 WECHAT_APP_ID = os.environ.get("WECHAT_APP_ID")
 WECHAT_APP_SECRET = os.environ.get("WECHAT_APP_SECRET")
 WECHAT_REQUEST_DOMAIN = os.environ.get("WECHAT_REQUEST_DOMAIN")
+_wechat_access_token_cache: Dict[str, Any] = {"value": "", "expires_at": 0.0}
+_wechat_share_link_cache: Dict[str, Any] = {"value": ""}
+_wechat_access_token_lock = Lock()
+_wechat_share_link_lock = Lock()
 _state_lock = Lock()
 _admin_login_lock = Lock()
 _admin_login_failures: Dict[str, List[float]] = {}
@@ -2249,6 +2253,74 @@ def miniapp_bootstrap(request: MiniappBootstrapRequest):
 @app.get("/api/v1/miniapp/readiness")
 def miniapp_readiness():
     return build_miniapp_readiness()
+
+
+def get_wechat_miniapp_access_token() -> str:
+    """Return a cached WeChat access token without ever exposing app secrets."""
+    if not WECHAT_APP_ID or not WECHAT_APP_SECRET:
+        raise HTTPException(status_code=503, detail="小程序分享链接暂不可用，请稍后重试")
+    now = time.time()
+    with _wechat_access_token_lock:
+        if _wechat_access_token_cache["value"] and _wechat_access_token_cache["expires_at"] > now + 60:
+            return str(_wechat_access_token_cache["value"])
+        query = urlencode({
+            "grant_type": "client_credential",
+            "appid": WECHAT_APP_ID,
+            "secret": WECHAT_APP_SECRET,
+        })
+        try:
+            with urlopen(f"https://api.weixin.qq.com/cgi-bin/token?{query}", timeout=8) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except Exception as error:
+            print(f"WeChat share token request failed: {type(error).__name__}")
+            raise HTTPException(status_code=502, detail="暂时无法连接微信分享服务，请稍后重试") from error
+        token = payload.get("access_token")
+        if not token or payload.get("errcode"):
+            print(f"WeChat share token rejected: errcode={payload.get('errcode')}")
+            raise HTTPException(status_code=502, detail="微信分享服务暂不可用，请检查小程序凭证配置")
+        expires_in = max(300, int(payload.get("expires_in", 7200)))
+        _wechat_access_token_cache.update(value=token, expires_at=now + expires_in - 300)
+        return str(token)
+
+
+def get_wechat_miniapp_share_link() -> str:
+    """Create/cache a permanent Mini Program URL Link to the conversation entry."""
+    with _wechat_share_link_lock:
+        cached_link = str(_wechat_share_link_cache.get("value") or "")
+        if cached_link:
+            return cached_link
+        access_token = get_wechat_miniapp_access_token()
+        request = UrlRequest(
+            f"https://api.weixin.qq.com/wxa/generate_urllink?access_token={access_token}",
+            data=json.dumps({
+                "path": "pages/conversation/index",
+                "query": "",
+                "is_expire": False,
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=8) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except Exception as error:
+            print(f"WeChat share link request failed: {type(error).__name__}")
+            raise HTTPException(status_code=502, detail="暂时无法生成小程序体验链接，请稍后重试") from error
+        url_link = payload.get("url_link")
+        if payload.get("errcode") or not isinstance(url_link, str) or not url_link.startswith("https://"):
+            print(f"WeChat share link rejected: errcode={payload.get('errcode')}")
+            raise HTTPException(status_code=502, detail="微信暂未生成可用的小程序链接，请稍后重试")
+        _wechat_share_link_cache["value"] = url_link
+        return url_link
+
+
+@app.get("/api/v1/miniapp/share-link")
+def miniapp_share_link():
+    return {
+        "url_link": get_wechat_miniapp_share_link(),
+        "path": "/pages/conversation/index",
+        "expires": False,
+    }
 
 @app.get("/admin", include_in_schema=False)
 def admin_console():

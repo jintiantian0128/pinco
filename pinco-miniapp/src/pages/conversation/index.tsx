@@ -85,6 +85,7 @@ function formatTime(ts: number) {
 const ConversationPage: React.FC = () => {
   usePageAnalytics('conversation')
   const [draft, setDraft] = useState('')
+  const [shareLinkBusy, setShareLinkBusy] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [recordHint, setRecordHint] = useState('')
@@ -136,6 +137,13 @@ const ConversationPage: React.FC = () => {
     title: 'Pinco 全周期职业伙伴，陪你一起走过求职与职场',
     path: '/pages/conversation/index',
   }))
+
+  useDidShow(() => {
+    // 部分基础库/旧版本不会自动展示转发入口，页面显示时显式启用好友转发。
+    Taro.showShareMenu({ withShareTicket: true, showShareItems: ['shareAppMessage'] }).catch((error) => {
+      console.warn('[Share] unable to show native share menu', error)
+    })
+  })
 
   const handleCreateNewConversation = () => {
     setConversationScrollKey((current) => current + 1)
@@ -334,6 +342,25 @@ const ConversationPage: React.FC = () => {
   const handleShare = (message: MessageItem) => {
     setShareTargetMessage(message)
     setShowShareMenu(true)
+  }
+
+  const handleCopyMiniappShareLink = async () => {
+    if (shareLinkBusy) return
+    setShareLinkBusy(true)
+    trackProductEvent('miniapp.share_link.requested', userProfile?.user_id)
+    try {
+      const result = await apiRequest<{ url_link?: string }>('/api/v1/miniapp/share-link')
+      const link = String(result?.url_link || '').trim()
+      if (!link.startsWith('https://')) throw new Error('分享链接格式无效')
+      await Taro.setClipboardData({ data: link })
+      trackProductEvent('miniapp.share_link.copied', userProfile?.user_id)
+      Taro.showToast({ title: '体验链接已复制', icon: 'success' })
+    } catch (error) {
+      console.error('[Share] copy mini-program link failed', error)
+      Taro.showToast({ title: error instanceof Error ? error.message : '链接暂不可用，请稍后重试', icon: 'none', duration: 2500 })
+    } finally {
+      setShareLinkBusy(false)
+    }
   }
 
   const handleCopySharedMessage = () => {
@@ -1242,6 +1269,14 @@ const ConversationPage: React.FC = () => {
           <View className={styles.actionBarButton} onClick={() => setShowHistory(true)}>
             <Text className={styles.actionBarIcon}>📜</Text>
             <Text className={styles.actionBarLabel}>历史 {conversationHistory.length > 0 ? `(${conversationHistory.length})` : ''}</Text>
+          </View>
+          <Button className={classnames(styles.actionBarButton, styles.shareActionButton)} openType="share">
+            <Text className={styles.actionBarIcon}>↗</Text>
+            <Text className={styles.actionBarLabel}>转发邀请</Text>
+          </Button>
+          <View className={classnames(styles.actionBarButton, shareLinkBusy && styles.shareActionDisabled)} onClick={handleCopyMiniappShareLink}>
+            <Text className={styles.actionBarIcon}>⧉</Text>
+            <Text className={styles.actionBarLabel}>{shareLinkBusy ? '生成中…' : '复制体验链接'}</Text>
           </View>
         </View>
         {hasMessages && (

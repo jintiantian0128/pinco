@@ -60,6 +60,15 @@
   border-radius: 20rpx;
 }
 
+.shareActionButton {
+  margin: 0;
+  line-height: normal;
+  border: 0;
+  &::after { border: 0; }
+}
+
+.shareActionDisabled { opacity: 0.55; }
+
 .actionBarIcon {
   font-size: 22rpx;
 }

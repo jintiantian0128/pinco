@@ -1,4 +1,5 @@
 import asyncio
+from io import BytesIO
 import json
 import os
 import tempfile
@@ -12,6 +13,38 @@ from state_store import JsonFileStateStore
 
 
 class TrustFoundationTests(unittest.TestCase):
+    def test_miniapp_share_link_uses_wechat_url_link_and_caches_it(self):
+        class FakeResponse(BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                self.close()
+
+        responses = [
+            FakeResponse(b'{"access_token":"test-token","expires_in":7200}'),
+            FakeResponse(b'{"errcode":0,"url_link":"https://wxaurl.cn/pinco-test"}'),
+        ]
+        with patch.object(main, "WECHAT_APP_ID", "wx-test"), patch.object(
+            main, "WECHAT_APP_SECRET", "secret-test"
+        ), patch.dict(main._wechat_access_token_cache, {"value": "", "expires_at": 0}), patch.dict(
+            main._wechat_share_link_cache, {"value": ""}
+        ), patch.object(main, "urlopen", side_effect=responses) as mocked_urlopen:
+            first = main.miniapp_share_link()
+            second = main.miniapp_share_link()
+
+        self.assertEqual(first["url_link"], "https://wxaurl.cn/pinco-test")
+        self.assertEqual(first["path"], "/pages/conversation/index")
+        self.assertFalse(first["expires"])
+        self.assertEqual(second, first)
+        self.assertEqual(mocked_urlopen.call_count, 2)
+
+    def test_miniapp_share_link_fails_closed_without_wechat_credentials(self):
+        with patch.object(main, "WECHAT_APP_ID", ""), patch.object(main, "WECHAT_APP_SECRET", ""):
+            with self.assertRaises(HTTPException) as raised:
+                main.miniapp_share_link()
+        self.assertEqual(raised.exception.status_code, 503)
+
     def test_release_fingerprint_is_validated_and_exposed_by_health(self):
         with tempfile.TemporaryDirectory() as directory:
             release_path = os.path.join(directory, ".pinco-release-sha")
