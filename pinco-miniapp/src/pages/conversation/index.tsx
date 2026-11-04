@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Image, ScrollView, Text, Textarea, View } from '@tarojs/components'
-import Taro, { useDidHide, useDidShow, useLoad } from '@tarojs/taro'
+import Taro, { useDidHide, useDidShow, useLoad, useShareAppMessage } from '@tarojs/taro'
 import classnames from 'classnames'
 import styles from './index.module.scss'
 import { usePincoStore } from '@/store/usePincoStore'
@@ -129,6 +129,13 @@ const ConversationPage: React.FC = () => {
   const submitSupportFeedback = usePincoStore((state) => state.submitSupportFeedback)
   const scrollRef = useRef<any>(null)
   const [conversationScrollKey, setConversationScrollKey] = useState(0)
+
+  // 让右上角菜单启用“转发给朋友/复制链接”。不要把当前会话内容或用户资料
+  // 拼进分享卡片；被分享者进入的是 Pinco 会话首页。
+  useShareAppMessage(() => ({
+    title: 'Pinco 全周期职业伙伴，陪你一起走过求职与职场',
+    path: '/pages/conversation/index',
+  }))
 
   const handleCreateNewConversation = () => {
     setConversationScrollKey((current) => current + 1)
@@ -329,17 +336,12 @@ const ConversationPage: React.FC = () => {
     setShowShareMenu(true)
   }
 
-  const handleShareOption = (option: 'link' | 'wechat') => {
+  const handleCopySharedMessage = () => {
     if (!shareTargetMessage) return
-    if (option === 'link') {
-      Taro.setClipboardData({
-        data: shareTargetMessage.content,
-        success: () => Taro.showToast({ title: '内容已复制', icon: 'success' })
-      })
-    } else if (option === 'wechat') {
-      Taro.showShareMenu({ withShareTicket: true })
-      Taro.showToast({ title: '请使用右上角菜单转发', icon: 'none' })
-    }
+    Taro.setClipboardData({
+      data: shareTargetMessage.content,
+      success: () => Taro.showToast({ title: '内容已复制', icon: 'success' })
+    })
     setShowShareMenu(false)
   }
 
@@ -1790,15 +1792,19 @@ const ConversationPage: React.FC = () => {
       {showShareMenu && shareTargetMessage && (
         <View className={styles.actionMenuOverlay} onClick={() => setShowShareMenu(false)}>
           <View className={styles.actionMenu}>
-            <View className={styles.actionMenuItem} onClick={() => handleShareOption('link')}>
+            <View className={styles.actionMenuItem} onClick={handleCopySharedMessage}>
               <Text className={styles.actionMenuIcon}>🔗</Text>
               <Text className={styles.actionMenuText}>复制内容</Text>
             </View>
             <View className={styles.actionMenuDivider} />
-            <View className={styles.actionMenuItem} onClick={() => handleShareOption('wechat')}>
+            <Button
+              className={classnames(styles.actionMenuItem, styles.actionMenuShareButton)}
+              openType="share"
+              onClick={() => setShowShareMenu(false)}
+            >
               <Text className={styles.actionMenuIcon}>💬</Text>
               <Text className={styles.actionMenuText}>转发给好友</Text>
-            </View>
+            </Button>
           </View>
         </View>
       )}

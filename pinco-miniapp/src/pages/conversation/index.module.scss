@@ -797,6 +797,21 @@
   padding: 24rpx 32rpx;
 }
 
+.actionMenuShareButton {
+  width: 100%;
+  margin: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  line-height: normal;
+  text-align: left;
+
+  &::after {
+    border: 0;
+  }
+}
+
 .actionMenuIcon {
   font-size: 36rpx;
 }
