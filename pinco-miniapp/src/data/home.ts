@@ -2,6 +2,14 @@ import { HomeActionItem, ServiceTimelineItem } from '@/types/pinco'
 
 export const homeActions: HomeActionItem[] = [
   {
+    id: 'career-planning',
+    title: '职业规划',
+    subtitle: '先看方向，再拆下一步',
+    scenario: 'general',
+    prompt: '我想和你一起做职业规划。请先结合你记得的职业背景给我一个初步判断；如果缺关键信息，一次只问我一个问题。我们可以一起梳理长期方向和接下来最现实的一步。',
+    tone: 'purple'
+  },
+  {
     id: 'resume',
     title: '简历诊断',
     subtitle: '先找到最容易丢分的地方',
@@ -19,10 +27,10 @@ export const homeActions: HomeActionItem[] = [
   },
   {
     id: 'emotion',
-    title: '情绪陪伴',
-    subtitle: '不内耗，先把状态扶起来',
+    title: '求职/职场陪伴',
+    subtitle: '受挫、迷茫或工作卡住，都可以先说说',
     scenario: 'emotion',
-    prompt: '我最近在求职里有点内耗，你先接住我的情绪，再给我两个今天能做的动作。',
+    prompt: '我在求职或工作中遇到了一件让我难受/卡住的事。请先听我说并理解我的感受，不要马上给一堆建议，也不要默认我现在想行动。你可以先问我更希望你听我说、一起梳理，还是帮我想一个小小的下一步；等我愿意时，再把情绪支持和职业问题接起来。',
     tone: 'pink'
   },
   {

@@ -513,6 +513,46 @@ class ConversationAgentTests(unittest.TestCase):
             self.assertEqual(response.response.count("？") + response.response.count("?"), 1)
             self.assertIn("为了给你更贴合的建议", response.response)
 
+    def test_conversation_history_sync_restore_delete_and_clear(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "conversation-history-device", "小程", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["messages"] = [
+                {"id": "legacy-u", "role": "user", "content": "帮我看下简历"},
+                {"id": "legacy-a", "role": "assistant", "content": "先看目标岗位和项目证据。"},
+            ]
+            store.save(state)
+            with patch.object(main, "_state_store", store):
+                recovered = main.list_conversation_sessions(user_id)
+                self.assertTrue(recovered["sessions"][0]["recovered"])
+                self.assertEqual(recovered["sessions"][0]["id"], "legacy-recovered")
+
+                saved = main.sync_conversation_session(main.ConversationSessionSyncRequest(
+                    user_id=user_id,
+                    session={
+                        "id": "session-new",
+                        "title": "我想做职业规划",
+                        "scenario": "general",
+                        "messages": [
+                            {"id": "welcome", "role": "assistant", "content": "欢迎"},
+                            {"id": "u-new", "role": "user", "content": "我想做职业规划"},
+                            {"id": "a-error", "role": "assistant", "content": "请求失败", "transient": True},
+                        ],
+                    },
+                ))
+                self.assertTrue(saved["saved"])
+                sessions = main.list_conversation_sessions(user_id)["sessions"]
+                current = next(item for item in sessions if item["id"] == "session-new")
+                self.assertEqual([item["id"] for item in current["messages"]], ["u-new"])
+                self.assertTrue(any(item["id"] == "legacy-recovered" for item in sessions))
+
+                main.delete_conversation_session("legacy-recovered", user_id)
+                self.assertFalse(any(item["id"] == "legacy-recovered" for item in main.list_conversation_sessions(user_id)["sessions"]))
+                main.clear_account_messages(main.CommunityActionRequest(user_id=user_id))
+                self.assertEqual(main.list_conversation_sessions(user_id)["sessions"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

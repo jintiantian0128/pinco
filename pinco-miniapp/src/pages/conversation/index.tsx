@@ -14,10 +14,12 @@ import { buildJobSearchPrompt } from '@/utils/job-search'
 type ChatAction = { label: string; prompt?: string; kind?: 'prompt' | 'resume' | 'jd' | 'interview' | 'progress' | 'bind' | 'review' | 'search' | 'evidence_new' | 'evidence_direction' | 'target_job' }
 
 const quickStartCards: Array<{ title: string; desc: string; scenario: ConversationScenario; kind?: ChatAction['kind']; prompt: string }> = [
+  { title: '先做职业规划', desc: '从现在的处境，梳理方向和下一步', scenario: 'general', prompt: '我想和你一起做职业规划。请先结合你记得的职业背景给我一个初步判断；如果缺关键信息，一次只问我一个问题。我们可以一起梳理长期方向和接下来最现实的一步。' },
   { title: '我还没有简历', desc: '口述一段经历，先生成可信证据', scenario: 'resume', kind: 'evidence_new', prompt: '' },
   { title: '我有一份旧简历', desc: '上传 PDF / DOCX，再提炼真实证据', scenario: 'resume', kind: 'resume', prompt: '' },
   { title: '我不知道投什么', desc: '从经历判断方向，再搜索真实岗位', scenario: 'general', kind: 'evidence_direction', prompt: '' },
   { title: '我已有目标岗位', desc: '粘贴 JD，或先搜索岗位', scenario: 'jd', kind: 'target_job', prompt: '' },
+  { title: '我在求职或工作中卡住了', desc: '受挫、迷茫、被裁或入职适应，都可以先说', scenario: 'emotion', prompt: '我在求职或工作中遇到了一件让我难受/卡住的事。请先听我说并理解我的感受，不要马上给一堆建议，也不要默认我现在想行动。你可以先问我更希望你听我说、一起梳理，还是帮我想一个小小的下一步；等我愿意时，再把情绪支持和职业问题接起来。' },
 ]
 
 type EvidenceDraft = {
@@ -126,6 +128,17 @@ const ConversationPage: React.FC = () => {
   const supportFeedbackCheckInId = usePincoStore((state) => state.supportFeedbackCheckInId)
   const submitSupportFeedback = usePincoStore((state) => state.submitSupportFeedback)
   const scrollRef = useRef<any>(null)
+  const [conversationScrollKey, setConversationScrollKey] = useState(0)
+
+  const handleCreateNewConversation = () => {
+    setConversationScrollKey((current) => current + 1)
+    createNewConversation()
+  }
+
+  const handleSwitchConversation = (sessionId: string) => {
+    setConversationScrollKey((current) => current + 1)
+    switchToConversation(sessionId)
+  }
 
   const startConversationalJobSearch = (query = '') => {
     const prompt = buildJobSearchPrompt(query)
@@ -193,8 +206,8 @@ const ConversationPage: React.FC = () => {
   }
 
   useEffect(() => {
-    loadConversationHistory()
-  }, [])
+    void loadConversationHistory()
+  }, [userProfile?.user_id])
 
   useEffect(() => {
     showPrivacyPrompt = (referrer) => {
@@ -500,7 +513,7 @@ const ConversationPage: React.FC = () => {
     startConversationalJobSearch(direction.search_query || direction.role)
   }
 
-  const handleChatAction = async (item: { label?: string; prompt?: string; kind?: ChatAction['kind'] }) => {
+  const handleChatAction = async (item: { label?: string; prompt?: string; scenario?: ConversationScenario; kind?: ChatAction['kind'] }) => {
     if (item.kind === 'evidence_new') {
       openEvidenceBuilder(false, 'no_resume')
       return
@@ -561,7 +574,8 @@ const ConversationPage: React.FC = () => {
       return
     }
     if (item.prompt) {
-      await seedConversation(conversationMeta.scenario, item.prompt, conversationMeta.subtitle)
+      const scenario = item.scenario || conversationMeta.scenario
+      await seedConversation(scenario, item.prompt, conversationMeta.subtitle)
     }
   }
 
@@ -1212,13 +1226,13 @@ const ConversationPage: React.FC = () => {
       {/* 综合助手不再按子意图切换会话，避免简历、岗位和面试上下文被割裂。 */}
       <View className={styles.stickyHeader}>
         <View className={styles.scenarioContext}>
-          <Text className={styles.scenarioContextTitle}>综合求职助手</Text>
-          <Text className={styles.scenarioContextDesc}>简历、岗位、面试和职业情绪都可以接着聊，学姐会结合这段对话帮你推进。</Text>
+          <Text className={styles.scenarioContextTitle}>Pinco 全周期职业伙伴</Text>
+          <Text className={styles.scenarioContextDesc}>从方向规划、简历和找岗，到面试、Offer、入职适应与职场难题；受挫时也可以先被听见，不必马上解决问题。</Text>
         </View>
 
         {/* 对话操作栏 */}
         <View className={styles.actionBar}>
-          <View className={styles.actionBarButton} onClick={createNewConversation}>
+          <View className={styles.actionBarButton} onClick={handleCreateNewConversation}>
             <Text className={styles.actionBarIcon}>+</Text>
             <Text className={styles.actionBarLabel}>新建</Text>
           </View>
@@ -1228,9 +1242,28 @@ const ConversationPage: React.FC = () => {
             <Text className={styles.actionBarLabel}>历史 {conversationHistory.length > 0 ? `(${conversationHistory.length})` : ''}</Text>
           </View>
         </View>
+        {hasMessages && (
+          <View className={styles.quickActionsWrap}>
+            <Text className={styles.quickActionsTitle}>快捷入口</Text>
+            <ScrollView className={styles.quickActionsScroll} scrollX enhanced showScrollbar={false}>
+              <View className={styles.quickActionsRow}>
+                {quickStartCards.map((item) => (
+                  <View
+                    key={`active-${item.title}`}
+                    className={styles.quickActionChip}
+                    onClick={() => handleChatAction({ label: item.title, prompt: item.prompt, scenario: item.scenario, kind: item.kind })}
+                  >
+                    <Text>{item.title}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       <ScrollView
+        key={conversationScrollKey}
         ref={scrollRef}
         className={styles.messageScroll}
         scrollY
@@ -1704,13 +1737,13 @@ const ConversationPage: React.FC = () => {
                     <View
                       className={styles.historyItemMain}
                       onClick={() => {
-                        switchToConversation(session.id)
+                        handleSwitchConversation(session.id)
                         setShowHistory(false)
                       }}
                     >
                       <Text className={styles.historyItemTitle}>{session.title}</Text>
                       <Text className={styles.historyItemMeta}>
-                        {session.messages.length} 条消息 · {new Date(session.updatedAt).toLocaleDateString('zh-CN')}
+                        {session.recovered ? '云端恢复记录 · 旧版未按会话分组，内容可能合并' : `${session.messages.length} 条消息 · ${new Date(session.updatedAt).toLocaleDateString('zh-CN')}`}
                       </Text>
                     </View>
                     <View

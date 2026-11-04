@@ -110,13 +110,60 @@ interface PincoState {
   createNewConversation: () => void
   switchToConversation: (sessionId: string) => void
   deleteConversation: (sessionId: string) => void
-  loadConversationHistory: () => void
+  loadConversationHistory: () => Promise<void>
 }
 
 const STORAGE_KEY = 'pinco_messages_v2'
 const JOB_STORAGE_KEY = 'pinco_job_progress_v1'
 const TASKS_STORAGE_KEY = 'pinco_today_tasks_v1'
 const HISTORY_STORAGE_KEY = 'pinco_conversation_history_v1'
+const CURRENT_CONVERSATION_ID_KEY = 'pinco_current_conversation_id_v1'
+
+const newConversationId = () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+const getCurrentConversationId = () => {
+  try {
+    const saved = Taro.getStorageSync(CURRENT_CONVERSATION_ID_KEY)
+    if (saved) return String(saved)
+  } catch (e) {
+    console.warn('[Store] read current conversation id failed', e)
+  }
+  const id = newConversationId()
+  try { Taro.setStorageSync(CURRENT_CONVERSATION_ID_KEY, id) } catch {}
+  return id
+}
+
+const setCurrentConversationId = (id = newConversationId()) => {
+  try { Taro.setStorageSync(CURRENT_CONVERSATION_ID_KEY, id) } catch (e) {
+    console.warn('[Store] save current conversation id failed', e)
+  }
+  return id
+}
+
+const conversationSessionFrom = (
+  id: string,
+  messages: MessageItem[],
+  scenario: ConversationScenario,
+  fallbackTitle: string,
+): ConversationSession | null => {
+  const meaningful = messages.filter((message) =>
+    (message.role === 'user' || message.role === 'assistant')
+    && message.id !== 'welcome'
+    && !message.transient
+    && Boolean(message.content?.trim()),
+  )
+  if (meaningful.length === 0) return null
+  const firstUser = meaningful.find((message) => message.role === 'user')
+  const title = firstUser?.content || fallbackTitle || 'Pinco 对话'
+  return {
+    id,
+    title: title.slice(0, 20) + (title.length > 20 ? '…' : ''),
+    scenario,
+    messages: [...messages],
+    createdAt: messages.find((message) => message.id !== 'welcome')?.createdAt || Date.now(),
+    updatedAt: Date.now(),
+  }
+}
 
 const mergeMessages = (local: MessageItem[], remote: MessageItem[]): MessageItem[] => {
   const merged = new Map<string, MessageItem>()
@@ -263,7 +310,16 @@ export const usePincoStore = create<PincoState>((set, get) => ({
 
   saveMessages: () => {
     try {
-      Taro.setStorageSync(STORAGE_KEY, JSON.stringify(get().messages))
+      const state = get()
+      Taro.setStorageSync(STORAGE_KEY, JSON.stringify(state.messages))
+      const userId = state.userProfile?.user_id
+      const session = conversationSessionFrom(
+        getCurrentConversationId(), state.messages, state.conversationMeta.scenario, state.conversationMeta.title,
+      )
+      if (userId && session) {
+        void apiRequest('/api/v1/conversations/sync', 'POST', { user_id: userId, session })
+          .catch((error) => console.warn('[Store] cloud conversation sync failed; local copy retained', error))
+      }
     } catch (e) {
       console.error('[Store] save messages failed', e)
     }
@@ -276,9 +332,12 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     set({ messages: result.messages, interviewState: null, pendingJobEvent: null })
     try {
       Taro.removeStorageSync(STORAGE_KEY)
+      Taro.removeStorageSync(HISTORY_STORAGE_KEY)
+      setCurrentConversationId()
     } catch (e) {
       console.error('[Store] clear messages failed', e)
     }
+    set({ conversationHistory: [] })
   },
 
   loadTodayTasks: () => {
@@ -1472,18 +1531,41 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     }
   },
 
-  loadConversationHistory: () => {
+  loadConversationHistory: async () => {
+    let localSessions: ConversationSession[] = []
     try {
       const raw = Taro.getStorageSync(HISTORY_STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw) as ConversationSession[]
-        set({ conversationHistory: parsed.filter((s) => s.id && s.messages?.length > 0) })
-        return
+        localSessions = parsed.filter((s) => s.id && s.messages?.length > 0)
       }
     } catch (e) {
       console.error('[Store] load conversation history failed', e)
     }
-    set({ conversationHistory: [] })
+    const userId = get().userProfile?.user_id
+    if (!userId) {
+      set({ conversationHistory: localSessions })
+      return
+    }
+    try {
+      const result = await apiRequest<{ sessions?: ConversationSession[] }>(
+        `/api/v1/conversations?user_id=${encodeURIComponent(userId)}`,
+      )
+      const byId = new Map<string, ConversationSession>()
+      for (const session of [...localSessions, ...(result.sessions || [])]) {
+        if (session?.id && session.messages?.length) byId.set(session.id, session)
+      }
+      const currentId = getCurrentConversationId()
+      const merged = [...byId.values()]
+        .filter((session) => session.id !== currentId)
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, 50)
+      set({ conversationHistory: merged })
+      Taro.setStorageSync(HISTORY_STORAGE_KEY, JSON.stringify(merged))
+    } catch (error) {
+      console.warn('[Store] cloud conversation history unavailable; using local copy', error)
+      set({ conversationHistory: localSessions })
+    }
   },
 
   createNewConversation: () => {
@@ -1495,20 +1577,18 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       const title = firstUserMsg
         ? firstUserMsg.content.slice(0, 20) + (firstUserMsg.content.length > 20 ? '...' : '')
         : currentMeta.title
-      const session: ConversationSession = {
-        id: `session-${Date.now()}`,
-        title,
-        scenario: currentMeta.scenario,
-        messages: [...currentMessages],
-        createdAt: currentMessages[0]?.createdAt || Date.now(),
-        updatedAt: Date.now(),
-      }
-      const nextHistory = [session, ...get().conversationHistory].slice(0, 50)
+      const session = conversationSessionFrom(getCurrentConversationId(), currentMessages, currentMeta.scenario, title)
+      if (session) {
+      const nextHistory = [session, ...get().conversationHistory.filter((item) => item.id !== session.id)].slice(0, 50)
       set({ conversationHistory: nextHistory })
       try {
         Taro.setStorageSync(HISTORY_STORAGE_KEY, JSON.stringify(nextHistory))
       } catch (e) {
         console.error('[Store] save conversation history failed', e)
+      }
+      const userId = get().userProfile?.user_id
+      if (userId) void apiRequest('/api/v1/conversations/sync', 'POST', { user_id: userId, session })
+        .catch((error) => console.warn('[Store] archive conversation sync failed; local copy retained', error))
       }
     }
     // Reset current conversation
@@ -1527,6 +1607,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     })
     try {
       Taro.setStorageSync(STORAGE_KEY, JSON.stringify([welcomeMessage]))
+      setCurrentConversationId()
     } catch (e) {
       console.error('[Store] reset messages failed', e)
     }
@@ -1550,6 +1631,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         scenario: session.scenario,
       },
     })
+    setCurrentConversationId(session.id)
     try {
       Taro.setStorageSync(STORAGE_KEY, JSON.stringify(session.messages))
     } catch (e) {
@@ -1566,6 +1648,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     } catch (e) {
       console.error('[Store] delete conversation failed', e)
     }
+    const userId = get().userProfile?.user_id
+    if (userId) void apiRequest(`/api/v1/conversations/${encodeURIComponent(sessionId)}?user_id=${encodeURIComponent(userId)}`, 'DELETE')
+      .catch((error) => console.warn('[Store] cloud conversation delete failed', error))
   }
 }))
 

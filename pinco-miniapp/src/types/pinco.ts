@@ -349,6 +349,7 @@ export interface ConversationSession {
   messages: MessageItem[]
   createdAt: number
   updatedAt: number
+  recovered?: boolean
 }
 
 export interface MiniappBootstrapResponse {

@@ -155,8 +155,8 @@ const HomePage: React.FC = () => {
     <View className={styles.page}>
       <View className={styles.heroCard}>
         <Text className={styles.eyebrow}>Pinco AI职场学姐</Text>
-        <Text className={styles.heroTitle}>先别自己硬扛，让学姐帮你排清楚今天最该做的那一步</Text>
-        <Text className={styles.heroDesc}>简历诊断、模拟面试、JD解读、情绪陪伴——带着场景进去，学姐帮你拆成可执行动作。</Text>
+        <Text className={styles.heroTitle}>从找方向到站稳新岗位，学姐陪你走完整个职业周期</Text>
+        <Text className={styles.heroDesc}>职业规划、简历、找岗、面试、Offer 和入职后的职场难题都能接着聊；受挫时先陪你缓一缓，不急着把感受变成待办。</Text>
         <View className={styles.primaryButton} onClick={() => enterConversation('general', '继续和学姐往下聊')}>
           <Text>立即进入专属会话</Text>
         </View>
