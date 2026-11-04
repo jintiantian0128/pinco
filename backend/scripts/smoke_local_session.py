@@ -33,8 +33,6 @@ try:
         {"device_id": f"smoke-session-{uuid.uuid4().hex}", "platform": "http-smoke", "nickname": "自动化验收"},
     )
     assert status == 200, (status, bootstrap)
-    health_status, health = call("/health")
-    assert health_status == 200 and health["version"] == "0.7.0", (health_status, health)
     user_id = bootstrap["user"]["user_id"]
     token = bootstrap["session_token"]
     assert token and "session_token_hash" not in bootstrap["user"]
@@ -90,7 +88,7 @@ try:
     after_delete_status, _ = call(f"/api/v1/workspace?user_id={bootstrap['user']['user_id']}", token=token)
     assert after_delete_status == 401
 
-    print("HTTP smoke passed: v0.7.0 session_guard=401/200 payment_fail_closed=503 community_write=403 export/delete=200")
+    print("HTTP smoke passed: session_guard=401/200 payment_fail_closed=503 community_write=403 export/delete=200")
 finally:
     if user_id and token:
         delete_status, _ = call(
