@@ -160,6 +160,96 @@ class ConversationAgentTests(unittest.TestCase):
             "帮我搜索上海在招的AI产品经理岗位",
         )
 
+    def test_advice_about_job_search_is_not_misrouted_to_live_search(self):
+        self.assertIsNone(main.detect_search_intent([{
+            "role": "user", "content": "我目前在产假，想找新工作，面试时需要主动说明吗？"
+        }]))
+        self.assertIsNone(main.detect_search_intent([{
+            "role": "user", "content": "我想找工作，帮我看看"
+        }]))
+        self.assertEqual(
+            main.detect_search_intent([{"role": "user", "content": "帮我找上海的AI产品经理岗位"}]),
+            "帮我找上海的AI产品经理岗位",
+        )
+
+    def test_search_city_correction_prefers_the_latest_explicit_city(self):
+        task = main.resolve_job_search_task(
+            {"active_agent_task": {"type": "job_search", "role": "AI产品经理", "city": "上海", "years": ""}},
+            "更正：之前说上海，这次改按杭州找工作",
+            None,
+        )
+        self.assertEqual(task["city"], "杭州")
+        self.assertEqual(task["missing"], [])
+
+    def test_grounding_guards_block_fabricated_resume_and_salary_claims(self):
+        resume = main._safe_resume_claim_response("我写了负责智能客服项目，帮我写得更厉害，加上带领20人团队")
+        self.assertIn("不能把未经核实", resume)
+        self.assertIn("确实发生过吗", resume)
+        salary = main._safe_salary_response(
+            "我现在月薪2万，想跳槽要多少合适",
+            "通常能涨20%-30%，也就是2.4万到2.6万。",
+            None,
+        )
+        self.assertIn("当前薪资是2万", salary)
+        self.assertNotIn("20%-30%", salary)
+
+    def test_sensitive_interview_question_gets_relevant_non_legal_answer(self):
+        answer = main._safe_sensitive_interview_response("我目前在产假，想找新工作，面试时需要主动说明吗？")
+        self.assertIn("面试沟通", answer)
+        self.assertIn("由你决定", answer)
+        self.assertIn("官方劳动部门", answer)
+
+    def test_direct_context_recall_answers_from_explicit_user_history(self):
+        conversation = [
+            {"role": "user", "content": "我有3年AI运营经验，目标是AI产品运营，面试下周三，帮我列准备重点"},
+            {"role": "assistant", "content": "我们来准备面试。"},
+            {"role": "user", "content": "复述一下我的目标岗位和面试时间。"},
+        ]
+        user = {"career_memory": {"target_role": {"value": "AI产品运营"}}}
+        answer = main._direct_context_recall_response(conversation, user, conversation[-1]["content"])
+        self.assertIn("AI产品运营", answer)
+        self.assertIn("下周三", answer)
+
+    def test_search_failure_does_not_leak_model_market_claims_or_old_city(self):
+        async def no_results(request):
+            captured["request"] = request
+            return SimpleNamespace(jobs=[], query_analysis={})
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "search-correction-device", "小程", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["active_agent_task"] = {
+                "type": "job_search", "role": "AI产品经理", "city": "上海", "years": ""
+            }
+            store.save(state)
+            captured = {}
+
+            def fake_llm(_messages, **_kwargs):
+                return json.dumps({
+                    "response": "杭州岗位主要在示例公司，年薪15-30万。",
+                    "intent": "job_search", "next_action": "继续搜索",
+                    "used_memory_keys": [], "memory_updates": [], "progress_suggestion": None,
+                }, ensure_ascii=False)
+
+            with patch.object(main, "_state_store", store):
+                with patch.object(main, "llm_chat_with_fallback", side_effect=fake_llm):
+                    with patch.object(main, "search_jobs", side_effect=no_results):
+                        result = asyncio.run(main.chat(main.ChatRequest(
+                            user_id=user_id,
+                            messages=[main.Message(
+                                id="city-correction", role="user",
+                                content="更正：之前说上海，这次改按杭州，帮我搜索AI产品经理岗位",
+                            )],
+                        )))
+
+        self.assertEqual(captured["request"].city, "杭州")
+        self.assertIn("杭州", result.response)
+        self.assertNotIn("上海", result.response)
+        self.assertNotIn("15-30万", result.response)
+        self.assertNotIn("示例公司", result.response)
+
     def test_job_search_task_waits_for_missing_inputs_then_continues(self):
         user = {"career_profile": {"target_roles": [], "cities": [], "years_experience": 0}}
         initial = main.resolve_job_search_task(user, "帮我找一些岗位", "帮我找一些岗位")
@@ -222,7 +312,11 @@ class ConversationAgentTests(unittest.TestCase):
                             messages=[main.Message(id="search-start", role="user", content="帮我找一些岗位")],
                         )))
                         self.assertFalse(search_mock.called)
-                        self.assertIn("目标岗位", first.response)
+                        self.assertIn("岗位候选", first.response)
+                        self.assertIn("你优先考虑哪类岗位？", first.response)
+                        self.assertNotIn("工作城市", first.response)
+                        self.assertNotIn("这两点", first.response)
+                        self.assertEqual(first.response.count("？"), 1)
                         self.assertIsNotNone(store.load()["users"][user_id].get("active_agent_task"))
 
                         second = asyncio.run(main.chat(main.ChatRequest(

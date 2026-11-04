@@ -1005,8 +1005,10 @@ def detect_search_intent(messages: list) -> Optional[str]:
     # request to hit external providers. Search requires both an explicit
     # action/question and a job object.
     patterns = [
-        r"(?:帮我|请|能否|能不能|可以)?(?:找|搜|搜索|查找|查查|推荐).{0,16}(?:岗位|职位|工作|机会|内推|实习)",
-        r"(?:岗位|职位|工作|机会|内推|实习).{0,16}(?:有哪些|有没有|在招|招聘|推荐|帮我找|帮我搜)",
+        # Require a concrete job object; generic “想找工作/找新工作” is an
+        # advice intent, not authorization to call vacancy search providers.
+        r"(?:帮我|请|能否|能不能|可以)?(?:搜索|搜|查找|找|推荐).{0,24}(?:岗位|职位|在招|招聘|职位机会|岗位机会|内推|实习岗位)",
+        r"(?:岗位|职位|机会|内推|实习岗位).{0,16}(?:有哪些|有没有|在招|招聘|推荐|帮我找|帮我搜)",
         r"(?:哪里|哪家|哪些公司).{0,16}(?:在招|招聘|有岗位|有职位|招人)",
     ]
     return last_user_msg if any(re.search(pattern, normalized) for pattern in patterns) else None
@@ -1040,10 +1042,16 @@ def resolve_job_search_task(user: Dict[str, Any], latest_text: str, explicit_req
         if any(alias.replace(" ", "") in text for alias in aliases):
             task["role"] = role
             break
-    for city in JOB_SEARCH_CITIES:
-        if city.lower() in text:
-            task["city"] = city
-            break
+    city_matches = [
+        (match.start(), city)
+        for city in JOB_SEARCH_CITIES
+        for match in re.finditer(re.escape(city.lower()), text)
+    ]
+    if city_matches:
+        # A correction often mentions the stale value first (“之前说上海，现
+        # 在按杭州”). Use the last explicit city in this turn, not the first
+        # city in a fixed list, so a changed condition invalidates old results.
+        task["city"] = max(city_matches, key=lambda item: item[0])[1]
     if any(value in text for value in ("不限", "全国", "都可以", "无所谓城市")):
         task["city"] = "不限"
     elif "远程" in text:
@@ -2466,7 +2474,127 @@ def _profile_field_value(profile: Dict[str, Any], field: str, user: Optional[Dic
 
 def _strip_question_sentences(text: str) -> str:
     pieces = re.split(r"(?<=[。！？?])", str(text or ""))
-    return "".join(piece for piece in pieces if "？" not in piece and "?" not in piece).strip()
+    cleaned = [piece for piece in pieces if "？" not in piece and "?" not in piece]
+    text = "".join(cleaned)
+    # When the backend supplies the one canonical clarification, discard model
+    # generated A/B/C option blocks too; those are often a second question even
+    # when the model forgot to include question punctuation.
+    text = re.sub(r"(?im)^\s*[A-D][.、]\s*[^\n]*(?:\n|$)", "", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _is_direct_answer_request(text: str) -> bool:
+    text = str(text or "")
+    return bool(re.search(r"(?:吗[？?]?|怎么|如何|多少|最需要|是否|要不要|合适吗|复述|告诉我|分析一下|给我.{0,12}(?:建议|步骤|方法|动作|清单))", text))
+
+
+def _user_already_provided_clarification(field: Optional[str], text: str) -> bool:
+    text = str(text or "")
+    if not field:
+        return False
+    if field == "target_role":
+        return bool(re.search(r"产品经理|产品运营|AI运营|运营岗|设计师|工程师|分析师|教师|销售|客服", text, re.I))
+    if field == "years_of_experience":
+        return bool(re.search(r"应届|校招|\d+(?:\.\d+)?\s*年(?:工作|经验|经历)?", text))
+    if field == "city":
+        return any(city in text for city in JOB_SEARCH_CITIES)
+    if field == "interview_round":
+        return bool(re.search(r"一面|二面|三面|终面|第[一二三四1-3]轮|业务面|HR面|技术面", text, re.I))
+    if field == "industry_or_background":
+        return bool(re.search(r"专业|行业|项目|实习|工作经历|做过|负责过|从.{1,8}转|酒店管理|新媒体运营", text))
+    if field == "offer_details":
+        return bool(re.search(r"\bOffer\b|offer|[AB]公司|月薪\s*\d|薪资\s*\d", text, re.I))
+    if field == "current_status":
+        return any(term in text for term in ("在职", "离职", "应届", "在校", "自由职业"))
+    if field == "resume_content":
+        return len(text) >= 180 and any(term in text for term in ("工作经历", "项目经历", "负责", "主导", "简历"))
+    return False
+
+
+def _has_obvious_profile_conflict(text: str) -> bool:
+    years = re.findall(r"(\d+(?:\.\d+)?)\s*年", str(text or ""))
+    return len(set(years)) > 1
+
+
+def _safe_sensitive_interview_response(text: str) -> Optional[str]:
+    text = str(text or "")
+    sensitive = any(token in text for token in ("产假", "孕产", "怀孕", "怀孕", "婚育", "家庭情况"))
+    asks_disclosure = any(token in text for token in ("主动说明", "需要说明", "要说明", "告知", "面试时", "面试要不要"))
+    if not (sensitive and asks_disclosure):
+        return None
+    return (
+        "你问的是面试沟通，不是岗位搜索。是否主动谈到个人情况由你决定，不必把隐私当作开场重点。"
+        "如果对方的问题实际涉及到岗时间或工作安排，可以只回答与安排有关的部分；不想展开时，也可以把话题带回岗位能力和工作计划。"
+        "具体权益或法律判断建议再核对当地官方劳动部门信息。"
+    )
+
+
+def _safe_resume_claim_response(user_text: str) -> Optional[str]:
+    text = str(user_text or "")
+    asks_to_inflate = any(token in text for token in ("写得更厉害", "包装得更", "加上", "写上", "夸大", "编一个"))
+    quantified_claim = re.search(r"(?:带领|管理|负责).{0,10}\d+\s*人|\d+(?:\.\d+)?\s*[%％]\s*(?:提升|增长|下降|降低)?", text)
+    if not (asks_to_inflate and quantified_claim):
+        return None
+    match = re.search(r"(?:带领|管理|负责).{0,10}\d+\s*人", text)
+    claim = match.group(0) if match else "这条量化成果"
+    return (
+        f"我不能把未经核实的「{claim}」写成简历事实。若这是你真实、可解释的经历，我可以据实优化；"
+        "否则先保留为待补证据，不加进简历。这个事实确实发生过吗？"
+    )
+
+
+def _safe_salary_response(user_text: str, response_text: str, search_results: Optional[List[Dict[str, Any]]]) -> Optional[str]:
+    text = str(user_text or "")
+    if any(token in text.lower() for token in ("offer", "offer对比", "两份offer")):
+        return None
+    is_salary_jump_question = bool(re.search(r"(?:月薪|薪资|工资).{0,16}(?:跳槽|涨|要多少|合适)|(?:跳槽|涨薪).{0,16}(?:多少|涨幅|薪资)", text))
+    if not is_salary_jump_question:
+        return None
+    source_has_salary = any(
+        str(item.get("salary") or item.get("predicted_salary") or "").strip()
+        for item in (search_results or [])
+    )
+    if source_has_salary:
+        return None
+    # If the model emits market percentages or amounts without any cited salary
+    # source, replace the whole answer with a grounded method and one next step.
+    unsupported_number = re.search(r"\d+(?:\.\d+)?\s*(?:%|％|万|k|K|元)", response_text or "")
+    if not unsupported_number:
+        return None
+    current_salary = re.search(r"(?:月薪|薪资|工资)\s*(?:约|为|是)?\s*(\d+(?:\.\d+)?\s*(?:万|k|K|元))", text)
+    anchor = f"你明确提供的当前薪资是{current_salary.group(1)}；" if current_salary else ""
+    return (
+        f"{anchor}但我没有与你目标岗位和城市匹配的可靠薪酬样本，不能直接给跳槽涨幅或目标数字。"
+        "更稳妥的是对照同级岗位的公开薪酬区间，再把月薪、奖金、期权和福利折算成年总包；"
+        "如果你补充目标岗位，我可以继续帮你搭谈薪区间的核对方法。"
+    )
+
+
+def _direct_context_recall_response(conversation: List[Dict[str, Any]], user: Dict[str, Any], user_text: str) -> Optional[str]:
+    if not re.search(r"(?:复述|刚才说|上次说|之前提到|刚才提到).{0,30}(?:岗位|职位).{0,20}(?:时间|日期)|(?:目标岗位和面试时间|岗位和面试时间)", user_text):
+        return None
+    user_texts = [str(item.get("content") or "") for item in conversation if item.get("role") == "user"]
+    profile = user.get("career_profile") or {}
+    memory = user.get("career_memory") or {}
+    role_memory = memory.get("target_role") or {}
+    role = "、".join(profile.get("target_roles") or []) or (role_memory.get("value") if isinstance(role_memory, dict) else "")
+    history = "\n".join(user_texts)
+    date_match = re.search(r"(?:面试|面试时间|面试安排)[^。；\n]{0,12}?(?:下周[一二三四五六日天]|本周[一二三四五六日天]|明天|后天|今天|周[一二三四五六日天]|\d{1,2}月\d{1,2}(?:日|号))", history)
+    parts = []
+    parts.append(f"目标岗位：{role}" if role else "目标岗位：我在当前可见记录中没有找到")
+    parts.append(f"面试时间：{date_match.group(0).replace('面试时间', '').replace('面试安排', '').replace('面试', '').strip()}" if date_match else "面试时间：我在当前可见记录中没有找到")
+    return "我从你之前明确说过的信息里核对到：" + "；".join(parts) + "。"
+
+
+def _clear_clarification_asked_this_turn(profile: Dict[str, Any], seed: Dict[str, Any]) -> None:
+    field = profile.get("pending_field")
+    if not field:
+        return
+    if field not in (seed.get("asked_fields") or []) and field in (profile.get("asked_fields") or []):
+        profile["asked_fields"] = [item for item in profile.get("asked_fields", []) if item != field]
+        profile["clarification_turns"] = max(0, int(profile.get("clarification_turns", 0)) - 1)
+    profile["pending_field"] = None
+    profile["open_questions"] = [item for item in profile.get("open_questions", []) if item.get("field") != field]
 
 
 def apply_conversation_profile_update(
@@ -6418,10 +6546,18 @@ confirmed_facts 只能记录用户本轮明确陈述、且能从本轮用户原�
                 agent_result["memory_updates"] = extract_agent_memory_updates(latest_user_text)
             except Exception as memory_error:
                 print(f"[Chat Agent] memory extraction skipped after provider error: {memory_error}")
+        grounded_overrides = [
+            _direct_context_recall_response(conversation, user_snapshot, latest_user_text),
+            _safe_sensitive_interview_response(latest_user_text),
+            _safe_resume_claim_response(latest_user_text),
+            _safe_salary_response(latest_user_text, agent_result["response"], search_results),
+        ]
+        grounded_override = next((item for item in grounded_overrides if item), None)
         profile_update_for_policy = deepcopy(agent_result.get("profile_update") or {})
-        if search_task and search_task.get("missing"):
+        if (search_task and search_task.get("missing")) or grounded_override or _is_direct_answer_request(latest_user_text):
             # The resumable search workflow owns its one-at-a-time required input
-            # questions; don't let generic discovery ask a parallel question.
+            # questions; direct questions and deterministic safety/recall answers
+            # should not receive unrelated profile-discovery questions either.
             profile_update_for_policy["ask_field"] = ""
         conversation_profile, clarification_question = apply_conversation_profile_update(
             user_snapshot.get("conversation_profile"),
@@ -6430,6 +6566,15 @@ confirmed_facts 只能记录用户本轮明确陈述、且能从本轮用户原�
             user_snapshot,
             conversation_turn_count,
         )
+        clarification_field = conversation_profile.get("pending_field")
+        if (
+            grounded_override
+            or _is_direct_answer_request(latest_user_text)
+            or _user_already_provided_clarification(clarification_field, latest_user_text)
+            or _has_obvious_profile_conflict(latest_user_text)
+        ):
+            clarification_question = None
+            _clear_clarification_asked_this_turn(conversation_profile, conversation_profile_seed)
         # The backend, not free-form model prose, owns the number and eligibility
         # of clarification questions. Keep the useful answer and append at most one.
         response_text = _strip_question_sentences(agent_result["response"])
@@ -6456,7 +6601,6 @@ confirmed_facts 只能记录用户本轮明确陈述、且能从本轮用户原�
                 ])
                 response_text = f"我检索到了以下带来源岗位候选，请先打开原页面确认仍在招聘：\n\n{jobs_text}\n\n下面再按现有信息分析匹配度；来源中没有的条件我不会补写。\n\n{response_text}"
         if search_task and search_task.get("missing"):
-            response_text = _strip_question_sentences(agent_result["response"]) or "我先不乱搜，避免给你一堆不匹配的岗位。"
             missing_field = "目标岗位" if "目标岗位" in search_task["missing"] else "工作城市"
             profile_field = "target_role" if missing_field == "目标岗位" else "city"
             search_question = (
@@ -6464,26 +6608,42 @@ confirmed_facts 只能记录用户本轮明确陈述、且能从本轮用户原�
                 if missing_field == "目标岗位"
                 else "你优先考虑哪个城市？也可以回答‘不限’或‘远程’。"
             )
+            asked_this_turn = (
+                profile_field in conversation_profile.get("asked_fields", [])
+                and profile_field not in conversation_profile_seed.get("asked_fields", [])
+            )
             can_ask_search_field = (
                 profile_field not in conversation_profile.get("user_declined_to_answer", [])
-                and profile_field not in conversation_profile.get("asked_fields", [])
+                and (profile_field not in conversation_profile.get("asked_fields", []) or asked_this_turn)
                 and int(conversation_profile.get("clarification_turns", 0)) < 3
             )
             if can_ask_search_field:
-                response_text = f"{response_text}\n\n为了避免重复确认，我先补最关键的一项：{search_question}"
+                # This workflow must ask for exactly one missing search input.
+                # Do not retain free-form model prose here: it may ask for both
+                # role and city in one turn, contradicting the clarification policy.
+                lead = (
+                    "我先帮你把岗位候选筛得更贴合，搜索结果会附可核对的来源。"
+                    if missing_field == "目标岗位"
+                    else "目标岗位方向已经明确；我会按它筛选可核对的岗位来源。"
+                )
+                response_text = f"{lead}\n\n{search_question}"
                 conversation_profile["pending_field"] = profile_field
-                conversation_profile.setdefault("asked_fields", []).append(profile_field)
-                conversation_profile["clarification_turns"] = min(3, int(conversation_profile.get("clarification_turns", 0)) + 1)
+                if not asked_this_turn:
+                    conversation_profile.setdefault("asked_fields", []).append(profile_field)
+                    conversation_profile["clarification_turns"] = min(3, int(conversation_profile.get("clarification_turns", 0)) + 1)
                 conversation_profile["open_questions"] = [{"field": profile_field, "question": search_question}]
             else:
-                response_text = f"{response_text}\n\n岗位搜索还缺少{missing_field}，我先不重复追问，也不会用猜测补齐。你之后愿意补充时，我可以从这一步继续。"
+                response_text = f"岗位搜索还缺少{missing_field}，我先不重复追问，也不会用猜测补齐。你之后愿意补充时，我可以从这一步继续。"
                 conversation_profile["pending_field"] = None
                 conversation_profile["open_questions"] = [{"field": profile_field, "reason": "awaiting_user_optional_input"}]
         elif search_attempted and not search_results:
             if search_succeeded:
-                response_text = f"我按「{search_task.get('role')} · {search_task.get('city')}」查了实时来源，但这次没有找到符合来源校验条件的岗位卡片。我不会编造职位。可以换一个城市、岗位关键词，或把城市改成‘不限’再试。\n\n{agent_result['response']}"
+                response_text = f"我按「{search_task.get('role')} · {search_task.get('city')}」查了实时来源，但没有找到符合来源校验条件的具体岗位卡片。我不会把列表页当成岗位，也不会补写无来源的公司分布或薪酬判断。可以换岗位关键词、调整城市，或回复「重试搜索」再查一次。"
             else:
-                response_text = f"我这次尝试检索「{search_task.get('role')} · {search_task.get('city')}」时，岗位来源服务暂时没有返回结果，所以不能确认查到了什么。我会保留这次搜索条件；你可以回复‘重试搜索’，也可以调整岗位或城市。\n\n{agent_result['response']}"
+                response_text = f"我尝试检索「{search_task.get('role')} · {search_task.get('city')}」时，岗位来源服务暂时没有返回结果，因此不能确认岗位或市场情况。搜索条件已保留；你可以回复「重试搜索」，也可以调整关键词或城市。"
+
+        if grounded_override:
+            response_text = grounded_override
 
         accepted_progress = persist_chat_turn(
             request.user_id,
