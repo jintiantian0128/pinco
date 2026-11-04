@@ -71,7 +71,10 @@ try:
         },
         token,
     )
-    assert post_status == 200 and created["post"]["title"] == "自动化会话边界验收"
+    assert (
+        post_status == 403
+        and "暂未开放用户发帖" in created.get("detail", "")
+    ), (post_status, created)
 
     export_status, exported = call(f"/api/v1/account/export?user_id={user_id}", token=token)
     assert export_status == 200 and "session_token_hash" not in exported["profile"]
@@ -87,7 +90,7 @@ try:
     after_delete_status, _ = call(f"/api/v1/workspace?user_id={bootstrap['user']['user_id']}", token=token)
     assert after_delete_status == 401
 
-    print("HTTP smoke passed: v0.7.0 session_guard=401/200 payment_fail_closed=503 community_write=200 export/delete=200")
+    print("HTTP smoke passed: v0.7.0 session_guard=401/200 payment_fail_closed=503 community_write=403 export/delete=200")
 finally:
     if user_id and token:
         delete_status, _ = call(
