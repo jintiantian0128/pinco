@@ -18,7 +18,7 @@ const HubPage: React.FC = () => {
     const query = searchQuery.trim().toLowerCase()
     if (!query) return gardenArticles
     return gardenArticles.filter((article) =>
-      [article.title, article.subtitle, article.category, article.content.join(' ')]
+      [article.title, article.subtitle, article.category, article.content?.join(' ') || '', ...(article.sections || []).flatMap((section) => [section.heading, section.body, ...(section.bullets || []), section.practice || ''])]
         .join(' ')
         .toLowerCase()
         .includes(query)

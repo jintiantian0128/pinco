@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { Button, Text, View } from '@tarojs/components'
+import { Button, ScrollView, Text, View } from '@tarojs/components'
 import Taro, { useLoad, useShareAppMessage } from '@tarojs/taro'
 import styles from './index.module.scss'
 import { gardenArticles } from '@/data/articles'
@@ -40,7 +40,8 @@ const ArticlePage: React.FC = () => {
   }
 
   return (
-    <View className={styles.page}>
+    <ScrollView className={styles.reader} scrollY enhanced showScrollbar>
+      <View className={styles.page}>
       <View className={styles.header}>
         <Text className={styles.category}>{article.category}</Text>
         <Text className={styles.title}>{article.title}</Text>
@@ -48,14 +49,37 @@ const ArticlePage: React.FC = () => {
       </View>
 
       <View className={styles.section}>
-        {article.content.map((paragraph) => (
+        {article.sections?.map((section) => (
+          <View key={section.heading} className={styles.articleSection}>
+            <Text className={styles.sectionHeading}>{section.heading}</Text>
+            <Text className={styles.paragraph}>{section.body}</Text>
+            {section.bullets?.length ? (
+              <View className={styles.bulletList}>
+                {section.bullets.map((bullet) => (
+                  <View key={bullet} className={styles.bulletRow}>
+                    <Text className={styles.bulletMark}>•</Text>
+                    <Text className={styles.bulletText}>{bullet}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            {section.practice ? (
+              <View className={styles.practiceCard}>
+                <Text className={styles.practiceLabel}>带走练习</Text>
+                <Text className={styles.practiceText}>{section.practice}</Text>
+              </View>
+            ) : null}
+          </View>
+        ))}
+        {article.content?.map((paragraph) => (
           <Text key={paragraph} className={styles.paragraph}>{paragraph}</Text>
         ))}
         <Button className={styles.primaryButton} onClick={startArticlePractice} ariaLabel="带着文章去实战">
           <Text>带着文章去实战</Text>
         </Button>
       </View>
-    </View>
+      </View>
+    </ScrollView>
   )
 }
 

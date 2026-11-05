@@ -1,1 +1,1 @@
-export default definePageConfig({ navigationBarTitleText: '升职加薪' })
+export default definePageConfig({ navigationBarTitleText: 'Pinco-Career Agent', enableShareAppMessage: true })

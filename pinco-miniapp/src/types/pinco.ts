@@ -128,9 +128,17 @@ export interface GardenArticle {
   category: string
   title: string
   subtitle: string
-  content: string[]
+  content?: string[]
+  sections?: GardenArticleSection[]
   reads: string
   highlight: string
+}
+
+export interface GardenArticleSection {
+  heading: string
+  body: string
+  bullets?: string[]
+  practice?: string
 }
 
 export interface CommunityComment {

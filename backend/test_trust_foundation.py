@@ -13,6 +13,34 @@ from state_store import JsonFileStateStore
 
 
 class TrustFoundationTests(unittest.TestCase):
+    def test_aliyun_audio_is_normalized_to_mono_16khz_mp3(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, "recorder-output-with-unreliable-extension.mp3")
+            with open(source, "wb") as audio:
+                audio.write(b"not-an-mp3-header; recorder bytes")
+
+            def fake_ffmpeg(args, **_kwargs):
+                output = args[-1]
+                with open(output, "wb") as normalized:
+                    normalized.write(b"normalized-mp3")
+
+                class Result:
+                    returncode = 0
+                    stderr = ""
+
+                return Result()
+
+            with patch.object(main.shutil, "which", return_value="/usr/bin/ffmpeg"), patch.object(
+                main.subprocess, "run", side_effect=fake_ffmpeg
+            ) as run_ffmpeg:
+                normalized, audio_format, converted = main.prepare_aliyun_audio(source)
+
+            self.assertTrue(converted)
+            self.assertEqual(audio_format, "mp3")
+            self.assertTrue(normalized.endswith(".normalized.mp3"))
+            self.assertEqual(run_ffmpeg.call_args.args[0][run_ffmpeg.call_args.args[0].index("-ar") + 1], "16000")
+            self.assertEqual(run_ffmpeg.call_args.args[0][run_ffmpeg.call_args.args[0].index("-ac") + 1], "1")
+
     def test_miniapp_share_link_uses_wechat_url_link_and_caches_it(self):
         class FakeResponse(BytesIO):
             def __enter__(self):

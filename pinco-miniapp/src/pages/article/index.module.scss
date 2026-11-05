@@ -6,6 +6,11 @@
   background: $color-bg-page;
 }
 
+.reader {
+  height: 100vh;
+  background: $color-bg-page;
+}
+
 .header {
   background: $color-bg-card;
   border-radius: 28rpx;
@@ -57,6 +62,70 @@
   &:last-child {
     margin-bottom: 0;
   }
+}
+
+.articleSection {
+  margin-bottom: 36rpx;
+
+  &:last-of-type {
+    margin-bottom: 0;
+  }
+}
+
+.sectionHeading {
+  display: block;
+  margin-bottom: 14rpx;
+  color: $color-text-primary;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  line-height: 1.5;
+}
+
+.bulletList {
+  margin-top: 8rpx;
+}
+
+.bulletRow {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 12rpx;
+}
+
+.bulletMark {
+  flex-shrink: 0;
+  width: 32rpx;
+  color: $color-primary;
+  font-size: $font-size-md;
+  line-height: $line-height-loose;
+}
+
+.bulletText {
+  flex: 1;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  line-height: $line-height-loose;
+}
+
+.practiceCard {
+  margin-top: 18rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 20rpx;
+  background: $color-bg-soft;
+}
+
+.practiceLabel {
+  display: block;
+  margin-bottom: 8rpx;
+  color: $color-primary;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+}
+
+.practiceText {
+  display: block;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  line-height: $line-height-loose;
 }
 
 .primaryButton {

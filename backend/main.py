@@ -10,6 +10,7 @@ from threading import Lock
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from urllib.parse import urlencode
+from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
 from state_store import StateStore, create_state_store
 from career_taxonomy import role_interview_focus, translate_job_query
@@ -8782,20 +8783,12 @@ def get_aliyun_nls_token() -> str:
         return token_id
 
 def prepare_aliyun_audio(temp_path: str) -> tuple[str, str, bool]:
-    """Return an Aliyun-compatible audio path, format name, and conversion flag.
+    """Normalize recorder output to the exact NLS contract: mono 16 kHz MP3.
 
-    WeChat DevTools can return WebM/Opus bytes even when RecorderManager was
-    requested with ``format: mp3`` and the temporary filename ends in ``.mp3``.
-    Sending those bytes to NLS as MP3 produces a misleading upstream failure.
-    Real devices normally produce MP3, so only the WebM simulator case is
-    normalized here.
+    RecorderManager's requested format and filename are not reliable evidence
+    of the encoded bytes across WeChat DevTools, iOS and Android. Always decode
+    and re-encode instead of labelling WebM/AAC/44.1 kHz bytes as 16 kHz MP3.
     """
-    with open(temp_path, "rb") as audio_file:
-        header = audio_file.read(16)
-    is_webm = header.startswith(b"\x1a\x45\xdf\xa3")
-    if not is_webm:
-        return temp_path, "mp3", False
-
     ffmpeg_path = shutil.which("ffmpeg")
     if not ffmpeg_path:
         raise HTTPException(
@@ -8832,11 +8825,22 @@ def prepare_aliyun_audio(temp_path: str) -> tuple[str, str, bool]:
             check=False,
         )
     except subprocess.TimeoutExpired as error:
-        raise RuntimeError("Audio conversion timed out.") from error
+        if os.path.exists(normalized_path):
+            os.remove(normalized_path)
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "ASR_AUDIO_CONVERSION_TIMEOUT", "message": "录音格式转换超时，请缩短录音后重试。"},
+        ) from error
     if completed.returncode != 0 or not os.path.exists(normalized_path):
-        stderr = (completed.stderr or "").strip()[-500:]
-        raise RuntimeError(f"Audio conversion failed: {stderr}")
-    print(f"[ASR] Normalized WebM/Opus recording to MP3: {os.path.getsize(normalized_path)} bytes")
+        # Avoid echoing arbitrary ffmpeg input metadata back to the client.
+        print(f"[ASR] Audio normalization failed: exit={completed.returncode}, stderr={(completed.stderr or '').strip()[-300:]}")
+        if os.path.exists(normalized_path):
+            os.remove(normalized_path)
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "ASR_AUDIO_FORMAT_UNSUPPORTED", "message": "录音格式无法处理，请重新录制后再试。"},
+        )
+    print(f"[ASR] Normalized recording to mono 16 kHz MP3: {os.path.getsize(normalized_path)} bytes")
     return normalized_path, "mp3", True
 
 def transcribe_with_aliyun_asr(temp_path: str) -> str:
@@ -8848,7 +8852,17 @@ def transcribe_with_aliyun_asr(temp_path: str) -> str:
                 "message": "阿里云语音项目 App Key 尚未配置。",
             },
         )
-    token = get_aliyun_nls_token()
+    try:
+        token = get_aliyun_nls_token()
+    except Exception as error:
+        # Keep provider secrets and raw SDK payloads in neither the response
+        # nor ordinary logs; the stage and exception class are enough to
+        # separate credential/permission failures from audio recognition.
+        print(f"[ASR] Aliyun token request failed: {type(error).__name__}")
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "ALIYUN_TOKEN_REQUEST_FAILED", "message": "阿里云语音鉴权失败，请检查 AccessKey 权限、语音服务开通状态和地域配置。"},
+        ) from error
     prepared_path, audio_format, converted = prepare_aliyun_audio(temp_path)
     try:
         with open(prepared_path, "rb") as audio_file:
@@ -8871,11 +8885,34 @@ def transcribe_with_aliyun_asr(temp_path: str) -> str:
             },
             method="POST",
         )
-        with urlopen(request, timeout=60) as response:
-            result = json.loads(response.read().decode("utf-8"))
+        try:
+            with urlopen(request, timeout=60) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except HTTPError as error:
+            print(f"[ASR] Aliyun recognition HTTP failure: status={error.code}")
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "ALIYUN_ASR_HTTP_FAILED", "message": f"阿里云语音识别请求被拒绝（HTTP {error.code}），请检查 AppKey、项目状态和服务权限。"},
+            ) from error
+        except URLError as error:
+            reason = getattr(error, "reason", None)
+            print(f"[ASR] Aliyun recognition network failure: {type(reason).__name__}")
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "ALIYUN_ASR_NETWORK_FAILED", "message": "Pinco 后端暂时无法连接阿里云语音服务，请稍后重试。"},
+            ) from error
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            print(f"[ASR] Aliyun recognition returned invalid JSON: {type(error).__name__}")
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "ALIYUN_ASR_INVALID_RESPONSE", "message": "阿里云语音服务返回异常，请稍后重试。"},
+            ) from error
         if int(result.get("status") or 0) != 20000000:
-            raise RuntimeError(
-                f"Aliyun NLS failed: status={result.get('status')}, message={result.get('message')}"
+            status = str(result.get("status") or "unknown")
+            print(f"[ASR] Aliyun recognition rejected: status={status}")
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "ALIYUN_ASR_REJECTED", "message": f"阿里云语音服务拒绝了这段录音（错误码 {status}），请检查项目状态、AppKey 与音频要求。"},
             )
         return str(result.get("result") or "").strip()
     finally:
@@ -8923,10 +8960,11 @@ async def voice_upload(request: Request, type: str = "voice"):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ASR] Error: {e}")
+        print(f"[ASR] Error: {type(e).__name__}")
+        provider_message = "阿里云语音识别服务暂时不可用，请稍后重试。" if ASR_PROVIDER == "aliyun" else "语音识别服务暂时不可用，请稍后重试。"
         raise HTTPException(
             status_code=502,
-            detail={"code": "ASR_UPSTREAM_ERROR", "message": "语音识别服务暂时不可用，请稍后重试。"},
+            detail={"code": "ASR_UPSTREAM_ERROR", "message": provider_message},
         )
 
 # --- Frontend Static Files ---

@@ -270,7 +270,7 @@ const ConversationPage: React.FC = () => {
     const sourcePostId = typeof options?.source_post_id === 'string' ? decodeURIComponent(options.source_post_id) : ''
     const duration = Number(options?.duration)
     openConversation(scenario, '把问题交给学姐一起拆')
-    Taro.setNavigationBarTitle({ title: '升职加薪' })
+    Taro.setNavigationBarTitle({ title: 'Pinco-Career Agent' })
     if (scenario === 'interview' && (position || jobId || sourcePostId)) {
       setInterviewInput(position || 'AI 求职面试')
       setInterviewCompany(company)
