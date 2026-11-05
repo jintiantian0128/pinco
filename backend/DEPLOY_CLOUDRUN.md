@@ -58,6 +58,19 @@ IMAGE_OCR_PROVIDER=local
 IMAGE_OCR_DEVICE_VERIFIED=false
 ```
 
+如改用腾讯云一句话识别，将 ASR 环境变量替换为：
+
+```text
+ASR_PROVIDER=tencent
+TENCENTCLOUD_SECRET_ID=<CAM 的 SecretId>
+TENCENTCLOUD_SECRET_KEY=<CAM 的 SecretKey>
+TENCENTCLOUD_REGION=ap-shanghai
+TENCENT_ASR_MONTHLY_LIMIT=4500
+ASR_DEVICE_VERIFIED=false
+```
+
+SecretId/SecretKey 只配置在云托管环境变量中，并为 CAM 子用户仅授予语音识别调用权限。Pinco 使用腾讯云官方 ASR SDK，先把录音规范化为 16kHz 单声道 MP3，再调用 60 秒以内的一句话识别接口。程序用当前的云端 MySQL/MongoDB 做跨实例原子计数，每月最多调用 4,500 次；无法确认计数或持久化数据库未启用时会拒绝调用，避免无保护地发起请求。该限额只统计 Pinco 的调用，若同一腾讯云账号还有其他应用共用 ASR 免费额度，账号总用量仍需在腾讯云控制台核对；腾讯云免费额度/计费规则以账号控制台当前展示为准。真实设备验证通过前不要改成 `ASR_DEVICE_VERIFIED=true`。
+
 云托管是无状态容器。生产环境若仍使用 `PINCO_STATE_BACKEND=file`，重启或扩缩容会丢失用户、帖子、练习报告、专家订单等数据，不能开放首批用户。当前环境已经提供云托管 MySQL，优先使用 `mysql`，无需额外购买 MongoDB 或配置 VPC。程序会自动创建 `pinco` 数据库（账号具备建库权限时）和 `pinco_state` 表；生产环境建议在控制台先建库，再使用只拥有该库读写权限的专用账号，不要长期使用 root。
 
 ### 微信支付（先测试，后公开）

@@ -15,6 +15,7 @@ class FakeCursor:
     def __init__(self, driver):
         self.driver = driver
         self.result = None
+        self.rowcount = 0
 
     def __enter__(self):
         return self
@@ -27,6 +28,17 @@ class FakeCursor:
         self.driver.queries.append((normalized, params))
         if normalized.startswith("SELECT state_json"):
             self.result = (self.driver.payload,) if self.driver.payload is not None else None
+        elif normalized.startswith("INSERT IGNORE INTO"):
+            self.driver.usage.setdefault(params[0], 0)
+            self.rowcount = 1
+        elif normalized.startswith("UPDATE `pinco_state_usage`"):
+            key, limit = params
+            current = self.driver.usage.get(key, 0)
+            self.rowcount = 1 if current < limit else 0
+            if self.rowcount:
+                self.driver.usage[key] = current + 1
+        elif normalized.startswith("SELECT usage_count"):
+            self.result = (self.driver.usage.get(params[0], 0),)
         elif normalized == "SELECT 1":
             self.result = (1,)
         elif normalized.startswith("INSERT INTO"):
@@ -60,6 +72,7 @@ class FakePyMySQL(types.ModuleType):
         self.queries = []
         self.connect_calls = []
         self.payload = None
+        self.usage = {}
         self.commits = 0
         self.rollbacks = 0
         self.closes = 0
@@ -105,6 +118,13 @@ class MySQLStateStoreTests(unittest.TestCase):
                 file_path="/tmp/unused.json",
                 default_factory=lambda: {},
             )
+
+    def test_monthly_usage_reservation_is_atomic_and_stops_at_limit(self):
+        driver = FakePyMySQL()
+        store = self.build_store(driver)
+        self.assertEqual(store.reserve_monthly_usage("tencent_asr_2026-11", 2), {"reserved": True, "used": 1, "limit": 2})
+        self.assertEqual(store.reserve_monthly_usage("tencent_asr_2026-11", 2), {"reserved": True, "used": 2, "limit": 2})
+        self.assertEqual(store.reserve_monthly_usage("tencent_asr_2026-11", 2), {"reserved": False, "used": 2, "limit": 2})
 
     def test_rejects_invalid_address_and_identifiers(self):
         driver = FakePyMySQL()

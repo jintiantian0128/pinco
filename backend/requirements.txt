@@ -12,6 +12,7 @@ wechatpayv3==2.0.2
 python-dotenv>=1.0.1
 baidusearch>=1.0.3
 aliyun-python-sdk-core==2.15.1
+tencentcloud-sdk-python-asr==3.1.197
 pymongo>=4.8.0
 PyMySQL>=1.1.1
 # Local-only Chinese/English OCR. The small ONNX models are bundled in the

@@ -83,6 +83,15 @@ ALIYUN_NLS_ENDPOINT = os.environ.get(
     "ALIYUN_NLS_ENDPOINT",
     "https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/asr",
 )
+TENCENTCLOUD_SECRET_ID = os.environ.get("TENCENTCLOUD_SECRET_ID", "").strip()
+TENCENTCLOUD_SECRET_KEY = os.environ.get("TENCENTCLOUD_SECRET_KEY", "").strip()
+TENCENTCLOUD_REGION = os.environ.get("TENCENTCLOUD_REGION", "ap-shanghai").strip() or "ap-shanghai"
+try:
+    # Keep a margin below Tencent ASR's currently documented free-tier quota.
+    # The limit can be lowered by an operator, but not raised past 5,000/month.
+    TENCENT_ASR_MONTHLY_LIMIT = max(1, min(int(os.environ.get("TENCENT_ASR_MONTHLY_LIMIT", "4500")), 4500))
+except (TypeError, ValueError):
+    TENCENT_ASR_MONTHLY_LIMIT = 4500
 BING_SEARCH_KEY = os.environ.get("BING_SEARCH_KEY")
 JSEARCH_API_KEY = os.environ.get("JSEARCH_API_KEY")
 JSEARCH_BASE_URL = "https://jsearch.p.rapidapi.com"
@@ -1942,6 +1951,7 @@ def build_miniapp_readiness() -> Dict[str, Any]:
     asr_configured = (
         (ASR_PROVIDER == "aliyun" and bool(ALIYUN_NLS_APP_KEY and ALIYUN_AK_ID and ALIYUN_AK_SECRET))
         or (ASR_PROVIDER == "openai" and bool(ASR_API_KEY))
+        or (ASR_PROVIDER == "tencent" and bool(TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY))
         or (ASR_PROVIDER == "local" and ENABLE_LOCAL_WHISPER)
     )
     asr_ready = asr_configured and ASR_DEVICE_VERIFIED
@@ -8946,6 +8956,121 @@ def transcribe_with_aliyun_asr(temp_path: str) -> str:
         if converted and os.path.exists(prepared_path):
             os.remove(prepared_path)
 
+
+def reserve_tencent_asr_request() -> Dict[str, Any]:
+    """Atomically enforce a monthly cap across all CloudRun instances."""
+    store = get_state_store()
+    if not store.durable:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "TENCENT_ASR_DURABLE_LIMIT_REQUIRED",
+                "message": "腾讯云语音识别需要启用云端 MySQL 或 MongoDB，才能可靠限制每月调用量；请先配置持久化存储。",
+            },
+        )
+    period = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m")
+    try:
+        reservation = store.reserve_monthly_usage(f"tencent_asr_{period}", TENCENT_ASR_MONTHLY_LIMIT)
+    except Exception as error:
+        print(f"[ASR] Tencent quota reservation failed: {type(error).__name__}")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "TENCENT_ASR_QUOTA_STORE_UNAVAILABLE", "message": "暂时无法确认语音识别免费额度余量，为避免产生额外费用，本次没有调用腾讯云。"},
+        ) from error
+    if not reservation.get("reserved"):
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "TENCENT_ASR_MONTHLY_LIMIT_REACHED",
+                "message": "Pinco 本月语音识别安全额度已用完，请下月再试；本次没有调用腾讯云。",
+            },
+        )
+    return reservation
+
+
+def transcribe_with_tencent_asr(temp_path: str) -> str:
+    if not (TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "TENCENT_ASR_CREDENTIALS_MISSING",
+                "message": "腾讯云语音识别尚未配置，请在云托管环境变量中配置 TENCENTCLOUD_SECRET_ID 和 TENCENTCLOUD_SECRET_KEY。",
+            },
+        )
+
+    prepared_path, _, converted = prepare_aliyun_audio(temp_path)
+    try:
+        duration_probe = shutil.which("ffprobe")
+        if not duration_probe:
+            raise HTTPException(status_code=503, detail={"code": "TENCENT_ASR_AUDIO_PROBE_MISSING", "message": "服务端无法校验录音时长，暂不调用腾讯云；请联系管理员检查音频组件。"})
+        probe = subprocess.run(
+            [duration_probe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", prepared_path],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        try:
+            duration_seconds = float((probe.stdout or "").strip())
+        except (TypeError, ValueError):
+            duration_seconds = 0
+        if probe.returncode != 0 or duration_seconds <= 0:
+            raise HTTPException(status_code=400, detail={"code": "TENCENT_ASR_AUDIO_DURATION_UNKNOWN", "message": "无法读取录音时长，请重新录制后再试。"})
+        if duration_seconds > 60:
+            raise HTTPException(status_code=400, detail={"code": "TENCENT_ASR_AUDIO_TOO_LONG", "message": "腾讯云一句话识别仅支持不超过 60 秒的录音，请缩短后重试。"})
+
+        with open(prepared_path, "rb") as audio_file:
+            audio_bytes = audio_file.read()
+        audio_data = base64.b64encode(audio_bytes).decode("ascii")
+        if len(audio_data) > 3 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail={"code": "TENCENT_ASR_AUDIO_TOO_LARGE", "message": "录音文件超过腾讯云识别上限，请缩短后重试。"})
+
+        try:
+            from tencentcloud.asr.v20190614 import asr_client, models
+            from tencentcloud.common import credential
+            from tencentcloud.common.profile.client_profile import ClientProfile
+            from tencentcloud.common.profile.http_profile import HttpProfile
+
+            http_profile = HttpProfile()
+            http_profile.endpoint = "asr.tencentcloudapi.com"
+            http_profile.reqTimeout = 60
+            client_profile = ClientProfile()
+            client_profile.httpProfile = http_profile
+            client = asr_client.AsrClient(
+                credential.Credential(TENCENTCLOUD_SECRET_ID, TENCENTCLOUD_SECRET_KEY),
+                TENCENTCLOUD_REGION,
+                client_profile,
+            )
+            request = models.SentenceRecognitionRequest()
+            request.from_json_string(json.dumps({
+                "EngSerViceType": "16k_zh",
+                "SourceType": 1,
+                "VoiceFormat": "mp3",
+                "Data": audio_data,
+                "DataLen": len(audio_bytes),
+                "FilterPunc": 0,
+            }))
+            # Reserve only after local validation and SDK setup, but before any
+            # billable upstream call. Failed upstream attempts remain counted.
+            reserve_tencent_asr_request()
+            response = client.SentenceRecognition(request)
+        except HTTPException:
+            raise
+        except Exception as error:
+            # SDK exceptions can include request metadata; log only the class.
+            print(f"[ASR] Tencent recognition failed: {type(error).__name__}")
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "TENCENT_ASR_UPSTREAM_FAILED", "message": "腾讯云语音识别暂时不可用，请检查密钥权限、语音识别服务开通状态和地域后重试。"},
+            ) from error
+        result = str(getattr(response, "Result", "") or "").strip()
+        if not result:
+            raise HTTPException(status_code=502, detail={"code": "TENCENT_ASR_EMPTY_RESULT", "message": "腾讯云没有识别出有效文字，请靠近麦克风后重试。"})
+        return result
+    finally:
+        if converted and os.path.exists(prepared_path):
+            os.remove(prepared_path)
+
 @app.post("/api/v1/voice/upload")
 async def voice_upload(request: Request, type: str = "voice"):
     """Upload voice file and return ASR text."""
@@ -8966,6 +9091,8 @@ async def voice_upload(request: Request, type: str = "voice"):
                 text = transcribe_with_external_asr(temp_path)
             elif ASR_PROVIDER == "aliyun":
                 text = transcribe_with_aliyun_asr(temp_path)
+            elif ASR_PROVIDER == "tencent":
+                text = transcribe_with_tencent_asr(temp_path)
             elif ENABLE_LOCAL_WHISPER:
                 model = get_whisper_model()
                 segments, info = model.transcribe(temp_path, language="zh", beam_size=1, vad_filter=True)
@@ -8988,7 +9115,7 @@ async def voice_upload(request: Request, type: str = "voice"):
         raise
     except Exception as e:
         print(f"[ASR] Error: {type(e).__name__}")
-        provider_message = "阿里云语音识别服务暂时不可用，请稍后重试。" if ASR_PROVIDER == "aliyun" else "语音识别服务暂时不可用，请稍后重试。"
+        provider_message = "阿里云语音识别服务暂时不可用，请稍后重试。" if ASR_PROVIDER == "aliyun" else "腾讯云语音识别服务暂时不可用，请稍后重试。" if ASR_PROVIDER == "tencent" else "语音识别服务暂时不可用，请稍后重试。"
         raise HTTPException(
             status_code=502,
             detail={"code": "ASR_UPSTREAM_ERROR", "message": provider_message},

@@ -39,6 +39,10 @@ class StateStore(ABC):
             "detail": "状态仓库可用",
         }
 
+    def reserve_monthly_usage(self, key: str, limit: int) -> Dict[str, Any]:
+        """Atomically reserve one billable operation or fail closed."""
+        raise RuntimeError("当前状态仓库不支持跨实例的原子用量限制")
+
 
 class JsonFileStateStore(StateStore):
     backend_name = "file"
@@ -110,6 +114,24 @@ class MongoStateStore(StateStore):
         document["_id"] = "pinco_state"
         self.collection.replace_one({"_id": "pinco_state"}, document, upsert=True)
 
+    def reserve_monthly_usage(self, key: str, limit: int) -> Dict[str, Any]:
+        from pymongo import ReturnDocument
+        from pymongo.errors import DuplicateKeyError
+
+        usage = self.collection.database.get_collection(f"{self.collection.name}_usage")
+        try:
+            usage.update_one({"_id": key}, {"$setOnInsert": {"count": 0}}, upsert=True)
+        except DuplicateKeyError:
+            # Another CloudRun instance may have initialized the month first.
+            pass
+        reserved = usage.find_one_and_update(
+            {"_id": key, "count": {"$lt": limit}},
+            {"$inc": {"count": 1}},
+            return_document=ReturnDocument.AFTER,
+        )
+        current = usage.find_one({"_id": key}, {"count": 1}) or {"count": 0}
+        return {"reserved": reserved is not None, "used": int(current.get("count") or 0), "limit": limit}
+
     def health(self) -> Dict[str, Any]:
         try:
             self.client.admin.command("ping")
@@ -160,6 +182,7 @@ class MySQLStateStore(StateStore):
         self.password = password
         self.database = self._validated_identifier(database, "MYSQL_DATABASE")
         self.table = self._validated_identifier(table, "MYSQL_STATE_TABLE")
+        self.usage_table = self._validated_identifier(f"{self.table}_usage", "MYSQL_STATE_TABLE")
         self.default_factory = default_factory
         self._ensure_schema()
 
@@ -229,6 +252,16 @@ class MySQLStateStore(StateStore):
                     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
                     """
                 )
+                cursor.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS `{self.usage_table}` (
+                        usage_key VARCHAR(64) NOT NULL PRIMARY KEY,
+                        usage_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                            ON UPDATE CURRENT_TIMESTAMP
+                    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                    """
+                )
             connection.commit()
         finally:
             connection.close()
@@ -262,6 +295,34 @@ class MySQLStateStore(StateStore):
                     ("pinco_state", payload),
                 )
             connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def reserve_monthly_usage(self, key: str, limit: int) -> Dict[str, Any]:
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"INSERT IGNORE INTO `{self.usage_table}` (usage_key, usage_count) VALUES (%s, 0)",
+                    (key,),
+                )
+                cursor.execute(
+                    f"UPDATE `{self.usage_table}` SET usage_count=usage_count+1 "
+                    "WHERE usage_key=%s AND usage_count < %s",
+                    (key, limit),
+                )
+                reserved = cursor.rowcount == 1
+                cursor.execute(
+                    f"SELECT usage_count FROM `{self.usage_table}` WHERE usage_key=%s",
+                    (key,),
+                )
+                row = cursor.fetchone()
+                used = int(row[0]) if row else 0
+            connection.commit()
+            return {"reserved": reserved, "used": used, "limit": limit}
         except Exception:
             connection.rollback()
             raise
