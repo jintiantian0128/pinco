@@ -8889,10 +8889,37 @@ def transcribe_with_aliyun_asr(temp_path: str) -> str:
             with urlopen(request, timeout=60) as response:
                 result = json.loads(response.read().decode("utf-8"))
         except HTTPError as error:
-            print(f"[ASR] Aliyun recognition HTTP failure: status={error.code}")
+            # Aliyun may return a useful machine-readable error code in the
+            # HTTP error body. Keep raw text out of logs/responses because it
+            # can contain request details; expose only allow-listed metadata.
+            upstream_code = ""
+            task_id = ""
+            try:
+                error_payload = json.loads(error.read(4096).decode("utf-8"))
+                candidate_code = error_payload.get("status") or error_payload.get("code") or error_payload.get("Code")
+                if isinstance(candidate_code, (str, int)):
+                    upstream_code = re.sub(r"[^A-Za-z0-9_-]", "", str(candidate_code))[:80]
+                candidate_task_id = error_payload.get("task_id") or error_payload.get("TaskId")
+                if isinstance(candidate_task_id, str):
+                    task_id = re.sub(r"[^A-Za-z0-9_-]", "", candidate_task_id)[:80]
+            except Exception:
+                pass
+            print(
+                "[ASR] Aliyun recognition HTTP failure: "
+                f"http_status={error.code}, provider_code={upstream_code or 'unavailable'}, "
+                f"task_id={task_id or 'unavailable'}"
+            )
+            detail = {
+                "code": "ALIYUN_ASR_HTTP_FAILED",
+                "message": f"阿里云语音识别请求被拒绝（HTTP {error.code}），请检查 AppKey、项目状态和服务权限。",
+            }
+            if upstream_code:
+                detail["provider_code"] = upstream_code
+            if task_id:
+                detail["task_id"] = task_id
             raise HTTPException(
                 status_code=502,
-                detail={"code": "ALIYUN_ASR_HTTP_FAILED", "message": f"阿里云语音识别请求被拒绝（HTTP {error.code}），请检查 AppKey、项目状态和服务权限。"},
+                detail=detail,
             ) from error
         except URLError as error:
             reason = getattr(error, "reason", None)

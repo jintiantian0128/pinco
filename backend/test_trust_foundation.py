@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+from urllib.error import HTTPError
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -40,6 +41,36 @@ class TrustFoundationTests(unittest.TestCase):
             self.assertTrue(normalized.endswith(".normalized.mp3"))
             self.assertEqual(run_ffmpeg.call_args.args[0][run_ffmpeg.call_args.args[0].index("-ar") + 1], "16000")
             self.assertEqual(run_ffmpeg.call_args.args[0][run_ffmpeg.call_args.args[0].index("-ac") + 1], "1")
+
+    def test_aliyun_http_failure_exposes_only_safe_provider_diagnostics(self):
+        upstream_error = HTTPError(
+            "https://nls-gateway.invalid/stream/v1/asr",
+            400,
+            "Bad Request",
+            {},
+            BytesIO(json.dumps({
+                "Code": "InvalidAppKey",
+                "Message": "do not expose this raw message",
+                "TaskId": "task-123",
+                "Secret": "must-not-leak",
+            }).encode("utf-8")),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            prepared_audio = os.path.join(directory, "test-audio.mp3")
+            with open(prepared_audio, "wb") as audio:
+                audio.write(b"test audio")
+            with patch.object(main, "ALIYUN_NLS_APP_KEY", "test-app-key"), patch.object(
+                main, "get_aliyun_nls_token", return_value="test-token"
+            ), patch.object(
+                main, "prepare_aliyun_audio", return_value=(prepared_audio, "mp3", False)
+            ), patch.object(main, "urlopen", side_effect=upstream_error):
+                with self.assertRaises(HTTPException) as raised:
+                    main.transcribe_with_aliyun_asr("/tmp/input-audio.mp3")
+
+        self.assertEqual(raised.exception.detail["provider_code"], "InvalidAppKey")
+        self.assertEqual(raised.exception.detail["task_id"], "task-123")
+        self.assertNotIn("do not expose", str(raised.exception.detail))
+        self.assertNotIn("must-not-leak", str(raised.exception.detail))
 
     def test_miniapp_share_link_uses_wechat_url_link_and_caches_it(self):
         class FakeResponse(BytesIO):
