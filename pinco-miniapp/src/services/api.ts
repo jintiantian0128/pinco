@@ -57,11 +57,13 @@ export const setApiSessionRecoveryHandler = (handler: ApiSessionRecoveryHandler 
 
 class ApiResponseError extends Error {
   statusCode: number
+  code: string
 
-  constructor(message: string, statusCode: number) {
+  constructor(message: string, statusCode: number, code = '') {
     super(message)
     this.name = 'ApiResponseError'
     this.statusCode = statusCode
+    this.code = code
   }
 }
 
@@ -77,6 +79,12 @@ const getErrorMessage = (data: any, fallback: string) => {
   }
   if (typeof data?.message === 'string' && data.message.trim()) return data.message
   return fallback
+}
+
+const getErrorCode = (data: any): string => {
+  const detail = data?.detail
+  const code = detail && typeof detail === 'object' ? detail.code : data?.error?.code
+  return typeof code === 'string' ? code : ''
 }
 
 export const canUseCallContainer = () => {
@@ -191,7 +199,13 @@ const apiRequestInternal = async <T>(
   allowSessionRecovery: boolean,
   preferPublicHttps = false
 ): Promise<T> => {
-  const useCallContainer = canUseCallContainer() && !preferPublicHttps
+  // Long-running/billable POSTs must use one transport attempt only. Racing a
+  // 6s callContainer timeout against HTTPS can leave the first request running
+  // and submit a second copy (duplicate LLM charges / ASR quota consumption).
+  const singleShotLongPost = method === 'POST' && (
+    path === '/api/v1/chat' || path === '/api/v1/voice/upload'
+  )
+  const useCallContainer = canUseCallContainer() && !preferPublicHttps && !singleShotLongPost
 
   if (useCallContainer) {
     console.info('[API] callContainer', method, path, 'env=', CLOUD_ENV, 'service=', CLOUD_SERVICE)
@@ -227,7 +241,7 @@ const apiRequestInternal = async <T>(
           const retry = remapRecoveredIdentity(path, data, recovery)
           return apiRequestInternal<T>(retry.path, method, retry.data, false, preferPublicHttps)
         }
-        throw new ApiResponseError(getErrorMessage(res.data, '服务暂时不可用'), res.statusCode)
+        throw new ApiResponseError(getErrorMessage(res.data, '服务暂时不可用'), res.statusCode, getErrorCode(res.data))
       }
       console.info('[API] callContainer success', path, 'status=', res.statusCode)
       return res.data as T
@@ -248,7 +262,7 @@ const apiRequestInternal = async <T>(
     url: `${baseUrl}${path}`,
     method,
     data,
-    timeout: 30000,
+    timeout: singleShotLongPost ? 60000 : 30000,
     header: {
       'Content-Type': 'application/json',
       ...(apiSessionToken ? { 'X-Pinco-Session': apiSessionToken } : {}),
@@ -262,7 +276,7 @@ const apiRequestInternal = async <T>(
       const retry = remapRecoveredIdentity(path, data, recovery)
       return apiRequestInternal<T>(retry.path, method, retry.data, false, preferPublicHttps)
     }
-    throw new ApiResponseError(getErrorMessage(response.data, '服务暂时不可用'), response.statusCode)
+    throw new ApiResponseError(getErrorMessage(response.data, '服务暂时不可用'), response.statusCode, getErrorCode(response.data))
   }
   return response.data
 }

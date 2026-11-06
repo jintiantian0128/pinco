@@ -30,6 +30,18 @@ class TencentAsrTests(unittest.TestCase):
                 main.reserve_tencent_asr_request()
         self.assertEqual(raised.exception.status_code, 429)
         self.assertEqual(raised.exception.detail["code"], "TENCENT_ASR_MONTHLY_LIMIT_REACHED")
+        self.assertEqual(raised.exception.detail["message"], "当月语音输入额度已用完，请使用文本输入")
+
+    def test_tencent_provider_quota_codes_are_classified_without_exposing_payloads(self):
+        self.assertEqual(
+            main.tencent_asr_quota_error_code(RuntimeError("FailedOperation.UserHasNoFreeAmount: exhausted")),
+            "FailedOperation.UserHasNoFreeAmount",
+        )
+        self.assertEqual(
+            main.tencent_asr_quota_error_code(RuntimeError("FailedOperation.UserHasNoAmount")),
+            "FailedOperation.UserHasNoAmount",
+        )
+        self.assertIsNone(main.tencent_asr_quota_error_code(RuntimeError("AuthFailure.InvalidSecretId")))
 
     def test_transcription_uses_signed_sdk_and_expected_short_audio_contract(self):
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as audio:

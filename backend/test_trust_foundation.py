@@ -130,11 +130,11 @@ class TrustFoundationTests(unittest.TestCase):
             self.assertEqual(store.load()["users"]["u1"]["messages"], [])
             self.assertFalse(store.health()["durable"])
 
-    def test_llm_retry_never_returns_canned_answer(self):
+    def test_llm_quota_failure_is_not_retried_with_a_rewritten_prompt(self):
         with patch.object(main, "llm_chat", side_effect=RuntimeError("429 quota")) as mocked:
             with self.assertRaises(RuntimeError):
                 main.llm_chat_with_fallback([{"role": "user", "content": "我面试挂了"}])
-            self.assertEqual(mocked.call_count, 2)
+            self.assertEqual(mocked.call_count, 1)
 
     def test_jd_failure_is_explicit(self):
         request = main.JDAnalyzeRequest(jd_text="AI 产品经理，要求三年经验和数据分析能力")

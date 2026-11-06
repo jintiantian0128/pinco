@@ -105,7 +105,7 @@ class AdminConsoleTests(unittest.TestCase):
         self.assertNotIn("properties", result["events"][0])
 
     def test_admin_model_config_is_protected_and_never_returns_api_key(self):
-        with patch.object(main, "PINCO_ADMIN_TOKEN", "b" * 32), patch.object(main, "LLM_PROVIDER", "openai"), patch.object(main, "OPENAI_API_KEY", "top-secret-key"):
+        with patch.object(main, "PINCO_ADMIN_TOKEN", "b" * 32), patch.object(main, "DEEPSEEK_API_KEY", "top-secret-key"):
             with self.assertRaises(main.HTTPException) as denied:
                 main.get_admin_config(x_pinco_admin_token=None)
             self.assertEqual(denied.exception.status_code, 403)

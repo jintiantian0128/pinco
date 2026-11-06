@@ -28,10 +28,9 @@ SHA-256：`9b125835e84a2dc9ea51604f931b763b85db7e76d9205906def90a11199faa4d`
 在云托管「服务设置 → 环境变量」中配置：
 
 ```text
-LLM_PROVIDER=openai
-OPENAI_API_KEY=<DeepSeek API Key>
-OPENAI_BASE_URL=https://api.deepseek.com
-DEFAULT_MODEL=<控制台实际可用的 DeepSeek 模型名>
+DEEPSEEK_API_KEY=<DeepSeek API Key>
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=<控制台实际可用的 DeepSeek 模型名>
 
 PINCO_STATE_BACKEND=mysql
 MYSQL_ADDRESS=<微信云托管自动提供的内网地址>
@@ -70,6 +69,8 @@ ASR_DEVICE_VERIFIED=false
 ```
 
 SecretId/SecretKey 只配置在云托管环境变量中，并为 CAM 子用户仅授予语音识别调用权限。Pinco 使用腾讯云官方 ASR SDK，先把录音规范化为 16kHz 单声道 MP3，再调用 60 秒以内的一句话识别接口。程序用当前的云端 MySQL/MongoDB 做跨实例原子计数，每月最多调用 4,500 次；无法确认计数或持久化数据库未启用时会拒绝调用，避免无保护地发起请求。该限额只统计 Pinco 的调用，若同一腾讯云账号还有其他应用共用 ASR 免费额度，账号总用量仍需在腾讯云控制台核对；腾讯云免费额度/计费规则以账号控制台当前展示为准。真实设备验证通过前不要改成 `ASR_DEVICE_VERIFIED=true`。
+
+聊天模型使用 DeepSeek 的 HTTPS `/chat/completions` 接口，由后端直接发送 JSON 请求；OpenAI 和 Anthropic 聊天模型分支及对应 SDK 已移除。过渡期间若旧环境仍只有 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`DEFAULT_MODEL`，程序会兼容读取；建议迁移为上面的 `DEEPSEEK_*` 后删除旧变量。可选兼容型 ASR 配置仍只服务语音识别，并通过标准 HTTP multipart 请求调用，不参与聊天模型调用。
 
 云托管是无状态容器。生产环境若仍使用 `PINCO_STATE_BACKEND=file`，重启或扩缩容会丢失用户、帖子、练习报告、专家订单等数据，不能开放首批用户。当前环境已经提供云托管 MySQL，优先使用 `mysql`，无需额外购买 MongoDB 或配置 VPC。程序会自动创建 `pinco` 数据库（账号具备建库权限时）和 `pinco_state` 表；生产环境建议在控制台先建库，再使用只拥有该库读写权限的专用账号，不要长期使用 root。
 

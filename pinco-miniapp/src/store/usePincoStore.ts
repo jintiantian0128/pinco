@@ -527,7 +527,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           model: '未知',
           provider: 'backend',
           mockMode: false,
-          summary: '模型服务未连接：本地记录可用，但不会用固定模板冒充 AI'
+          // Bootstrap may fail because of session, persistence, or transport errors;
+          // do not report that as an LLM outage unless the model endpoint was checked.
+          summary: '启动服务连接失败：本地记录可用，模型状态未确认'
         },
         runtimeInfo,
         messages: (() => {
@@ -786,7 +788,9 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           ...get().serviceHealth,
           online: true,
           mockMode: false,
-          summary: get().serviceHealth.summary.includes('模型服务未连接') ? '模型服务已恢复' : get().serviceHealth.summary
+          summary: get().serviceHealth.summary.includes('模型服务未连接') || get().serviceHealth.summary.includes('启动服务连接失败')
+            ? '模型服务已恢复'
+            : get().serviceHealth.summary
         },
         isStreaming: false,
         streamingContent: '',

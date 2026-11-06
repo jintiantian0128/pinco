@@ -64,12 +64,17 @@ load_dotenv(os.path.join(BACKEND_DIR, ".env"), override=False)
 PINCO_ADMIN_USERNAME = os.environ.get("PINCO_ADMIN_USERNAME", "").strip()
 PINCO_ADMIN_PASSWORD = os.environ.get("PINCO_ADMIN_PASSWORD", "")
 
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "anthropic").strip().lower()  # mock | openai | anthropic
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.moonshot.cn/v1").rstrip("/")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com").rstrip("/")
-DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "claude-sonnet-4-20250514")
+# Chat completions go directly to DeepSeek over HTTPS; legacy variable names
+# remain read-only fallbacks during CloudBase migration from the old setup.
+LLM_PROVIDER = "deepseek"
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
+DEEPSEEK_BASE_URL = (os.environ.get("DEEPSEEK_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or "https://api.deepseek.com").rstrip("/")
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL") or os.environ.get("DEFAULT_MODEL") or "deepseek-v4-flash"
+if DEEPSEEK_MODEL in {"deepseek-chat", "deepseek-reasoner"}:
+    # DeepSeek retired these legacy aliases in July 2026; use the current
+    # Flash model instead of leaving older CloudBase variables broken.
+    DEEPSEEK_MODEL = "deepseek-v4-flash"
+DEFAULT_MODEL = DEEPSEEK_MODEL
 ASR_PROVIDER = os.environ.get("ASR_PROVIDER", "disabled").strip().lower()
 ASR_API_KEY = os.environ.get("ASR_API_KEY")
 ASR_BASE_URL = os.environ.get("ASR_BASE_URL", "https://api.openai.com/v1").rstrip("/")
@@ -128,10 +133,8 @@ WECHAT_PAY_TEST_USER_IDS = {
 # approved applicant with the same public name is bound to a Pinco user.
 PINCO_DEVELOPER_USER_ID = os.environ.get("PINCO_DEVELOPER_USER_ID", "").strip()
 
-MOCK_MODE = LLM_PROVIDER == "mock" or (LLM_PROVIDER != "anthropic" and not OPENAI_API_KEY) or (LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY)
+MOCK_MODE = not bool(DEEPSEEK_API_KEY)
 
-_openai_client = None
-_anthropic_client = None
 _llm_probe_cache = {"checked_at": 0, "status": None}
 _aliyun_nls_token_cache = {"id": "", "expires_at": 0}
 _aliyun_nls_token_lock = Lock()
@@ -141,56 +144,74 @@ _local_ocr_engine = None
 _local_ocr_engine_lock = Lock()
 
 def get_active_llm_base_url() -> Optional[str]:
-    if LLM_PROVIDER == "anthropic":
-        return ANTHROPIC_BASE_URL
-    if LLM_PROVIDER == "openai":
-        return OPENAI_BASE_URL
-    return None
+    return DEEPSEEK_BASE_URL
 
 def get_llm_config_issue() -> Optional[str]:
-    if LLM_PROVIDER == "mock":
-        return "当前是 mock 模式，不会调用真实模型。"
-    if LLM_PROVIDER not in {"openai", "anthropic"}:
-        return f"不支持的 LLM_PROVIDER：{LLM_PROVIDER}。请使用 openai 或 anthropic。"
-    if LLM_PROVIDER == "openai":
-        if not OPENAI_API_KEY:
-            return "OPENAI_API_KEY 未配置。"
-        if "api.kimi.com/coding" in OPENAI_BASE_URL:
-            return "api.kimi.com/coding 是 Anthropic-compatible endpoint；请把 LLM_PROVIDER 改为 anthropic，或改用 OPENAI_BASE_URL=https://api.moonshot.cn/v1。"
-    if LLM_PROVIDER == "anthropic":
-        if not ANTHROPIC_API_KEY:
-            return "ANTHROPIC_API_KEY 未配置。"
-        if "moonshot.cn" in ANTHROPIC_BASE_URL:
-            return "api.moonshot.cn/v1 是 OpenAI-compatible endpoint；请把 LLM_PROVIDER 改为 openai，或改用 ANTHROPIC_BASE_URL=https://api.kimi.com/coding。"
+    if not DEEPSEEK_API_KEY:
+        return "DEEPSEEK_API_KEY 未配置（兼容旧变量 OPENAI_API_KEY）。"
+    if not DEEPSEEK_BASE_URL.startswith(("https://", "http://")):
+        return "DEEPSEEK_BASE_URL 必须是 http(s) 地址。"
     return None
 
-def get_openai_client():
-    global _openai_client
-    if _openai_client is None:
-        from openai import OpenAI
-        key = OPENAI_API_KEY
-        if not key:
-            raise RuntimeError("OPENAI_API_KEY is not set.")
-        _openai_client = OpenAI(base_url=OPENAI_BASE_URL, api_key=key, timeout=45.0)
-    return _openai_client
 
-def get_anthropic_client():
-    global _anthropic_client
-    if _anthropic_client is None:
-        from anthropic import Anthropic
-        key = ANTHROPIC_API_KEY
-        if not key:
-            raise RuntimeError("ANTHROPIC_API_KEY is not set.")
-        _anthropic_client = Anthropic(base_url=ANTHROPIC_BASE_URL, api_key=key, timeout=45.0)
-    return _anthropic_client
+class DeepSeekAPIError(RuntimeError):
+    def __init__(self, status_code: int, detail: str):
+        super().__init__(f"DeepSeek HTTP {status_code}: {detail[:1200]}")
+        self.status_code = status_code
 
-def extract_anthropic_text(resp: Any) -> str:
-    parts = []
-    for block in getattr(resp, "content", []) or []:
-        text = getattr(block, "text", None)
-        if text:
-            parts.append(text)
-    return "".join(parts).strip()
+
+def deepseek_chat_completions_url(base_url: str) -> str:
+    base = (base_url or "https://api.deepseek.com").rstrip("/")
+    if base.endswith("/chat/completions"):
+        return base
+    return f"{base}/chat/completions"
+
+
+def _deepseek_chat_request(payload: dict) -> str:
+    """Call DeepSeek's native HTTPS API with one bounded transient retry."""
+    if not DEEPSEEK_API_KEY:
+        raise RuntimeError("DEEPSEEK_API_KEY is not configured.")
+    request = UrlRequest(
+        deepseek_chat_completions_url(DEEPSEEK_BASE_URL),
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Pinco-Career-Agent/1.0",
+        },
+        method="POST",
+    )
+    last_error = None
+    for attempt in range(2):
+        try:
+            with urlopen(request, timeout=35) as response:
+                response_body = response.read().decode("utf-8")
+            data = json.loads(response_body)
+            content = (data.get("choices") or [{}])[0].get("message", {}).get("content")
+            if isinstance(content, list):
+                content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
+            if not isinstance(content, str) or not content.strip():
+                raise RuntimeError("DeepSeek returned an empty chat completion.")
+            return content.strip()
+        except HTTPError as error:
+            try:
+                detail = error.read().decode("utf-8", errors="replace")
+            except Exception:
+                detail = str(error.reason)
+            wrapped = DeepSeekAPIError(error.code, detail)
+            if attempt == 0 and error.code in {408, 409, 500, 502, 503, 504}:
+                last_error = wrapped
+                time.sleep(0.25)
+                continue
+            raise wrapped from error
+        except (URLError, TimeoutError, ConnectionError) as error:
+            last_error = error
+            if attempt == 0:
+                time.sleep(0.25)
+                continue
+            raise RuntimeError(f"DeepSeek transport error: {error}") from error
+    raise RuntimeError(f"DeepSeek request failed: {last_error}")
 
 def llm_chat(messages: list, temperature: float = 0.7, system_prompt: Optional[str] = None, max_tokens: int = 2048) -> str:
     if MOCK_MODE:
@@ -209,24 +230,14 @@ def llm_chat(messages: list, temperature: float = 0.7, system_prompt: Optional[s
             continue
         normalized_messages.append(msg)
     effective_system = "\n\n".join(collected_system + ([system_prompt] if system_prompt else [])) or None
-    if LLM_PROVIDER == "anthropic":
-        client = get_anthropic_client()
-        resp = client.messages.create(
-            model=DEFAULT_MODEL,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=effective_system,
-            messages=normalized_messages,
-        )
-        text = extract_anthropic_text(resp)
-        if not text:
-            raise RuntimeError("EMPTY_LLM_RESPONSE")
-        return text
-    else:
-        client = get_openai_client()
-        full_messages = ([{"role": "system", "content": effective_system}] if effective_system else []) + normalized_messages
-        resp = client.chat.completions.create(model=DEFAULT_MODEL, messages=full_messages, temperature=temperature, max_tokens=max_tokens)
-        return resp.choices[0].message.content
+    full_messages = ([{"role": "system", "content": effective_system}] if effective_system else []) + normalized_messages
+    return _deepseek_chat_request({
+        "model": DEFAULT_MODEL,
+        "messages": full_messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": False,
+    })
 
 def sanitize_prompt_text(text: Optional[str]) -> str:
     if not text:
@@ -245,8 +256,12 @@ def sanitize_prompt_text(text: Optional[str]) -> str:
     return sanitized
 
 def _is_llm_recoverable(error_text: str) -> bool:
-    recoverable = ["Request not allowed", "403", "402", "membership", "quota", "rate_limit", "429", "overloaded"]
-    return any(kw in error_text for kw in recoverable)
+    # This fallback only helps with provider content-policy blocks. Quota,
+    # authentication and transient transport failures must not trigger a
+    # second prompt/request; the HTTP client retries only bounded transport/5xx errors.
+    recoverable = ["request not allowed", "content policy", "content_filter", "safety policy"]
+    lowered = error_text.lower()
+    return any(kw in lowered for kw in recoverable)
 
 def llm_chat_with_fallback(messages: list, temperature: float = 0.7, system_prompt: Optional[str] = None, max_tokens: int = 2048) -> str:
     """Retry once with a safer prompt, but never replace a failed model call with canned content."""
@@ -379,82 +394,6 @@ def probe_llm(force: bool = False) -> Dict[str, Any]:
     _llm_probe_cache["checked_at"] = now
     _llm_probe_cache["status"] = status
     return status
-
-async def llm_chat_stream(messages: list, temperature: float = 0.7, system_prompt: Optional[str] = None, max_tokens: int = 2048):
-    """Stream LLM response as async generator. Yields text chunks."""
-    if MOCK_MODE:
-        raise RuntimeError("MOCK_MODE")
-
-    config_issue = get_llm_config_issue()
-    if config_issue:
-        raise RuntimeError(config_issue)
-
-    normalized_messages = []
-    collected_system = []
-    for msg in messages:
-        role = msg.get("role")
-        content = msg.get("content")
-        if role == "system":
-            if content:
-                collected_system.append(content)
-            continue
-        normalized_messages.append(msg)
-    effective_system = "\n\n".join(collected_system + ([system_prompt] if system_prompt else [])) or None
-
-    if LLM_PROVIDER == "anthropic":
-        client = get_anthropic_client()
-        with client.messages.stream(
-            model=DEFAULT_MODEL,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=effective_system,
-            messages=normalized_messages,
-        ) as stream:
-            for text in stream.text_stream:
-                yield text
-    else:
-        client = get_openai_client()
-        full_messages = ([{"role": "system", "content": effective_system}] if effective_system else []) + normalized_messages
-        response = client.chat.completions.create(
-            model=DEFAULT_MODEL,
-            messages=full_messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-        )
-        for chunk in response:
-            delta = chunk.choices[0].delta.content if chunk.choices else None
-            if delta:
-                yield delta
-
-
-async def llm_chat_stream_with_fallback(messages: list, temperature: float = 0.7, system_prompt: Optional[str] = None, max_tokens: int = 2048):
-    """Stream LLM response with fallback on content policy blocks."""
-    try:
-        async for chunk in llm_chat_stream(messages, temperature=temperature, system_prompt=system_prompt, max_tokens=max_tokens):
-            yield chunk
-    except Exception as error:
-        error_text = str(error)
-        if not _is_llm_recoverable(error_text):
-            raise
-        print(f"LLM stream fallback retry triggered: {error_text}")
-        safe_messages = []
-        for msg in messages:
-            safe_messages.append({
-                "role": msg.get("role"),
-                "content": sanitize_prompt_text(msg.get("content")),
-            })
-        safe_system = sanitize_prompt_text(system_prompt) or "你是 Pinco 学姐，擅长中文求职与职场建议。先接住情绪，再给温和、具体、可执行的建议。"
-        try:
-            async for chunk in llm_chat_stream(safe_messages, temperature=min(temperature, 0.6), system_prompt=safe_system, max_tokens=max_tokens):
-                yield chunk
-        except Exception as retry_error:
-            retry_text = str(retry_error)
-            if not _is_llm_recoverable(retry_text):
-                raise
-            print(f"LLM stream provider blocked twice: {retry_text}")
-            raise retry_error
-
 
 # --- Models ---
 
@@ -2156,20 +2095,15 @@ if os.path.isdir(DEMO_DIR):
 
 @app.get("/api/v1/config", response_model=ConfigResponse)
 def get_config():
-    base = None
-    if LLM_PROVIDER == "anthropic":
-        base = ANTHROPIC_BASE_URL
-    elif LLM_PROVIDER == "openai":
-        base = OPENAI_BASE_URL
-    return ConfigResponse(provider=LLM_PROVIDER, mock_mode=MOCK_MODE, base_url=base, model=DEFAULT_MODEL)
+    return ConfigResponse(provider="deepseek", mock_mode=MOCK_MODE, base_url=DEEPSEEK_BASE_URL, model=DEFAULT_MODEL)
 
 @app.get("/api/v1/admin/config")
 def get_admin_config(x_pinco_admin_token: Optional[str] = Header(default=None)):
     require_admin_token(x_pinco_admin_token)
-    base = ANTHROPIC_BASE_URL if LLM_PROVIDER == "anthropic" else OPENAI_BASE_URL
-    key_configured = bool(ANTHROPIC_API_KEY if LLM_PROVIDER == "anthropic" else OPENAI_API_KEY)
+    base = DEEPSEEK_BASE_URL
+    key_configured = bool(DEEPSEEK_API_KEY)
     return {
-        "provider": LLM_PROVIDER,
+        "provider": "deepseek",
         "mock_mode": MOCK_MODE,
         "base_url": base,
         "model": DEFAULT_MODEL,
@@ -2212,26 +2146,21 @@ def admin_login(request: AdminLoginRequest, http_request: Request):
 def update_config(request: ConfigUpdateRequest, x_pinco_admin_token: Optional[str] = Header(default=None)):
     require_admin_token(x_pinco_admin_token)
     provider = request.provider.strip().lower()
-    if provider not in {"openai", "anthropic"}:
-        raise HTTPException(status_code=422, detail="provider 仅支持 openai 或 anthropic")
+    if provider != "deepseek":
+        raise HTTPException(status_code=422, detail="当前仅支持 DeepSeek 直连接口")
     if not request.api_key.strip():
         raise HTTPException(status_code=422, detail="API Key 不能为空")
-    global LLM_PROVIDER, OPENAI_API_KEY, OPENAI_BASE_URL, ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, DEFAULT_MODEL, MOCK_MODE, _openai_client, _anthropic_client, _llm_probe_cache
-    LLM_PROVIDER = provider
-    DEFAULT_MODEL = request.model or DEFAULT_MODEL
-    if LLM_PROVIDER == "anthropic":
-        ANTHROPIC_API_KEY = request.api_key
-        if request.base_url:
-            ANTHROPIC_BASE_URL = request.base_url.rstrip("/")
-        _anthropic_client = None
-    else:
-        OPENAI_API_KEY = request.api_key
-        if request.base_url:
-            OPENAI_BASE_URL = request.base_url.rstrip("/")
-        _openai_client = None
+    global DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, DEFAULT_MODEL, MOCK_MODE, _llm_probe_cache
+    if request.base_url:
+        DEEPSEEK_BASE_URL = request.base_url.rstrip("/")
+    if not DEEPSEEK_BASE_URL.startswith(("https://", "http://")):
+        raise HTTPException(status_code=422, detail="DeepSeek API 地址必须是 http(s) 地址")
+    DEEPSEEK_API_KEY = request.api_key.strip()
+    DEEPSEEK_MODEL = request.model.strip() if request.model and request.model.strip() else DEFAULT_MODEL
+    DEFAULT_MODEL = DEEPSEEK_MODEL
     MOCK_MODE = False
     _llm_probe_cache = {"checked_at": 0, "status": None}
-    return {"status": "updated", "provider": LLM_PROVIDER, "mock_mode": MOCK_MODE, "model": DEFAULT_MODEL}
+    return {"status": "updated", "provider": "deepseek", "mock_mode": MOCK_MODE, "model": DEFAULT_MODEL}
 
 @app.post("/api/v1/miniapp/bootstrap")
 def miniapp_bootstrap(request: MiniappBootstrapRequest):
@@ -6612,7 +6541,15 @@ confirmed_facts 只能记录用户本轮明确陈述、且能从本轮用户原�
 若达到关键节点，progress_suggestion 可为：
 {{"milestone":"resume_completed|mock_interview_completed|interview_feedback|offer_decision","company":"","position":"","status":"saved|applied|written|interview1|interview2|hr|offer|rejected|空字符串","prompt":"一句轻量确认"}}
 """
-        raw_agent = llm_chat_with_fallback(conversation, system_prompt=system, max_tokens=2600)
+        # Model I/O is synchronous in the provider SDK. Keep it off FastAPI's
+        # event loop so slow upstream responses cannot stall health/session and
+        # recovery requests for every mini-program user on the same worker.
+        raw_agent = await asyncio.to_thread(
+            llm_chat_with_fallback,
+            conversation,
+            system_prompt=system,
+            max_tokens=2600,
+        )
         try:
             agent_result = sanitize_agent_result(json.loads(clean_json_response(raw_agent)))
         except Exception as parse_error:
@@ -8747,11 +8684,39 @@ def transcribe_with_external_asr(temp_path: str) -> str:
                 "message": "语音转文字服务尚未配置，请在云托管中设置 ASR_PROVIDER、ASR_API_KEY、ASR_BASE_URL 和 ASR_MODEL。",
             },
         )
-    from openai import OpenAI
-    client = OpenAI(base_url=ASR_BASE_URL, api_key=ASR_API_KEY, timeout=60.0)
+    boundary = f"----PincoASR{uuid.uuid4().hex}"
     with open(temp_path, "rb") as audio_file:
-        result = client.audio.transcriptions.create(model=ASR_MODEL, file=audio_file)
-    return str(getattr(result, "text", "") or "").strip()
+        audio_bytes = audio_file.read()
+    file_name = os.path.basename(temp_path) or "recording.mp3"
+    parts = [
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n{ASR_MODEL}\r\n".encode(),
+        (
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\n"
+            "Content-Type: audio/mpeg\r\n\r\n"
+        ).encode(),
+        audio_bytes,
+        f"\r\n--{boundary}--\r\n".encode(),
+    ]
+    request = UrlRequest(
+        f"{ASR_BASE_URL}/audio/transcriptions",
+        data=b"".join(parts),
+        headers={
+            "Authorization": f"Bearer {ASR_API_KEY}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=60) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")[:500]
+        raise RuntimeError(f"ASR upstream HTTP {error.code}: {detail}") from error
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        raise RuntimeError("ASR upstream returned an empty transcription.")
+    return text
 
 def get_aliyun_nls_token() -> str:
     now = int(time.time())
@@ -8982,10 +8947,29 @@ def reserve_tencent_asr_request() -> Dict[str, Any]:
             status_code=429,
             detail={
                 "code": "TENCENT_ASR_MONTHLY_LIMIT_REACHED",
-                "message": "Pinco 本月语音识别安全额度已用完，请下月再试；本次没有调用腾讯云。",
+                "message": "当月语音输入额度已用完，请使用文本输入",
             },
         )
     return reservation
+
+
+def tencent_asr_quota_error_code(error: Exception) -> Optional[str]:
+    """Return only documented quota-exhaustion codes; never expose SDK payloads."""
+    candidates = [
+        getattr(error, "code", None),
+        getattr(error, "error_code", None),
+        str(error),
+    ]
+    quota_codes = (
+        "FailedOperation.UserHasNoAmount",
+        "FailedOperation.UserHasNoFreeAmount",
+    )
+    for candidate in candidates:
+        text = str(candidate or "")
+        for code in quota_codes:
+            if code.lower() in text.lower():
+                return code
+    return None
 
 
 def transcribe_with_tencent_asr(temp_path: str) -> str:
@@ -9058,6 +9042,17 @@ def transcribe_with_tencent_asr(temp_path: str) -> str:
             raise
         except Exception as error:
             # SDK exceptions can include request metadata; log only the class.
+            quota_code = tencent_asr_quota_error_code(error)
+            if quota_code:
+                print(f"[ASR] Tencent monthly usage exhausted: provider_code={quota_code}")
+                raise HTTPException(
+                    status_code=429,
+                    detail={
+                        "code": "TENCENT_ASR_MONTHLY_LIMIT_REACHED",
+                        "message": "当月语音输入额度已用完，请使用文本输入",
+                        "provider_code": quota_code,
+                    },
+                ) from error
             print(f"[ASR] Tencent recognition failed: {type(error).__name__}")
             raise HTTPException(
                 status_code=502,

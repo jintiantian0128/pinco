@@ -194,7 +194,11 @@ const ConversationPage: React.FC = () => {
   const [messageActionTarget, setMessageActionTarget] = useState<MessageItem | null>(null)
   const [selectionMessage, setSelectionMessage] = useState<MessageItem | null>(null)
   const [selectionRange, setSelectionRange] = useState({ start: 0, end: 0 })
-  const [draftFocused, setDraftFocused] = useState(false)
+  // `Textarea.focus` is a command, not a reflection of the current focus state.
+  // Keeping it true while typing can make the native WeChat textarea re-apply
+  // focus on every controlled-value render, which moves the caret on some iOS
+  // clients. Consume each focus request as soon as the native focus event fires.
+  const [draftFocusRequested, setDraftFocusRequested] = useState(false)
   const [draftSelection, setDraftSelection] = useState({ start: -1, end: -1 })
   const [showEvidenceBuilder, setShowEvidenceBuilder] = useState(false)
   const [evidenceNarrative, setEvidenceNarrative] = useState('')
@@ -317,9 +321,9 @@ const ConversationPage: React.FC = () => {
     trackProductEvent('chat.message.edit_started', userProfile?.user_id)
     setDraft(message.content)
     setEditingMessageId(message.id)
-    setDraftFocused(true)
+    setDraftFocusRequested(true)
     setMessageActionTarget(null)
-    setTimeout(() => setDraftFocused(true), 80)
+    setTimeout(() => setDraftFocusRequested(true), 80)
   }
 
   const handleRetryUserMessage = async (message: MessageItem) => {
@@ -375,13 +379,11 @@ const ConversationPage: React.FC = () => {
   const handleSelectAllDraft = () => {
     if (!draft) return
     const end = draft.length
-    // 不先设为 false：微信会把随后的 blur 事件排在定时器之后，导致输入框
-    // 再次失焦、selectionStart/End 只删掉最后一个字符。保持 focus，并在按钮
-    // 点击完成后再写一次区间，开发者工具和真机都能稳定选中全文。
-    setDraftFocused(true)
+    // 微信会把按钮导致的 blur 排在定时器之后；发出一次 focus 请求，并在
+    // 点击完成后重新应用选区，避免原生 textarea 丢失选择范围。
+    setDraftFocusRequested(true)
     setDraftSelection({ start: 0, end })
     setTimeout(() => {
-      setDraftFocused(true)
       setDraftSelection({ start: 0, end })
     }, 120)
   }
@@ -428,8 +430,8 @@ const ConversationPage: React.FC = () => {
     }
     if (action.kind === 'paste_resume') {
       setDraft(action.prompt || '')
-      setDraftFocused(true)
-      setTimeout(() => setDraftFocused(true), 80)
+      setDraftFocusRequested(true)
+      setTimeout(() => setDraftFocusRequested(true), 80)
       return
     }
     if (action.kind === 'build_evidence') {
@@ -695,7 +697,7 @@ const ConversationPage: React.FC = () => {
         // 先让用户审阅识别结果，再由用户主动点击发送。图片内容不会在
         // 未确认时自动进入外部模型请求。
         setDraft((current) => [current.trim(), extractedText].filter(Boolean).join('\n\n').slice(0, 6000))
-        setDraftFocused(true)
+        setDraftFocusRequested(true)
         Taro.showToast({
           title: extractedText.length > 6000 ? '已填入前 6000 字，请确认后发送' : '图片文字已填入输入框，请确认后发送',
           icon: 'none',
@@ -945,6 +947,10 @@ const ConversationPage: React.FC = () => {
       } catch (e: any) {
         console.error('[Voice] upload failed', e)
         if (voiceMessageModeRef.current) setVoiceMessageMode(false)
+        if (e?.code === 'TENCENT_ASR_MONTHLY_LIMIT_REACHED') {
+          Taro.showToast({ title: '当月语音输入额度已用完，请使用文本输入', icon: 'none', duration: 3500 })
+          return
+        }
         const errMsg = e?.errMsg || e?.message || ''
         if (errMsg.includes('cancel')) {
           return
@@ -1943,14 +1949,15 @@ const ConversationPage: React.FC = () => {
           <Textarea
             className={styles.textarea}
             value={draft}
-            focus={draftFocused}
+            focus={draftFocusRequested}
             selectionStart={draftSelection.start}
             selectionEnd={draftSelection.end}
-            onFocus={() => setDraftFocused(true)}
-            onBlur={() => setDraftFocused(false)}
+            onFocus={() => setDraftFocusRequested(false)}
             onInput={(event) => {
               setDraft(event.detail.value)
-              setDraftSelection({ start: -1, end: -1 })
+              setDraftSelection((current) => current.start === -1 && current.end === -1
+                ? current
+                : { start: -1, end: -1 })
             }}
             onConfirm={() => handleSend()}
             confirmType="send"
