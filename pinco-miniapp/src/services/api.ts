@@ -36,6 +36,12 @@ export const setApiSessionToken = (token: string) => {
   apiSessionToken = token || ''
 }
 
+// Direct streaming requests bypass apiRequest, so expose only the header
+// needed to attach the current per-user session (never the token itself).
+export const getApiSessionHeaders = (): Record<string, string> => (
+  apiSessionToken ? { 'X-Pinco-Session': apiSessionToken } : {}
+)
+
 // 只在微信开发版注入回归入口，用于稳定验证“401 后自动恢复”。
 // 体验版和正式版不会暴露该方法，也不会允许外部读取真实 token。
 try {

@@ -1655,6 +1655,22 @@ const ConversationPage: React.FC = () => {
           </View>
         )}
 
+        {isSending && !streamingContent && (
+          <View className={styles.messageRow}>
+            <View className={classnames(styles.avatar, styles.avatarAssistant)}>
+              <Text>P</Text>
+            </View>
+            <View className={classnames(styles.messageBubble, styles.bubbleAssistant, styles.thinkingBubble)}>
+              <Text className={styles.thinkingText}>Pinco 正在整理你的问题…</Text>
+              <View className={styles.typingIndicator}>
+                <View className={styles.typingDot} />
+                <View className={styles.typingDot} />
+                <View className={styles.typingDot} />
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* 流式输出中 */}
         {isStreaming && streamingContent && (
           <View className={styles.messageRow}>
@@ -1966,29 +1982,41 @@ const ConversationPage: React.FC = () => {
             autoHeight
             showConfirmBar={false}
           />
-          <Button
-            className={classnames(styles.voiceButton, isRecording && styles.voiceButtonActive)}
-            ariaRole='button'
-            ariaLabel={isRecording ? '正在录音，再点一次发送' : '录音'}
-            onClick={() => handleVoiceClick('composer')}
-          >
-            <Text className={styles.voiceAccessibleLabel}>
-              {isRecording ? '正在录音，再点一次发送' : '录音'}
-            </Text>
-            {isRecording ? (
-              <View className={styles.recordingIndicator}>
-                <View className={styles.recordingWave} />
-                <View className={styles.recordingWave} style={{ animationDelay: '0.1s' }} />
-                <View className={styles.recordingWave} style={{ animationDelay: '0.2s' }} />
-              </View>
-            ) : (
-              <View className={styles.micIcon}>
-                <View className={styles.micBody} />
-                <View className={styles.micStem} />
-                <View className={styles.micBase} />
-              </View>
-            )}
-          </Button>
+          {draft.trim() ? (
+            <Button
+              className={classnames(styles.sendButton, isSending && styles.sendButtonDisabled)}
+              ariaRole='button'
+              ariaLabel={isSending ? '正在发送' : '发送消息'}
+              disabled={isSending}
+              onClick={() => handleSend()}
+            >
+              <Text>{isSending ? '发送中' : '发送'}</Text>
+            </Button>
+          ) : (
+            <Button
+              className={classnames(styles.voiceButton, isRecording && styles.voiceButtonActive)}
+              ariaRole='button'
+              ariaLabel={isRecording ? '正在录音，再点一次发送' : '录音'}
+              onClick={() => handleVoiceClick('composer')}
+            >
+              <Text className={styles.voiceAccessibleLabel}>
+                {isRecording ? '正在录音，再点一次发送' : '录音'}
+              </Text>
+              {isRecording ? (
+                <View className={styles.recordingIndicator}>
+                  <View className={styles.recordingWave} />
+                  <View className={styles.recordingWave} style={{ animationDelay: '0.1s' }} />
+                  <View className={styles.recordingWave} style={{ animationDelay: '0.2s' }} />
+                </View>
+              ) : (
+                <View className={styles.micIcon}>
+                  <View className={styles.micBody} />
+                  <View className={styles.micStem} />
+                  <View className={styles.micBase} />
+                </View>
+              )}
+            </Button>
+          )}
         </View>
       </View>
     </View>

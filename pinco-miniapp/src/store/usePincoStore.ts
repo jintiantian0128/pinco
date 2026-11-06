@@ -29,6 +29,7 @@ import { getBootstrapPayload } from '@/utils/session'
 import { getMiniappRuntimeInfo } from '@/utils/wechat'
 import {
   getApiBaseUrl,
+  getApiSessionHeaders,
   apiRequest,
   apiUploadFile,
   setApiSessionRecoveryHandler,
@@ -690,30 +691,55 @@ export const usePincoStore = create<PincoState>((set, get) => ({
 
     let fullContent = ''
     let useFallback = false
+    let streamRequestStarted = false
+    let streamErrorReceived = false
+    let streamCompleted = false
     let requestErrorText = ''
     let progressSuggestion: any = null
     let agentNextAction = ''
     let streamBuffer = ''
+    const streamDecoder = new TextDecoder('utf-8')
+    let lastStreamRenderAt = 0
+    let streamRenderTimer: ReturnType<typeof setTimeout> | undefined
+    const renderStreamingContent = (content: string, immediate = false) => {
+      const elapsed = Date.now() - lastStreamRenderAt
+      if (immediate || elapsed >= 48) {
+        if (streamRenderTimer) clearTimeout(streamRenderTimer)
+        streamRenderTimer = undefined
+        lastStreamRenderAt = Date.now()
+        set({ streamingContent: content })
+        return
+      }
+      if (streamRenderTimer) clearTimeout(streamRenderTimer)
+      streamRenderTimer = setTimeout(() => {
+        lastStreamRenderAt = Date.now()
+        streamRenderTimer = undefined
+        set({ streamingContent: content })
+      }, 48 - elapsed)
+    }
 
     try {
       const baseUrl = getApiBaseUrl()
       console.info('[Chat] baseUrl=', baseUrl, 'env=', process.env.TARO_ENV)
 
-      // callContainer 不支持 SSE 流式响应，小程序环境直接走非流式
-      const isWeapp = process.env.TARO_ENV === 'weapp'
+      // 云托管 callContainer 不转发 SSE；聊天使用公网 HTTPS 的 chunked SSE。
       const isTunnelUrl = baseUrl.includes('trycloudflare.com')
-      if (isWeapp || isTunnelUrl) {
-        console.info('[Chat] weapp or tunnel detected, skip streaming')
+      if (isTunnelUrl) {
+        console.info('[Chat] tunnel detected, skip streaming')
         useFallback = true
       }
 
       if (!useFallback) {
+      const requestStartedAt = Date.now()
+      let firstChunkLogged = false
+      streamRequestStarted = true
+      console.info('[Chat Perf] stream request started')
       const task = Taro.request({
         url: `${baseUrl}/api/v1/chat/stream`,
         method: 'POST',
         data: payload,
-        header: { 'Content-Type': 'application/json' },
-        timeout: 60000,
+        header: { 'Content-Type': 'application/json', ...getApiSessionHeaders() },
+        timeout: 90000,
         enableChunked: true,
       })
 
@@ -724,7 +750,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         (task as any).onChunkReceived((res: any) => {
           try {
             const chunk = new Uint8Array(res.data)
-            const text = new TextDecoder('utf-8').decode(chunk)
+            const text = streamDecoder.decode(chunk, { stream: true })
             streamBuffer += text
             const lines = streamBuffer.split('\n')
             streamBuffer = lines.pop() || ''
@@ -733,11 +759,20 @@ export const usePincoStore = create<PincoState>((set, get) => ({
                 try {
                   const data = JSON.parse(line.slice(6))
                   if (data.error) {
+                    streamErrorReceived = true
                     requestErrorText = data.error.message || data.error.code || JSON.stringify(data.error)
                   }
                   if (data.chunk) {
+                    if (!firstChunkLogged) {
+                      firstChunkLogged = true
+                      console.info('[Chat Perf] first visible token ms=', Date.now() - requestStartedAt)
+                    }
                     fullContent += data.chunk
-                    set({ streamingContent: fullContent })
+                    renderStreamingContent(fullContent)
+                  }
+                  if (typeof data.replace === 'string') {
+                    fullContent = data.replace
+                    renderStreamingContent(fullContent, true)
                   }
                   if (data.search_results && Array.isArray(data.search_results) && data.search_results.length > 0) {
                     set({ jobSearchResults: data.search_results })
@@ -745,6 +780,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
                   }
                   if (data.agent?.next_action) agentNextAction = String(data.agent.next_action)
                   if (data.progress_suggestion) progressSuggestion = data.progress_suggestion
+                  if (data.done) streamCompleted = true
                 } catch {}
               }
             }
@@ -758,7 +794,40 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       }
 
       const response = await task
-      console.info('[Chat] stream request done, status=', response.statusCode, 'contentLen=', fullContent.length)
+      console.info('[Chat Perf] stream request done', {
+        durationMs: Date.now() - requestStartedAt,
+        status: response.statusCode,
+        contentLength: fullContent.length,
+        completed: streamCompleted,
+      })
+
+      // Some base-library versions may expose the complete SSE body without
+      // onChunkReceived; parse it once instead of submitting a duplicate billable request.
+      if (!hasChunkHandler && typeof response.data === 'string') {
+        for (const line of response.data.split(/\r?\n/)) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.error) {
+              streamErrorReceived = true
+              requestErrorText = data.error.message || data.error.code || JSON.stringify(data.error)
+            }
+            if (data.chunk) {
+              if (!firstChunkLogged) {
+                firstChunkLogged = true
+                console.info('[Chat Perf] first visible token ms=', Date.now() - requestStartedAt)
+              }
+              fullContent += data.chunk
+            }
+            if (typeof data.replace === 'string') fullContent = data.replace
+            if (data.search_results?.length) set({ jobSearchResults: data.search_results })
+            if (data.agent?.next_action) agentNextAction = String(data.agent.next_action)
+            if (data.progress_suggestion) progressSuggestion = data.progress_suggestion
+            if (data.done) streamCompleted = true
+          } catch {}
+        }
+        if (fullContent) renderStreamingContent(fullContent, true)
+      }
 
       if (response.statusCode >= 400) {
         requestErrorText = extractApiErrorMessage(response.data) || `HTTP ${response.statusCode}`
@@ -769,8 +838,8 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         throw new Error(requestErrorText)
       }
 
-      if (!fullContent || useFallback) {
-        throw new Error('EMPTY_LLM_RESPONSE')
+      if (!streamCompleted || !fullContent || useFallback) {
+        throw new Error(streamCompleted ? 'EMPTY_LLM_RESPONSE' : 'STREAM_INTERRUPTED')
       }
 
       const assistantMessage: MessageItem = {
@@ -840,7 +909,8 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       }
 
       // Try non-streaming fallback
-      if (!fullContent && !/429|rate limit|usage limit|quota/i.test(requestErrorText)) {
+      const recoverableSessionFailure = /SESSION_REQUIRED|用户会话已过期/i.test(requestErrorText)
+      if ((!streamRequestStarted || recoverableSessionFailure) && !fullContent && !streamErrorReceived && !/429|rate limit|usage limit|quota/i.test(requestErrorText)) {
         try {
           // 小程序环境通过 apiRequest 走 callContainer，H5 走普通 HTTP
           const fallbackRes = await apiRequest<any>('/api/v1/chat', 'POST', payload)
@@ -864,7 +934,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         }
       }
 
-      if (fullContent) {
+      if (fullContent && streamCompleted && !streamErrorReceived) {
         // Fallback succeeded
         const assistantMessage: MessageItem = {
           id: `assistant-${Date.now()}`,
@@ -914,17 +984,25 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         })
       } else {
         // Both failed
+        const isBalanceFailure = /LLM_INSUFFICIENT_BALANCE|402|insufficient[_ ]balance|余额不足/i.test(requestErrorText)
         const isRateLimited = /429|Too Many Requests|rate limit|usage limit|quota|额度|限流|exceeded retry/i.test(requestErrorText)
-        const isAuthFailure = /401|403|unauthorized|invalid api.?key|authentication|鉴权|认证|api.?key/i.test(requestErrorText)
+        const isSessionFailure = /SESSION_REQUIRED|用户会话已过期/i.test(requestErrorText)
+        // A user-session 401 (SESSION_REQUIRED) is not a DeepSeek credential
+        // failure. Only classify explicit provider/API-key errors as auth.
+        const isAuthFailure = /LLM_AUTH_FAILED|模型服务 API Key|invalid api.?key|authentication_error|api key appears to be invalid|api.?key.{0,30}(invalid|expired)|expired.{0,30}api.?key/i.test(requestErrorText)
         const isServiceFailure = /5\d\d|timeout|timed out|network|fail url|连接|服务不可用/i.test(requestErrorText)
-        const reason = isRateLimited
+        const reason = isBalanceFailure
+          ? '模型服务账户余额不足，暂时无法生成回复。'
+          : isRateLimited
           ? '模型供应商返回了额度不足或请求限流。'
+          : isSessionFailure
+            ? '小程序登录状态已过期，自动恢复没有完成；请重新进入后再试。'
           : isAuthFailure
             ? '模型供应商拒绝了请求，通常与 API Key、权限或模型配置有关。'
             : isServiceFailure
               ? '这次请求遇到网络超时或服务暂时不可用。'
               : '这次请求没有成功，可能是网络、后端或模型供应商的单次故障。'
-        const assistantContent = `${reason}\n\n我把刚才的问题保留在本机对话中。服务恢复后，点“重试上一问”即可；重试成功时，未发送成功的问题会补回对话上下文。此前已成功的对话和简历记忆不会因这次故障清空。${isServiceFailure || !isRateLimited && !isAuthFailure ? `\n\n可先检查后端健康页：${getApiBaseUrl()}/health` : ''}`
+        const assistantContent = `${fullContent ? `${fullContent}\n\n（回复中断，以上内容可能不完整。）\n\n` : ''}${reason}\n\n我把刚才的问题保留在本机对话中。服务恢复后，点“重试上一问”即可；重试成功时，未发送成功的问题会补回对话上下文。此前已成功的对话和简历记忆不会因这次故障清空。${isServiceFailure || !isRateLimited && !isAuthFailure ? `\n\n可先检查后端健康页：${getApiBaseUrl()}/health` : ''}`
 
         set({
           messages: [
@@ -947,11 +1025,11 @@ export const usePincoStore = create<PincoState>((set, get) => ({
             }
           ],
           serviceHealth: {
-          online: !isRateLimited && !isAuthFailure && !isServiceFailure,
+          online: !isBalanceFailure && !isRateLimited && !isAuthFailure && !isServiceFailure,
             model: get().serviceHealth.model,
             provider: get().serviceHealth.provider,
             mockMode: false,
-            summary: isRateLimited ? '模型请求被限流：稍后可重试' : isAuthFailure ? '模型鉴权或配置异常' : isServiceFailure ? '本次请求网络或服务异常' : '本次模型请求失败'
+            summary: isBalanceFailure ? '模型服务账户余额不足' : isRateLimited ? '模型请求被限流：稍后可重试' : isAuthFailure ? '模型鉴权或配置异常' : isServiceFailure ? '本次请求网络或服务异常' : '本次模型请求失败'
           },
           isStreaming: false,
           streamingContent: '',
@@ -963,6 +1041,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         })
       }
     } finally {
+      if (streamRenderTimer) clearTimeout(streamRenderTimer)
       set({ isSending: false, isStreaming: false })
     }
   },

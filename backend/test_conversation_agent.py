@@ -342,10 +342,12 @@ class ConversationAgentTests(unittest.TestCase):
             progress_suggestion=None,
         )
 
-        async def fake_chat(_request):
+        async def fake_chat(_request, on_response_chunk=None):
+            if on_response_chunk:
+                on_response_chunk("已沿用你的简历记忆。")
             return expected
 
-        with patch.object(main, "chat", side_effect=fake_chat):
+        with patch.object(main, "_chat_core", side_effect=fake_chat):
             response = asyncio.run(main.chat_stream(main.ChatRequest(
                 messages=[main.Message(role="user", content="继续")]
             )))

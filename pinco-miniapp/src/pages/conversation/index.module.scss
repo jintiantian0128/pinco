@@ -1354,6 +1354,33 @@
   box-shadow: 0 4rpx 10rpx rgba(17, 24, 39, 0.18);
 }
 
+.sendButton {
+  @include button-reset;
+  min-width: 104rpx;
+  height: 68rpx;
+  padding: 0 18rpx;
+  border-radius: 34rpx;
+  background: #111827;
+  color: #FFFFFF;
+  font-size: 23rpx;
+  line-height: 68rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.sendButtonDisabled {
+  opacity: 0.55;
+}
+
+.thinkingBubble {
+  min-width: 240rpx;
+}
+
+.thinkingText {
+  color: $color-text-secondary;
+  font-size: 24rpx;
+}
+
 .voiceAccessibleLabel {
   position: absolute;
   width: 1px;
