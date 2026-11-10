@@ -2546,6 +2546,7 @@ def admin_console():
     return HTMLResponse(
         content=html,
         headers={
+            "Content-Disposition": 'inline; filename="pinco-admin.html"',
             "Cache-Control": "no-store, max-age=0",
             "Pragma": "no-cache",
             "Content-Security-Policy": (

@@ -13,7 +13,7 @@ class AdminConsoleTests(unittest.TestCase):
         self.assertEqual(response.headers["cache-control"], "no-store, max-age=0")
         self.assertEqual(response.headers["x-frame-options"], "DENY")
         self.assertEqual(response.media_type, "text/html")
-        self.assertNotIn("content-disposition", response.headers)
+        self.assertEqual(response.headers["content-disposition"], 'inline; filename="pinco-admin.html"')
         html = response.body.decode("utf-8")
         self.assertIn("Pinco 运营工作台", html)
         self.assertIn("首批用户愿意继续用", html)
