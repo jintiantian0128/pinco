@@ -546,12 +546,22 @@ const ConversationPage: React.FC = () => {
   }
 
   const handleChatAction = async (item: { label?: string; prompt?: string; scenario?: ConversationScenario; kind?: ChatAction['kind'] }) => {
+    if (item.kind === 'evidence_direction' && isSending) {
+      Taro.showToast({ title: '学姐正在回复，等一下再试', icon: 'none' })
+      return
+    }
     if (item.kind === 'evidence_new') {
       openEvidenceBuilder(false, 'no_resume')
       return
     }
     if (item.kind === 'evidence_direction') {
-      openEvidenceBuilder(true, 'unknown_direction')
+      setShowEvidenceBuilder(false)
+      trackProductEvent('activation.entry.selected', userProfile?.user_id, { source: 'unknown_direction' })
+      await seedConversation(
+        'general',
+        '我还不知道该投什么岗位。请先查看你已经掌握的我的职业画像、简历和对话记忆，给我一个初步判断；明确区分已确认事实和你的假设，不要编造经历。若信息足以判断，请给我 2 到 3 个适合的岗位方向，分别说明匹配依据、主要差距和下一步验证方法；若缺少关键经历，只问我一个最有助于判断的问题，并优先给出好回答的选项。暂时不要直接给未经核实的岗位或市场数据；方向确认后，再和我一起制定真实岗位搜索计划。',
+        '先结合已有经历判断方向；信息不足时只问一个关键问题',
+      )
       return
     }
     if (item.kind === 'target_job') {
