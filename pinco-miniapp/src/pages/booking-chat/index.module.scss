@@ -5,6 +5,7 @@
 .title { display: block; color: $color-text-primary; font-size: 32rpx; font-weight: 700; }
 .subtitle { display: block; margin-top: 6rpx; color: $color-text-secondary; font-size: 23rpx; }
 .status { display: block; margin-top: 8rpx; color: #7C3AED; font-size: 22rpx; }
+.bookingReference { display: block; margin-top: 6rpx; color: #9CA3AF; font-size: 18rpx; }
 .messages { flex: 1; min-height: 0; padding: 22rpx 24rpx; box-sizing: border-box; }
 .messageRow { display: flex; justify-content: flex-start; margin-bottom: 20rpx; padding-right: 90rpx; }
 .messageRowMine { justify-content: flex-end; padding-right: 0; padding-left: 90rpx; }
@@ -41,3 +42,5 @@
 .removePreview Text { color: #B91C1C; font-size: 20rpx; }
 .readonlyBar { padding: 24rpx 28rpx calc(24rpx + env(safe-area-inset-bottom)); background: #FFF; text-align: center; }
 .readonlyBar Text { color: $color-text-secondary; font-size: 23rpx; line-height: 1.5; }
+.readonlyText { display: block; }
+.refreshStatusButton { display: inline-flex; margin-top: 16rpx; padding: 12rpx 24rpx; border-radius: 999rpx; color: #6F3CFF; background: #F3ECFF; font-size: 24rpx; font-weight: 600; }

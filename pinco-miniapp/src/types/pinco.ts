@@ -22,6 +22,7 @@ export interface MessageQuickAction {
     jdText?: string
   }
   replaceFromMessageId?: string
+  requestId?: string
 }
 
 export interface MessageItem {

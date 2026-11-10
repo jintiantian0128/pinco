@@ -143,6 +143,7 @@ const BookingChatPage: React.FC = () => {
           {thread?.booking.consultation_type === 'chat' ? '图文咨询 · 双方在 Pinco 内沟通' : '电话咨询 · 专家接受后发送联系方式'}
         </Text>
         {thread?.booking && <Text className={styles.status}>{thread.booking.slot} · {thread.booking.status}</Text>}
+        {thread?.booking?.id && <Text className={styles.bookingReference}>预约编号：{thread.booking.id}</Text>}
       </View>
 
       <ScrollView className={styles.messages} scrollY scrollIntoView={scrollTarget} scrollWithAnimation>
@@ -179,13 +180,20 @@ const BookingChatPage: React.FC = () => {
         </View>
       ) : (
         <View className={styles.readonlyBar}>
-          <Text>
+          <Text className={styles.readonlyText}>
             {thread?.booking.consultation_type === 'phone'
-              ? '电话咨询仅用于接收专家发送的电话或会议链接'
+              ? '电话咨询用于接收专家发送的电话或会议链接。'
               : bookingStatusCode === 'intent_submitted'
-                ? '专家确认后会开启图文咨询，这里会同步处理进展。'
-                : '本次咨询已结束，消息仅供查看'}
+                ? '服务器当前返回：待专家确认。若后台已接受，请核对上方预约编号是否一致，再刷新状态。'
+                : bookingStatusCode === 'confirmed'
+                  ? '预约已确认，正在同步图文咨询权限…'
+                  : '本次咨询已结束，消息仅供查看。'}
           </Text>
+          {bookingStatusCode === 'intent_submitted' && (
+            <View className={styles.refreshStatusButton} onClick={() => load()}>
+              <Text>刷新预约状态</Text>
+            </View>
+          )}
         </View>
       )}
     </View>

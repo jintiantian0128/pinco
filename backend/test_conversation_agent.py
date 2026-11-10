@@ -15,6 +15,87 @@ async def collect_sse(response):
 
 
 class ConversationAgentTests(unittest.TestCase):
+    def test_chat_request_id_replays_completed_response_without_reexecuting_agent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "chat-idempotency-device", "小程", "weapp")
+            user_id = user["profile"]["user_id"]
+            store.save(state)
+            request = main.ChatRequest(
+                request_id="chat-recovery-001",
+                user_id=user_id,
+                messages=[main.Message(id="user-1", role="user", content="帮我看看求职方向")],
+            )
+            calls = []
+
+            async def fake_core(_request, on_response_chunk=None):
+                calls.append(True)
+                if on_response_chunk:
+                    on_response_chunk("先看你的真实经历。")
+                return main.ChatResponse(response="先看你的真实经历。")
+
+            with patch.object(main, "_state_store", store), patch.object(main, "_chat_core_uncached", side_effect=fake_core):
+                first = asyncio.run(main._chat_core(request))
+                replayed_chunks = []
+                second = asyncio.run(main._chat_core(request, on_response_chunk=replayed_chunks.append))
+                record = store.load()["users"][user_id]["chat_request_records"]["chat-recovery-001"]
+
+        self.assertEqual(calls, [True])
+        self.assertEqual(first.response, second.response)
+        self.assertEqual("".join(replayed_chunks), first.response)
+        self.assertEqual(record["status"], "completed")
+
+    def test_chat_request_id_rejects_reuse_for_a_different_user_turn(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "chat-idempotency-conflict-device", "小程", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["chat_request_records"] = {
+                "chat-recovery-002": {
+                    "fingerprint": "different-fingerprint", "status": "completed",
+                    "updated_at_epoch": main.time.time(), "response": {"response": "old"},
+                }
+            }
+            store.save(state)
+            request = main.ChatRequest(
+                request_id="chat-recovery-002", user_id=user_id,
+                messages=[main.Message(role="user", content="换一个完全不同的问题")],
+            )
+            with patch.object(main, "_state_store", store):
+                with self.assertRaises(main.HTTPException) as conflict:
+                    asyncio.run(main._chat_core(request))
+        self.assertEqual(conflict.exception.status_code, 409)
+
+    def test_chat_request_id_does_not_start_a_second_live_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "chat-idempotency-running-device", "小程", "weapp")
+            user_id = user["profile"]["user_id"]
+            request = main.ChatRequest(
+                request_id="chat-recovery-running", user_id=user_id,
+                messages=[main.Message(role="user", content="帮我梳理简历")],
+            )
+            fingerprint_source = {
+                "latest_user_message": "帮我梳理简历", "scenario": "general",
+                "replace_from_message_id": None, "interview_mode": False,
+                "interview_round": 0, "interview_position": None,
+            }
+            user["chat_request_records"] = {
+                "chat-recovery-running": {
+                    "fingerprint": main.hashlib.sha256(json.dumps(fingerprint_source, ensure_ascii=False, sort_keys=True).encode()).hexdigest(),
+                    "status": "running", "updated_at_epoch": main.time.time(),
+                }
+            }
+            store.save(state)
+            with patch.object(main, "_state_store", store):
+                with self.assertRaises(main.HTTPException) as pending:
+                    asyncio.run(main._chat_core(request))
+        self.assertEqual(pending.exception.status_code, 409)
+        self.assertEqual(pending.exception.detail["code"], "CHAT_REQUEST_IN_PROGRESS")
+
     def test_community_author_choice_uses_generated_alias_or_user_supplied_nickname(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)

@@ -77,7 +77,7 @@ interface PincoState {
   refreshServiceHealth: () => Promise<void>
   setLaunchScene: (scene: string) => void
   openConversation: (scenario?: ConversationScenario, subtitle?: string) => void
-  sendMessage: (content: string, type?: MessageItem['type'], media?: Pick<MessageItem, 'mediaUrl' | 'fileName' | 'duration'>, options?: { replaceFromMessageId?: string }) => Promise<void>
+  sendMessage: (content: string, type?: MessageItem['type'], media?: Pick<MessageItem, 'mediaUrl' | 'fileName' | 'duration'>, options?: { replaceFromMessageId?: string; requestId?: string }) => Promise<void>
   editAndResendMessage: (messageId: string, content: string) => Promise<void>
   regenerateMessage: (messageId: string) => Promise<void>
   seedConversation: (scenario: ConversationScenario, prompt: string, subtitle?: string) => Promise<void>
@@ -594,6 +594,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       ...media,
       createdAt: now,
     }
+    const requestId = options?.requestId || `chat-${userMessage.id}-${Math.random().toString(36).slice(2, 8)}`
 
     set({
       messages: [...get().messages, userMessage],
@@ -677,6 +678,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       user_id: get().userProfile?.user_id,
       scenario: get().conversationMeta.scenario,
       replace_from_message_id: options?.replaceFromMessageId,
+      request_id: requestId,
       messages: get().messages.filter((m) => (m.role === 'user' || m.role === 'assistant') && !m.transient).map((m) => ({
         id: m.id,
         role: m.role,
@@ -910,12 +912,30 @@ export const usePincoStore = create<PincoState>((set, get) => ({
 
       // Try non-streaming fallback
       const recoverableSessionFailure = /SESSION_REQUIRED|用户会话已过期/i.test(requestErrorText)
-      if ((!streamRequestStarted || recoverableSessionFailure) && !fullContent && !streamErrorReceived && !/429|rate limit|usage limit|quota/i.test(requestErrorText)) {
+      const retryableTransportFailure = /STREAM_INTERRUPTED|timeout|timed out|network|fail url|连接|服务暂时不可用|HTTP 5\d\d/i.test(requestErrorText)
+      const canRecover = (!streamRequestStarted || recoverableSessionFailure || retryableTransportFailure)
+        && !streamErrorReceived
+        && !/429|rate limit|usage limit|quota|LLM_AUTH_FAILED|CHAT_REQUEST_ID_CONFLICT/i.test(requestErrorText)
+      if (canRecover) {
         try {
-          // 小程序环境通过 apiRequest 走 callContainer，H5 走普通 HTTP
-          const fallbackRes = await apiRequest<any>('/api/v1/chat', 'POST', payload)
+          // SSE may have completed at the server while its connection dropped.
+          // Reuse request_id so the JSON endpoint replays, rather than executes,
+          // the same turn. A partial stream is replaced by the authoritative full response.
+          let fallbackRes: any
+          for (let attempt = 0; attempt < 30; attempt += 1) {
+            try {
+              fallbackRes = await apiRequest<any>('/api/v1/chat', 'POST', payload)
+              break
+            } catch (fallbackError: any) {
+              const message = String(fallbackError?.message || fallbackError || '')
+              if (!/CHAT_REQUEST_IN_PROGRESS|上一条请求仍在处理/i.test(message) || attempt === 29) throw fallbackError
+              await new Promise((resolve) => setTimeout(resolve, 1000))
+            }
+          }
           if (fallbackRes?.response) {
             fullContent = fallbackRes.response
+            streamCompleted = true
+            renderStreamingContent(fullContent, true)
             progressSuggestion = fallbackRes.progress_suggestion || null
             console.info('[Chat] fallback success, content length=', fullContent.length)
             const searchResults = fallbackRes?.search_results
@@ -1020,6 +1040,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
                   kind: 'retry_chat',
                   prompt: trimmed,
                   replaceFromMessageId: options?.replaceFromMessageId,
+                  requestId,
                 },
               ],
             }

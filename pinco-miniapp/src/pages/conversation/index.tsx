@@ -417,6 +417,7 @@ const ConversationPage: React.FC = () => {
     if (action.kind === 'retry_chat' && action.prompt) {
       await sendMessage(action.prompt, 'text', undefined, {
         replaceFromMessageId: action.replaceFromMessageId,
+        requestId: action.requestId,
       })
       return
     }
@@ -1312,7 +1313,7 @@ const ConversationPage: React.FC = () => {
         scrollY
         enhanced
         showScrollbar={false}
-        scrollIntoView={hasMessages ? `msg-${messages.length - 1}` : undefined}
+        scrollIntoView={showEvidenceBuilder ? 'evidence-builder' : (hasMessages ? `msg-${messages.length - 1}` : undefined)}
       >
 
         {/* 空状态引导 */}
@@ -1335,7 +1336,7 @@ const ConversationPage: React.FC = () => {
         )}
 
         {showEvidenceBuilder && (
-          <View className={styles.evidenceBuilder}>
+          <View id="evidence-builder" className={styles.evidenceBuilder}>
             <View className={styles.evidenceHeader}>
               <View className={styles.evidenceHeaderMain}>
                 <Text className={styles.evidenceTitle}>先把经历变成可信证据</Text>

@@ -1048,6 +1048,14 @@ class TrustFoundationTests(unittest.TestCase):
                 with self.assertRaises(main.HTTPException) as forbidden:
                     main.list_booking_messages(booking["id"], outsider["profile"]["user_id"])
                 self.assertEqual(forbidden.exception.status_code, 403)
+                with self.assertRaises(main.HTTPException) as pending_chat:
+                    main.create_booking_message(
+                        booking["id"],
+                        main.BookingMessageCreateRequest(
+                            user_id=candidate["profile"]["user_id"], content="确认前的消息",
+                        ),
+                    )
+                self.assertEqual(pending_chat.exception.status_code, 409)
 
                 main.decide_expert_booking(
                     booking["id"],
@@ -1056,6 +1064,9 @@ class TrustFoundationTests(unittest.TestCase):
                         decision="confirmed",
                     ),
                 )
+                confirmed_thread = main.list_booking_messages(booking["id"], candidate["profile"]["user_id"])
+                self.assertEqual(confirmed_thread["booking"]["status_code"], "confirmed")
+                self.assertEqual(confirmed_thread["booking"]["status"], "图文咨询中")
                 candidate_message = main.create_booking_message(
                     booking["id"],
                     main.BookingMessageCreateRequest(

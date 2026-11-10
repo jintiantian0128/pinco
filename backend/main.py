@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Tuple, Callable
@@ -678,6 +678,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[Message]
     user_id: Optional[str] = None
+    request_id: Optional[str] = Field(default=None, min_length=8, max_length=80)
     replace_from_message_id: Optional[str] = None
     scenario: str = "general"
     interview_mode: bool = False
@@ -2540,9 +2541,10 @@ def admin_console():
     console_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "admin_console.html")
     if not os.path.exists(console_path):
         raise HTTPException(status_code=404, detail="运营工作台文件不存在")
-    return FileResponse(
-        console_path,
-        media_type="text/html",
+    with open(console_path, "r", encoding="utf-8") as console_file:
+        html = console_file.read()
+    return HTMLResponse(
+        content=html,
         headers={
             "Cache-Control": "no-store, max-age=0",
             "Pragma": "no-cache",
@@ -5505,6 +5507,8 @@ def create_booking_message(booking_id: str, request: BookingMessageCreateRequest
         role = booking_participant_role(booking, request.user_id)
         if booking.get("consultation_type") != "chat":
             raise HTTPException(status_code=409, detail="电话咨询仅用于接收专家发送的联系方式")
+        if booking.get("status_code") == "intent_submitted":
+            raise HTTPException(status_code=409, detail="专家尚未确认预约，确认后才能开始图文咨询")
         if booking.get("status_code") in {"rejected", "cancelled", "completed"}:
             raise HTTPException(status_code=409, detail="当前咨询状态不能继续发送消息")
         message = append_booking_message(state, booking, role, content, image_file_id)
@@ -6578,7 +6582,7 @@ def get_agent_task(task_id: str, user_id: str):
     return {"task": task}
 
 
-async def _chat_core(request: ChatRequest, on_response_chunk: Optional[Callable[[str], None]] = None):
+async def _chat_core_uncached(request: ChatRequest, on_response_chunk: Optional[Callable[[str], None]] = None):
     chat_started_at = time.monotonic()
     try:
         conversation = sync_client_chat_history(
@@ -7002,6 +7006,101 @@ confirmed_facts 只能记录用户本轮明确陈述、且能从本轮用户原�
     except Exception as e:
         print(f"LLM Chat Error: {e}")
         raise llm_http_exception(e)
+
+
+async def _chat_core(request: ChatRequest, on_response_chunk: Optional[Callable[[str], None]] = None):
+    """Execute a chat turn once per client request id and replay completed results.
+
+    The request record lives beside the user's durable conversation, not in the
+    client process. This lets the app recover from a dropped SSE connection by
+    calling the ordinary JSON endpoint with the same id without charging or
+    mutating the conversation twice.
+    """
+    request_id = (request.request_id or "").strip()
+    user_id = request.user_id
+    if not request_id or not user_id:
+        return await _chat_core_uncached(request, on_response_chunk=on_response_chunk)
+
+    latest_user_message = next((message.content.strip() for message in reversed(request.messages) if message.role == "user" and not message.transient), "")
+    fingerprint_source = {
+        "latest_user_message": latest_user_message,
+        "scenario": request.scenario,
+        "replace_from_message_id": request.replace_from_message_id,
+        "interview_mode": request.interview_mode,
+        "interview_round": request.interview_round,
+        "interview_position": request.interview_position,
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(fingerprint_source, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    stale_after = 5 * 60
+    now = time.time()
+    missing_user = False
+    cached_response = None
+    request_in_progress = False
+    with _state_lock:
+        state = load_beta_state()
+        user = state.get("users", {}).get(user_id)
+        if not user:
+            missing_user = True
+        else:
+            records = user.setdefault("chat_request_records", {})
+            record = records.get(request_id)
+            if record and record.get("fingerprint") != fingerprint:
+                raise HTTPException(status_code=409, detail={"code": "CHAT_REQUEST_ID_CONFLICT", "message": "请求编号已用于不同内容，请重新发送。"})
+            if record and record.get("status") == "completed" and isinstance(record.get("response"), dict):
+                cached_response = (
+                    ChatResponse.model_validate(record["response"])
+                    if hasattr(ChatResponse, "model_validate")
+                    else ChatResponse.parse_obj(record["response"])
+                )
+            elif record and record.get("status") == "running" and now - float(record.get("updated_at_epoch") or now) < stale_after:
+                request_in_progress = True
+            else:
+                records[request_id] = {
+                    "fingerprint": fingerprint,
+                    "status": "running",
+                    "updated_at_epoch": now,
+                }
+                # Bound user state growth while retaining enough recent retries.
+                if len(records) > 30:
+                    for old_id, _ in sorted(records.items(), key=lambda item: float(item[1].get("updated_at_epoch") or 0))[:len(records) - 30]:
+                        records.pop(old_id, None)
+                save_beta_state(state)
+
+    if missing_user:
+        return await _chat_core_uncached(request, on_response_chunk=on_response_chunk)
+    if request_in_progress:
+        raise HTTPException(status_code=409, detail={"code": "CHAT_REQUEST_IN_PROGRESS", "message": "上一条请求仍在处理，请稍后重试。"})
+    if cached_response:
+        if on_response_chunk:
+            content = cached_response.response
+            for offset in range(0, len(content), 18):
+                on_response_chunk(content[offset:offset + 18])
+        return cached_response
+
+    try:
+        result = await _chat_core_uncached(request, on_response_chunk=on_response_chunk)
+    except Exception as error:
+        with _state_lock:
+            state = load_beta_state()
+            user = state.get("users", {}).get(user_id)
+            record = (user or {}).get("chat_request_records", {}).get(request_id)
+            if record and record.get("fingerprint") == fingerprint:
+                record.update({"status": "failed", "updated_at_epoch": time.time(), "error": str(error)[:500]})
+                save_beta_state(state)
+        raise
+
+    with _state_lock:
+        state = load_beta_state()
+        user = state.get("users", {}).get(user_id)
+        record = (user or {}).get("chat_request_records", {}).get(request_id)
+        if record and record.get("fingerprint") == fingerprint:
+            response_payload = result.model_dump() if hasattr(result, "model_dump") else result.dict()
+            record.update({"status": "completed", "updated_at_epoch": time.time(), "response": response_payload})
+            record.pop("error", None)
+            save_beta_state(state)
+    return result
 
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
