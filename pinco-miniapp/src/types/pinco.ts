@@ -222,6 +222,7 @@ export interface BookingItem {
   job_id?: string
   job_label?: string
   candidate_alias?: string
+  expert_account_bound?: boolean
   consultation_type?: 'chat' | 'phone'
   contact_setup_status?: 'pending' | 'shared' | 'not_needed'
   message_count?: number

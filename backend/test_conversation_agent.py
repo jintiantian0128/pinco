@@ -143,6 +143,80 @@ class ConversationAgentTests(unittest.TestCase):
         self.assertNotIn("user_id", result["bookings"][0])
         self.assertNotIn("contact_wechat", result["bookings"][0])
 
+    def test_admin_cannot_confirm_unbound_expert_and_admin_list_exposes_current_safe_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            candidate = main.ensure_user(state, "admin-booking-candidate", "求职者微信名", "weapp")
+            candidate_id = candidate["profile"]["user_id"]
+            expert = state["experts"][0]
+            expert["owner_user_id"] = None
+            slot = expert["slots"][0]
+            store.save(state)
+            with patch.object(main, "_state_store", store), patch.object(main, "PINCO_ADMIN_TOKEN", "admin-test-token"):
+                booking = main.create_booking(main.BookingCreateRequest(
+                    user_id=candidate_id,
+                    expert_id=expert["id"],
+                    expert_name=expert["name"],
+                    topic="简历诊断",
+                    slot=slot,
+                    desc="希望讨论项目经历",
+                    consultation_type="chat",
+                ))["booking"]
+                listed = main.list_admin_expert_bookings("admin-test-token")["bookings"][0]
+                with self.assertRaises(main.HTTPException) as unbound:
+                    main.admin_decide_expert_booking(
+                        booking["id"],
+                        main.ExpertBookingDecisionRequest(decision="confirmed", confirmed_slot=slot),
+                        "admin-test-token",
+                    )
+                state = store.load()
+                next(item for item in state["expert_bookings"] if item["id"] == booking["id"])["expert_owner_user_id"] = "real-expert-user"
+                store.save(state)
+                confirmed = main.admin_decide_expert_booking(
+                    booking["id"],
+                    main.ExpertBookingDecisionRequest(decision="confirmed", confirmed_slot=slot),
+                    "admin-test-token",
+                )["booking"]
+
+        self.assertFalse(listed["expert_account_bound"])
+        self.assertNotIn("user_id", listed)
+        self.assertNotIn("expert_owner_user_id", listed)
+        self.assertEqual(unbound.exception.status_code, 409)
+        self.assertIn("尚未绑定", unbound.exception.detail)
+        self.assertEqual(confirmed["status_code"], "confirmed")
+        self.assertEqual(confirmed["status"], "图文咨询中")
+
+    def test_expert_availability_requires_future_beijing_datetime_slots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            expert_user = main.ensure_user(state, "availability-picker-expert", "专家", "weapp")
+            expert_user_id = expert_user["profile"]["user_id"]
+            expert = state["experts"][0]
+            # Use a user-owned expert rather than a curated demo profile, whose
+            # slots are intentionally replenished by the catalogue seeder.
+            expert["id"] = "expert-availability-picker-test"
+            expert["owner_user_id"] = expert_user_id
+            store.save(state)
+            with patch.object(main, "_state_store", store):
+                with self.assertRaises(main.HTTPException) as invalid:
+                    main.update_expert_availability(
+                        expert["id"], main.ExpertAvailabilityRequest(user_id=expert_user_id, slots=["下周找时间"])
+                    )
+                valid_slots = main.suggested_expert_slots(2)
+                result = main.update_expert_availability(
+                    expert["id"], main.ExpertAvailabilityRequest(user_id=expert_user_id, slots=valid_slots)
+                )
+                public_expert = next(
+                    item for item in main.list_experts()["experts"] if item["id"] == expert["id"]
+                )
+
+        self.assertEqual(invalid.exception.status_code, 422)
+        self.assertEqual(result["expert"]["slots"], valid_slots)
+        self.assertEqual(public_expert["slots"], valid_slots)
+        self.assertEqual(public_expert["nextSlot"], valid_slots[0])
+
     def test_failed_client_turn_is_synced_without_transient_error_and_can_be_edited(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)

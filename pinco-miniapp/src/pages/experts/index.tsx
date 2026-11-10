@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ScrollView, Text, Textarea, View } from '@tarojs/components'
+import { Picker, ScrollView, Text, Textarea, View } from '@tarojs/components'
 import Taro, { useDidShow, usePullDownRefresh } from '@tarojs/taro'
 import styles from './index.module.scss'
 import { ExpertProfile } from '@/types/pinco'
@@ -72,6 +72,12 @@ const ExpertsPage: React.FC = () => {
     setConsultationType('chat')
     setSelectedJobId('')
     setShareContextWithExpert(false)
+  }
+
+  const openBooking = (expert: ExpertProfile) => {
+    setSelectedExpert(expert)
+    setSlot(expert.slots[0] || '')
+    setShowBookingForm(true)
   }
 
   const submitBooking = async () => {
@@ -159,7 +165,7 @@ const ExpertsPage: React.FC = () => {
             </Text>
             <View
               className={styles.bookButton}
-              onClick={(event) => { event.stopPropagation(); setSelectedExpert(expert); setShowBookingForm(true) }}
+              onClick={(event) => { event.stopPropagation(); openBooking(expert) }}
             >
               <Text>{expert.slots.length ? '去预约' : '暂无档期'}</Text>
             </View>
@@ -202,7 +208,7 @@ const ExpertsPage: React.FC = () => {
             <View
               className={styles.detailBookButton}
               onClick={() => selectedExpert.slots.length
-                ? setShowBookingForm(true)
+                ? openBooking(selectedExpert)
                 : Taro.showToast({ title: '专家暂未发布档期', icon: 'none' })}
             >
               <Text className={styles.detailBookText}>{selectedExpert.slots.length ? '选择可约档期' : '暂无可约档期'}</Text>
@@ -239,15 +245,21 @@ const ExpertsPage: React.FC = () => {
             </View>
             <View className={styles.paySection}>
               <Text className={styles.payLabel}>希望沟通的时间（北京时间，待专家确认）</Text>
-              <View className={styles.slotGrid}>
-                {selectedExpert.slots.map((item) => (
-                  <View
-                    key={item}
-                    className={`${styles.slotChip} ${slot === item ? styles.slotChipActive : ''}`}
-                    onClick={() => setSlot(item)}
-                  ><Text>{item}</Text></View>
-                ))}
-              </View>
+              {selectedExpert.slots.length > 0 ? (
+                <Picker
+                  mode="selector"
+                  range={selectedExpert.slots}
+                  value={Math.max(0, selectedExpert.slots.indexOf(slot))}
+                  onChange={(event) => setSlot(selectedExpert.slots[Number(event.detail.value)] || '')}
+                >
+                  <View className={styles.slotSelect}>
+                    <Text className={styles.slotSelectLabel}>预约时段</Text>
+                    <Text className={styles.slotSelectValue}>{slot || '请选择专家可约时段'}　⌄</Text>
+                  </View>
+                </Picker>
+              ) : (
+                <Text className={styles.emptySlots}>专家还没有发布可约时段，暂时不能提交预约。</Text>
+              )}
               <Text className={styles.detailIntro}>这里选择的是预约意向，不代表专家已确认。提交后会进入待确认流程；未绑定专家账号时由平台运营人工联系协调。</Text>
             </View>
             <View className={styles.paySection}>

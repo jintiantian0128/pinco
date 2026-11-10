@@ -245,7 +245,9 @@ export const fetchExperts = async () => {
   // This directory is public catalogue data. Use the configured, domain-whitelisted
   // HTTPS host directly so a slow callContainer handshake cannot leave the core
   // booking page blank for several seconds.
-  return apiRequest<{ experts: ExpertProfile[] }>('/api/v1/experts', 'GET', undefined, { preferPublicHttps: true })
+  // Availability changes immediately after an expert publishes slots. Avoid a
+  // cached catalogue response when the user returns from the expert workbench.
+  return apiRequest<{ experts: ExpertProfile[] }>(`/api/v1/experts?refresh=${Date.now()}`, 'GET', undefined, { preferPublicHttps: true })
 }
 
 export const fetchExpertApplicationStatus = async (userId: string) => {

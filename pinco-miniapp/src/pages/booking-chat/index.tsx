@@ -39,7 +39,7 @@ const BookingChatPage: React.FC = () => {
       setLoadError('')
     } catch (error) {
       console.error('[BookingChat] load failed', error)
-      if (!quiet) setLoadError('咨询消息暂时加载失败，下拉可以重试。')
+      if (!quiet) setLoadError(`咨询消息暂时加载失败：${(error as Error)?.message || '请检查网络后重试。'}`)
     }
   }, [bookingId, bootstrap])
 
@@ -55,7 +55,7 @@ const BookingChatPage: React.FC = () => {
 
   const bookingStatusCode = thread?.booking.status_code || ''
   const isChatConsultation = thread?.booking.consultation_type === 'chat'
-  const canChat = isChatConsultation && bookingStatusCode === 'confirmed'
+  const canChat = isChatConsultation && bookingStatusCode === 'confirmed' && thread?.booking.expert_account_bound !== false
   const scrollTarget = useMemo(() => {
     const messages = thread?.messages || []
     return messages.length ? `message-${messages[messages.length - 1].id}` : 'thread-start'
@@ -110,6 +110,8 @@ const BookingChatPage: React.FC = () => {
       setLoading(false)
     }
   }
+
+  const reopenExpertMarket = () => Taro.navigateTo({ url: '/pages/experts/index' })
 
   const renderMessage = (message: BookingMessage) => {
     const isMine = message.sender_role === thread?.participant_role
@@ -181,17 +183,26 @@ const BookingChatPage: React.FC = () => {
       ) : (
         <View className={styles.readonlyBar}>
           <Text className={styles.readonlyText}>
-            {thread?.booking.consultation_type === 'phone'
+            {thread?.booking.expert_account_bound === false && ['intent_submitted', 'confirmed'].includes(bookingStatusCode)
+              ? '该专家账号尚未绑定，图文消息暂不可发送。平台完成真实专家绑定后，请刷新预约状态再沟通。'
+              : thread?.booking.consultation_type === 'phone'
               ? '电话咨询用于接收专家发送的电话或会议链接。'
               : bookingStatusCode === 'intent_submitted'
                 ? '服务器当前返回：待专家确认。若后台已接受，请核对上方预约编号是否一致，再刷新状态。'
                 : bookingStatusCode === 'confirmed'
                   ? '预约已确认，正在同步图文咨询权限…'
-                  : '本次咨询已结束，消息仅供查看。'}
+                  : bookingStatusCode === 'cancelled' || bookingStatusCode === 'rejected'
+                    ? '这条预约已取消或专家无法接单，不能继续发送消息。你可以重新选择专家和可约时段。'
+                    : '本次咨询已结束，消息仅供查看。'}
           </Text>
           {bookingStatusCode === 'intent_submitted' && (
             <View className={styles.refreshStatusButton} onClick={() => load()}>
               <Text>刷新预约状态</Text>
+            </View>
+          )}
+          {(bookingStatusCode === 'cancelled' || bookingStatusCode === 'rejected') && (
+            <View className={styles.refreshStatusButton} onClick={reopenExpertMarket}>
+              <Text>重新选择专家</Text>
             </View>
           )}
         </View>

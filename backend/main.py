@@ -1613,6 +1613,7 @@ def serialize_booking_for_expert(booking: Dict[str, Any]) -> Dict[str, Any]:
     result = deepcopy(booking)
     result.pop("user_id", None)
     result.pop("expert_owner_user_id", None)
+    result["expert_account_bound"] = bool(booking.get("expert_owner_user_id"))
     result["candidate_alias"] = booking.get("candidate_alias") or anonymous_booking_alias(booking.get("id", ""))
     if not booking.get("share_contact_with_expert"):
         result.pop("contact_wechat", None)
@@ -5184,7 +5185,28 @@ def list_admin_expert_bookings(x_pinco_admin_token: Optional[str] = Header(defau
         key=lambda item: str(item.get("created_at", "")),
         reverse=True,
     )
-    return {"bookings": [serialize_booking_for_expert(item) for item in bookings]}
+    experts = {item.get("id"): item for item in state.get("experts", [])}
+    return {
+        "bookings": [
+            {
+                "id": str(item.get("id", "")),
+                "expert_id": str(item.get("expertId", "")),
+                "expert_name": str(item.get("expertName", "")),
+                "candidate_alias": item.get("candidate_alias") or anonymous_booking_alias(item.get("id", "")),
+                "slot": str(item.get("slot", "")),
+                "status": str(item.get("status", "")),
+                "status_code": str(item.get("status_code", "")),
+                "consultation_type": str(item.get("consultation_type", "phone")),
+                "created_at": str(item.get("created_at", "")),
+                "expert_account_bound": bool(item.get("expert_owner_user_id")),
+                "available_slots": [
+                    slot for slot in experts.get(item.get("expertId"), {}).get("slots", [])
+                    if isinstance(slot, str) and slot.strip()
+                ],
+            }
+            for item in bookings
+        ]
+    }
 
 @app.post("/api/v1/admin/expert-applications/{application_id}/review")
 def review_expert_application(
@@ -5276,6 +5298,11 @@ def review_expert_application(
 @app.post("/api/v1/experts/{expert_id}/availability")
 def update_expert_availability(expert_id: str, request: ExpertAvailabilityRequest):
     slots = list(dict.fromkeys(slot.strip() for slot in request.slots if slot.strip()))[:30]
+    for slot in slots:
+        try:
+            parse_booking_slot(slot)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
     with _state_lock:
         state = load_beta_state()
         expert = next((item for item in state.get("experts", []) if item.get("id") == expert_id), None)
@@ -5508,6 +5535,8 @@ def create_booking_message(booking_id: str, request: BookingMessageCreateRequest
         role = booking_participant_role(booking, request.user_id)
         if booking.get("consultation_type") != "chat":
             raise HTTPException(status_code=409, detail="电话咨询仅用于接收专家发送的联系方式")
+        if role == "candidate" and not booking.get("expert_owner_user_id"):
+            raise HTTPException(status_code=409, detail="该专家账号尚未绑定，平台完成绑定后才能开始图文咨询")
         if booking.get("status_code") == "intent_submitted":
             raise HTTPException(status_code=409, detail="专家尚未确认预约，确认后才能开始图文咨询")
         if booking.get("status_code") in {"rejected", "cancelled", "completed"}:
@@ -5761,6 +5790,11 @@ def admin_decide_expert_booking(
         booking = next((item for item in state.get("expert_bookings", []) if item.get("id") == booking_id), None)
         if not booking:
             raise HTTPException(status_code=404, detail="预约不存在")
+        if decision == "confirmed" and not booking.get("expert_owner_user_id"):
+            raise HTTPException(
+                status_code=409,
+                detail="该专家账号尚未绑定真实用户。请先到“专家审核”通过申请并绑定账号，再确认预约。",
+            )
         apply_expert_booking_decision(
             state, booking, decision, request.note, request.confirmed_slot
         )

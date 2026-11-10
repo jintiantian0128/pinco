@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Input, Text, Textarea, View } from '@tarojs/components'
+import { Input, Picker, Text, Textarea, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import styles from './index.module.scss'
 import { BookingItem, ExpertApplication, ExpertProfile } from '@/types/pinco'
@@ -30,6 +30,20 @@ const explainLoadFailure = (error: any) => {
   return '接口异常，请稍后重试'
 }
 
+const formatLocalDate = (date: Date) => {
+  const beijingDate = new Date(date.getTime() + 8 * 60 * 60 * 1000)
+  const year = beijingDate.getUTCFullYear()
+  const month = String(beijingDate.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(beijingDate.getUTCDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const dateOffset = (days: number) => {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return formatLocalDate(date)
+}
+
 const ExpertCenterPage: React.FC = () => {
   usePageAnalytics('expert-center')
   const userProfile = usePincoStore((state) => state.userProfile)
@@ -44,6 +58,8 @@ const ExpertCenterPage: React.FC = () => {
   const [tags, setTags] = useState('')
   const [proofUrls, setProofUrls] = useState('')
   const [slotText, setSlotText] = useState('')
+  const [slotDraftDate, setSlotDraftDate] = useState(() => dateOffset(2))
+  const [slotDraftTime, setSlotDraftTime] = useState('19:30')
   const [deliveryBookingId, setDeliveryBookingId] = useState('')
   const [deliverySummary, setDeliverySummary] = useState('')
   const [deliveryNextActions, setDeliveryNextActions] = useState('')
@@ -171,13 +187,28 @@ const ExpertCenterPage: React.FC = () => {
         slotText.split(/\n/).map((item) => item.trim()).filter(Boolean),
       )
       setExpert(result.expert)
-      Taro.showToast({ title: '真实档期已更新', icon: 'success' })
+      setSlotText(result.expert.slots.join('\n'))
+      Taro.showToast({ title: `已发布 ${result.expert.slots.length} 个时段`, icon: 'success' })
     } catch (error) {
       console.error('[ExpertCenter] slots failed', error)
-      Taro.showToast({ title: '档期更新失败', icon: 'none' })
+      Taro.showToast({ title: (error as Error)?.message || '档期更新失败，请检查时段后重试', icon: 'none', duration: 3000 })
     } finally {
       setLoading(false)
     }
+  }
+
+  const addAvailabilitySlot = () => {
+    const nextSlot = `${slotDraftDate} ${slotDraftTime}`
+    const slots = slotText.split(/\n/).map((item) => item.trim()).filter(Boolean)
+    if (slots.includes(nextSlot)) {
+      Taro.showToast({ title: '这个时段已经添加', icon: 'none' })
+      return
+    }
+    setSlotText([...slots, nextSlot].join('\n'))
+  }
+
+  const removeAvailabilitySlot = (target: string) => {
+    setSlotText(slotText.split(/\n/).map((item) => item.trim()).filter((item) => item && item !== target).join('\n'))
   }
 
   const decide = async (booking: BookingItem, decision: 'confirmed' | 'rejected') => {
@@ -314,8 +345,26 @@ const ExpertCenterPage: React.FC = () => {
         <>
           <View className={styles.card}>
             <Text className={styles.sectionTitle}>维护真实档期</Text>
-            <Text className={styles.hint}>只填写你确认能提供服务的北京时间，每行一个。已确认预约的时段会自动移除。</Text>
-            <Textarea className={styles.textarea} value={slotText} onInput={(event) => setSlotText(event.detail.value)} maxlength={1000} autoHeight />
+            <Text className={styles.hint}>选择北京时间日期和时间后添加，系统会自动按正确格式保存。请只发布你确认能服务的时段；已确认预约的时段会自动移除。</Text>
+            <View className={styles.slotPickerRow}>
+              <Picker mode="date" value={slotDraftDate} start={dateOffset(1)} end={dateOffset(90)} onChange={(event) => setSlotDraftDate(event.detail.value)}>
+                <View className={styles.slotPicker}><Text>日期</Text><Text className={styles.slotPickerValue}>{slotDraftDate}</Text></View>
+              </Picker>
+              <Picker mode="time" value={slotDraftTime} start="08:00" end="22:00" onChange={(event) => setSlotDraftTime(event.detail.value)}>
+                <View className={styles.slotPicker}><Text>时间</Text><Text className={styles.slotPickerValue}>{slotDraftTime}</Text></View>
+              </Picker>
+              <View className={styles.addSlotButton} onClick={addAvailabilitySlot}><Text>添加</Text></View>
+            </View>
+            <Text className={styles.label}>已添加时段（北京时间）</Text>
+            <View className={styles.slotList}>
+              {slotText.split(/\n/).map((item) => item.trim()).filter(Boolean).map((item) => (
+                <View key={item} className={styles.slotItem}>
+                  <Text>{item}</Text>
+                  <Text className={styles.removeSlot} onClick={() => removeAvailabilitySlot(item)}>移除</Text>
+                </View>
+              ))}
+              {!slotText.trim() && <Text className={styles.emptySlots}>还没有添加档期，添加并保存后用户才能预约。</Text>}
+            </View>
             <View className={styles.primaryButton} onClick={saveAvailability}><Text>{loading ? '保存中…' : '保存可约时段'}</Text></View>
           </View>
 
