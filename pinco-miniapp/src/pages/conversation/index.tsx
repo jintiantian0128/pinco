@@ -130,6 +130,7 @@ const ConversationPage: React.FC = () => {
   const submitSupportFeedback = usePincoStore((state) => state.submitSupportFeedback)
   const scrollRef = useRef<any>(null)
   const [conversationScrollKey, setConversationScrollKey] = useState(0)
+  const [scrollAnchorVersion, setScrollAnchorVersion] = useState(0)
 
   // 让右上角菜单启用“转发给朋友/复制链接”。不要把当前会话内容或用户资料
   // 拼进分享卡片；被分享者进入的是 Pinco 会话首页。
@@ -291,7 +292,12 @@ const ConversationPage: React.FC = () => {
   })
 
   useEffect(() => {
-  }, [messages.length, streamingContent])
+    if (messages.length <= 1 && !streamingContent && !showEvidenceBuilder) return
+    // Re-key a bottom sentinel after each committed message/stream update.
+    // WeChat may ignore scrollIntoView when the target id stays unchanged,
+    // especially on first render or when a conversation is switched in place.
+    setScrollAnchorVersion((version) => version + 1)
+  }, [messages.length, streamingContent, showEvidenceBuilder, conversationScrollKey])
 
   const hasMessages = messages.length > 1 // welcome message counts as 1
   const latestMessage = [...messages].reverse().find((item) => item.id !== 'welcome')
@@ -1323,7 +1329,7 @@ const ConversationPage: React.FC = () => {
         scrollY
         enhanced
         showScrollbar={false}
-        scrollIntoView={showEvidenceBuilder ? 'evidence-builder' : (hasMessages ? `msg-${messages.length - 1}` : undefined)}
+        scrollIntoView={showEvidenceBuilder ? 'evidence-builder' : (hasMessages ? `conversation-bottom-${scrollAnchorVersion}` : undefined)}
       >
 
         {/* 空状态引导 */}
@@ -1701,6 +1707,7 @@ const ConversationPage: React.FC = () => {
 
         {/* 底部留白 */}
         <View style={{ height: '20rpx' }} />
+        <View id={`conversation-bottom-${scrollAnchorVersion}`} style={{ height: '1rpx' }} />
       </ScrollView>
 
       {isRecording && (
