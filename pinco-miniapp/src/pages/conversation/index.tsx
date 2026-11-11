@@ -1965,6 +1965,10 @@ const ConversationPage: React.FC = () => {
         </View>
       )}
 
+      <View className={styles.aiDisclaimer}>
+        <Text>内容由 AI 生成，仅供参考</Text>
+      </View>
+
       <View className={styles.footer}>
         {draft.length > 0 && (
           <View className={styles.draftTools}>

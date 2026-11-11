@@ -61,6 +61,38 @@
   font-weight: 600;
 }
 
+.directoryNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 8rpx 0 22rpx;
+  padding: 18rpx 20rpx;
+  color: #7C5B20;
+  background: #FFFBEB;
+  border: 1rpx solid #FDE68A;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.noticeRetry {
+  flex-shrink: 0;
+  padding: 8rpx 16rpx;
+  color: #6D28D9;
+  background: #FFFFFF;
+  border-radius: 999rpx;
+  font-weight: 600;
+}
+
+.guideHeading {
+  display: block;
+  margin: 20rpx 0 16rpx;
+  color: $color-text-primary;
+  font-size: 28rpx;
+  font-weight: $font-weight-semibold;
+}
+
 .verifiedLabel {
   display: block;
   margin: 8px 0 4px;

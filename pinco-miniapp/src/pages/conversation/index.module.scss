@@ -1304,6 +1304,16 @@
 }
 
 /* ---- 底部输入区 ---- */
+.aiDisclaimer {
+  flex-shrink: 0;
+  padding: 8rpx 20rpx 4rpx;
+  color: $color-text-tertiary;
+  background: rgba(255, 255, 255, 0.98);
+  font-size: 20rpx;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .footer {
   flex-shrink: 0;
   padding: 12rpx 20rpx calc(12rpx + env(safe-area-inset-bottom));

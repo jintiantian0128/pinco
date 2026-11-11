@@ -7,9 +7,66 @@ import { fetchExperts } from '@/services/pinco'
 import { usePincoStore } from '@/store/usePincoStore'
 import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
+const EXPERTS_CACHE_KEY = 'pinco.experts.catalogue.v1'
+
+// A connectivity fallback, not a list of people claiming to be available.
+// These service directions are deliberately non-bookable and carry no slots.
+const OFFLINE_EXPERT_GUIDES: ExpertProfile[] = [
+  {
+    id: 'offline-direction-ai-product', name: 'AI 产品求职咨询方向', title: '岗位定位与产品面试',
+    intro: '围绕目标岗位拆解、真实项目证据梳理、产品案例表达与 Offer 决策提供咨询。',
+    tags: ['岗位定位', '项目证据', '产品面试', 'Offer选择'], price: 0, nextSlot: '', rating: 0, servedCount: 0,
+    slots: [], verificationStatus: '服务方向介绍 · 暂不可预约', serviceName: 'AI 产品求职诊断',
+    deliverables: ['问题诊断', '下一步行动清单'], durationMinutes: 30,
+  },
+  {
+    id: 'offline-direction-ai-ops', name: 'AI 运营求职咨询方向', title: '增长、内容与数据复盘',
+    intro: '围绕 AI 产品运营、增长与内容方向，梳理可核验的数据证据并准备面试复盘。',
+    tags: ['AI运营', '增长', '内容策略', '数据复盘'], price: 0, nextSlot: '', rating: 0, servedCount: 0,
+    slots: [], verificationStatus: '服务方向介绍 · 暂不可预约', serviceName: 'AI 运营求职诊断',
+    deliverables: ['经历证据诊断', '表达改进建议'], durationMinutes: 30,
+  },
+  {
+    id: 'offline-direction-agent', name: 'AI Agent 求职咨询方向', title: 'Agent 产品与方案表达',
+    intro: '围绕 Agent 规划、记忆、工具调用与评测体系，梳理产品方案和作品集表达。',
+    tags: ['AI Agent', '方案设计', '作品集', '技术理解'], price: 0, nextSlot: '', rating: 0, servedCount: 0,
+    slots: [], verificationStatus: '服务方向介绍 · 暂不可预约', serviceName: 'AI Agent 方案诊断',
+    deliverables: ['方案问题诊断', '作品集改进清单'], durationMinutes: 30,
+  },
+]
+
+const getCachedExperts = (): ExpertProfile[] => {
+  try {
+    const cached = Taro.getStorageSync(EXPERTS_CACHE_KEY)
+    return Array.isArray(cached) ? cached.filter((item) => item && typeof item.id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+const asNonBookableCachedExperts = (experts: ExpertProfile[]) => experts.map((expert) => ({
+  ...expert,
+  slots: [],
+  verificationStatus: '缓存资料 · 档期需联网确认',
+}))
+
 const ExpertsPage: React.FC = () => {
   usePageAnalytics('experts')
-  const [experts, setExperts] = useState<ExpertProfile[]>([])
+  const [initialDirectory] = useState(() => {
+    const cached = getCachedExperts()
+    return cached.length > 0
+      ? {
+          experts: asNonBookableCachedExperts(cached),
+          usingOfflineGuides: false,
+          notice: '正在刷新专家资料；为避免时段过期，缓存档期不会用于预约。',
+        }
+      : {
+          experts: OFFLINE_EXPERT_GUIDES,
+          usingOfflineGuides: true,
+          notice: '正在连接专家服务；当前仅展示不可预约的服务方向介绍。',
+        }
+  })
+  const [experts, setExperts] = useState<ExpertProfile[]>(initialDirectory.experts)
   const [selectedExpert, setSelectedExpert] = useState<ExpertProfile | null>(null)
   const [showBookingForm, setShowBookingForm] = useState(false)
   const [slot, setSlot] = useState('')
@@ -18,6 +75,8 @@ const ExpertsPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [expertsLoading, setExpertsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [directoryNotice, setDirectoryNotice] = useState(initialDirectory.notice)
+  const [usingOfflineGuides, setUsingOfflineGuides] = useState(initialDirectory.usingOfflineGuides)
   const [selectedJobId, setSelectedJobId] = useState('')
   const [shareContextWithExpert, setShareContextWithExpert] = useState(false)
   const createBookingOrder = usePincoStore((state) => state.createBookingOrder)
@@ -27,20 +86,62 @@ const ExpertsPage: React.FC = () => {
   const loadExperts = async () => {
     setExpertsLoading(true)
     setLoadError('')
+    setDirectoryNotice(experts.length > 0
+      ? '正在刷新专家资料；缓存档期不会用于预约。'
+      : '正在连接专家服务，请稍候。')
     // A stalled mini-program network request must not leave the core booking
     // screen in an endless spinner. Keep the request alive so a late success
     // can still populate the list, while exposing a retry state to the user.
     const loadingTimeout = setTimeout(() => {
       setExpertsLoading(false)
       setLoadError('连接专家服务超时，请检查网络后重试。')
+      if (initialDirectory.usingOfflineGuides) {
+        const cached = getCachedExperts()
+        if (cached.length > 0) {
+          setExperts(asNonBookableCachedExperts(cached))
+          setUsingOfflineGuides(false)
+          setDirectoryNotice('当前显示最近成功加载的专家资料。网络恢复后请刷新；为避免过期，缓存档期已隐藏。')
+        } else {
+          setExperts(OFFLINE_EXPERT_GUIDES)
+          setUsingOfflineGuides(true)
+          setDirectoryNotice('暂时连接不上预约服务，以下仅为服务方向介绍，不代表当前有可预约专家。')
+        }
+      } else {
+        setDirectoryNotice('当前显示缓存的专家资料；档期已隐藏，请联网刷新后再预约。')
+      }
     }, 12000)
     try {
       const result = await fetchExperts()
-      setExperts(result.experts || [])
-      setLoadError('')
+      const currentExperts = Array.isArray(result?.experts) ? result.experts : []
+      if (currentExperts.length > 0) {
+        setExperts(currentExperts)
+        setUsingOfflineGuides(false)
+        setDirectoryNotice('')
+        try {
+          Taro.setStorageSync(EXPERTS_CACHE_KEY, currentExperts)
+        } catch (cacheError) {
+          console.warn('[Experts] catalogue cache unavailable', cacheError)
+        }
+        setLoadError('')
+      } else {
+        setExperts(OFFLINE_EXPERT_GUIDES)
+        setUsingOfflineGuides(true)
+        setLoadError('暂时没有可展示的已审核专家。')
+        setDirectoryNotice('以下仅为服务方向介绍，不代表当前有可预约专家；档期开放后会在这里显示。')
+      }
     } catch (error) {
       console.error('[Experts] load failed', error)
       setLoadError('专家列表暂时加载失败，请下拉或点击重试。')
+      const cached = getCachedExperts()
+      if (cached.length > 0) {
+        setExperts(asNonBookableCachedExperts(cached))
+        setUsingOfflineGuides(false)
+        setDirectoryNotice('当前显示最近成功加载的专家资料。网络恢复后请刷新；为避免过期，缓存档期已隐藏。')
+      } else {
+        setExperts(OFFLINE_EXPERT_GUIDES)
+        setUsingOfflineGuides(true)
+        setDirectoryNotice('暂时连接不上预约服务，以下仅为服务方向介绍，不代表当前有可预约专家。')
+      }
     } finally {
       clearTimeout(loadingTimeout)
       setExpertsLoading(false)
@@ -120,12 +221,21 @@ const ExpertsPage: React.FC = () => {
     <View className={styles.page}>
       <View className={styles.header}>
         <Text className={styles.title}>专家市场</Text>
-        <Text className={styles.desc}>首批专家开放免费公测预约。可选 Pinco 内图文咨询或电话咨询，求职者默认匿名；提交后需专家确认，未绑定账号时由平台运营人工协调，暂不开放付费。</Text>
+        <Text className={styles.desc}>可选 Pinco 内图文咨询或电话咨询，求职者默认匿名。目录展示当前已审核专家与实时档期；只有显示可约时段时才能提交预约。专家未绑定账号时由平台运营人工协调，暂不开放付费。</Text>
         <View className={styles.applyButton} onClick={openExpertCenter}>
           <Text>进入专家工作台 / 申请专家</Text>
         </View>
         <Text className={styles.desc}>已绑定专家从这个入口确认、改期或拒绝预约。</Text>
       </View>
+
+      {directoryNotice && (
+        <View className={styles.directoryNotice}>
+          <Text>{directoryNotice}</Text>
+          <View className={styles.noticeRetry} onClick={loadExperts}><Text>重试</Text></View>
+        </View>
+      )}
+
+      {usingOfflineGuides && <Text className={styles.guideHeading}>可提供的咨询方向</Text>}
 
       {experts.length === 0 && (
         <View className={styles.emptyPanel}>
@@ -150,9 +260,11 @@ const ExpertsPage: React.FC = () => {
               <Text className={styles.name}>{expert.name}</Text>
               <Text className={styles.titleText}>{expert.title}</Text>
             </View>
-            <Text className={styles.priceTag}>免费公测预约</Text>
+            <Text className={styles.priceTag}>{usingOfflineGuides ? '服务方向介绍' : '免费公测预约'}</Text>
           </View>
-          <Text className={styles.verifiedLabel}>✓ {expert.verificationStatus}</Text>
+          <Text className={styles.verifiedLabel}>
+            {expert.verificationStatus.includes('服务方向介绍') ? 'ℹ' : expert.verificationStatus.includes('缓存资料') ? '◷' : '✓'} {expert.verificationStatus}
+          </Text>
           <Text className={styles.intro}>{expert.intro}</Text>
           <View className={styles.tagsRow}>
             {expert.tags.map((tag) => <Text key={tag} className={styles.tag}>{tag}</Text>)}
@@ -165,9 +277,13 @@ const ExpertsPage: React.FC = () => {
             </Text>
             <View
               className={styles.bookButton}
-              onClick={(event) => { event.stopPropagation(); openBooking(expert) }}
+              onClick={(event) => {
+                event.stopPropagation()
+                if (expert.slots.length > 0) openBooking(expert)
+                else Taro.showToast({ title: '当前没有可预约时段，请联网刷新后查看', icon: 'none' })
+              }}
             >
-              <Text>{expert.slots.length ? '去预约' : '暂无档期'}</Text>
+              <Text>{expert.slots.length ? '去预约' : usingOfflineGuides ? '暂不可预约' : '暂无档期'}</Text>
             </View>
           </View>
         </View>
