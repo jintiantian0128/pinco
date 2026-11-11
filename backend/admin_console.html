@@ -76,7 +76,8 @@
         const pendingExperts=snapshot.applications.filter(x=>x.status==='pending'||x.status==='changes_requested');
         const pendingReports=snapshot.reports.filter(x=>x.status==='pending');
         $('ready').textContent=`${snapshot.readiness.ready_count||0}/${snapshot.readiness.total_count||0}`;$('expertCount').textContent=pendingExperts.length;$('reportCount').textContent=pendingReports.length;
-        $('health').textContent=snapshot.health?.state?.online&&snapshot.health?.llm?.online?'正常':'需检查';renderExperts(pendingExperts);renderReports(pendingReports);renderNotifications(snapshot.notifications,snapshot.bookings);renderMetrics(snapshot.metrics||{});renderEvents(snapshot.events||{});renderConfig(snapshot.config||{});
+        const readinessItems=snapshot.readiness?.items||[];const modelReady=readinessItems.find(item=>item.key==='model_service')?.ready;const stateReady=readinessItems.find(item=>item.key==='durable_state')?.ready;
+        $('health').textContent=snapshot.health?.status==='online'&&modelReady&&stateReady?'正常':'需检查';renderExperts(pendingExperts);renderReports(pendingReports);renderNotifications(snapshot.notifications,snapshot.bookings);renderMetrics(snapshot.metrics||{});renderEvents(snapshot.events||{});renderConfig(snapshot.config||{});
       }
       function renderExperts(items){const root=$('experts');root.replaceChildren();if(!items.length){root.append(text('div','当前没有待处理的专家申请。','empty'));return}items.forEach(app=>{
         const card=text('article','', 'card');const top=text('div','', 'cardTop');const title=text('div');title.append(text('h3',`${app.display_name||app.real_name} · ${app.title}`),text('div',`实名（仅审核可见）：${app.real_name} · ${app.status} · ${app.created_at||''}`,'meta'));top.append(title,text('span',`¥${app.reference_price||0}/30分钟`,'chip'));card.append(top,text('p',app.intro,'copy'),text('p',`可核验经历：${app.experience_summary}`,'copy'));

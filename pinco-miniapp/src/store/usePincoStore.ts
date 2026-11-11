@@ -1022,7 +1022,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
             : isServiceFailure
               ? '这次请求遇到网络超时或服务暂时不可用。'
               : '这次请求没有成功，可能是网络、后端或模型供应商的单次故障。'
-        const assistantContent = `${fullContent ? `${fullContent}\n\n（回复中断，以上内容可能不完整。）\n\n` : ''}${reason}\n\n我把刚才的问题保留在本机对话中。服务恢复后，点“重试上一问”即可；重试成功时，未发送成功的问题会补回对话上下文。此前已成功的对话和简历记忆不会因这次故障清空。${isServiceFailure || !isRateLimited && !isAuthFailure ? `\n\n可先检查后端健康页：${getApiBaseUrl()}/health` : ''}`
+        const assistantContent = `${fullContent ? `${fullContent}\n\n（回复中断，以上内容可能不完整。）\n\n` : ''}${reason}\n\n我把刚才的问题保留在本机对话中。服务恢复后，点“重试上一问”即可；重试成功时，未发送成功的问题会补回对话上下文。此前已成功的对话和简历记忆不会因这次故障清空。${isServiceFailure || !isRateLimited && !isAuthFailure ? `\n\n可先检查后端依赖状态：${getApiBaseUrl()}/ready` : ''}`
 
         set({
           messages: [

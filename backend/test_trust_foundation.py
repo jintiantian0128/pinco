@@ -115,11 +115,27 @@ class TrustFoundationTests(unittest.TestCase):
             self.assertIsNone(main.read_release_sha(release_path))
 
         with patch.object(main, "PINCO_RELEASE_SHA", "b" * 40), patch.object(
-            main, "probe_llm", return_value={"online": True}
+            main, "probe_llm", side_effect=AssertionError("liveness must not probe DeepSeek")
         ), patch.object(
-            main, "build_state_health_summary", return_value={"durable": True, "online": True}
+            main, "build_state_health_summary", side_effect=AssertionError("liveness must not ping storage")
         ):
-            self.assertEqual(main.health_check()["release_sha"], "b" * 40)
+            health = main.health_check()
+            self.assertEqual(health["release_sha"], "b" * 40)
+            self.assertEqual(health["status"], "online")
+            self.assertEqual(health["check"], "liveness")
+
+    def test_readiness_health_probes_dependencies_separately(self):
+        llm = {"online": True, "status": "connected"}
+        state = {"durable": True, "online": True}
+        with patch.object(main, "probe_llm", return_value=llm) as probe, patch.object(
+            main, "build_state_health_summary", return_value=state
+        ) as state_health:
+            result = main.readiness_check()
+        self.assertEqual(result["llm"], llm)
+        self.assertEqual(result["state"], state)
+        self.assertEqual(result["check"], "readiness")
+        probe.assert_called_once_with()
+        state_health.assert_called_once_with()
 
     def test_json_state_store_round_trip_and_atomic_shape(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -2345,6 +2345,25 @@ def generate_community_reply(title: str, content: str) -> str:
 
 @app.get("/health")
 def health_check():
+    # Cloud hosting uses this endpoint as a liveness probe. It must answer from
+    # process-local data only: probing DeepSeek or a remote database here can
+    # consume the platform's startup/readiness deadline and make a live worker
+    # look dead during cold starts or upstream incidents.
+    return {
+        "status": "online",
+        "model": DEFAULT_MODEL,
+        "version": "0.7.0",
+        "release_sha": PINCO_RELEASE_SHA,
+        "mock_mode": MOCK_MODE,
+        "provider": LLM_PROVIDER,
+        "check": "liveness",
+        "readiness_url": "/ready",
+    }
+
+
+@app.get("/ready")
+def readiness_check():
+    """Return dependency readiness separately from the cheap liveness probe."""
     return {
         "status": "online",
         "model": DEFAULT_MODEL,
@@ -2354,6 +2373,7 @@ def health_check():
         "provider": LLM_PROVIDER,
         "llm": probe_llm(),
         "state": build_state_health_summary(),
+        "check": "readiness",
     }
 
 @app.get("/api/v1/llm/health")
