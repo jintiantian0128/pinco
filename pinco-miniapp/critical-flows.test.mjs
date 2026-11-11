@@ -60,6 +60,10 @@ assert.match(conversation, /编辑并重发/, 'Long-press actions must retain an
 assert.match(conversation, /重试/, 'Persistent user message actions must provide one-tap retry')
 assert.match(conversation, /message\.role === 'user' \? '我' : 'P'/, 'Assistant conversation avatar must use P')
 assert.match(store, /transient: true/, 'Technical error bubbles must be excluded from persisted model context')
+assert.match(store, /state\.messages\.filter\(\(message\) => !message\.transient\)/, 'Transient failure bubbles must not be saved into local chat history')
+assert.match(store, /\[\.\.\.remote, \.\.\.local\]\.filter\(\(item\) => !item\.transient\)/, 'Old cached transient errors must be removed when restoring chat history')
+assert.doesNotMatch(store, /const canRecover =[^;]{0,240}&& !streamErrorReceived/, 'Retryable SSE error events must be eligible for the JSON recovery request')
+assert.match(store, /fallbackRes\?\.response\)[\s\S]{0,160}streamErrorReceived = false/, 'A successful JSON recovery must replace the failed stream state')
 assert.match(store, /replace_from_message_id/, 'Edited turns must replace the old server-side context')
 assert.doesNotMatch(api, /process\.env\.NODE_ENV === 'development'[\s\S]{0,120}127\.0\.0\.1:8090/, 'WeChat development builds must not point real devices at localhost')
 assert.doesNotMatch(

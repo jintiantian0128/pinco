@@ -2087,8 +2087,21 @@ async def require_user_session(request: Request, call_next):
         )
     return await call_next(request)
 
-def build_service_health_summary() -> Dict[str, Any]:
-    probe = probe_llm()
+def build_service_health_summary(check_model: bool = True) -> Dict[str, Any]:
+    if check_model:
+        probe = probe_llm()
+    else:
+        # Mini-app bootstrap is on the first-screen critical path. Do not make
+        # a billable/network DeepSeek request before users can start chatting.
+        probe = _llm_probe_cache.get("status")
+        if not probe or time.time() - float(_llm_probe_cache.get("checked_at") or 0) >= 60:
+            probe = {
+                "online": False,
+                "status": "not_checked",
+                "code": "LLM_NOT_CHECKED",
+                "message": "模型状态尚未探测；首次对话会直接连接真实模型。",
+                "base_url": get_active_llm_base_url(),
+            }
     return {
         "online": probe["online"],
         "model": DEFAULT_MODEL,
@@ -2150,8 +2163,8 @@ def extract_text_from_image(content: bytes) -> str:
     texts = getattr(result, "txts", None) or []
     return "\n".join(str(text).strip() for text in texts if str(text).strip())[:12000]
 
-def build_miniapp_readiness() -> Dict[str, Any]:
-    service_health = build_service_health_summary()
+def build_miniapp_readiness(check_model: bool = True) -> Dict[str, Any]:
+    service_health = build_service_health_summary(check_model=check_model)
     state_health = build_state_health_summary()
     payment_issue = get_wechat_pay_config_issue()
     payment_configured = payment_issue is None
@@ -2458,7 +2471,8 @@ def update_config(request: ConfigUpdateRequest, x_pinco_admin_token: Optional[st
 
 @app.post("/api/v1/miniapp/bootstrap")
 def miniapp_bootstrap(request: MiniappBootstrapRequest):
-    readiness = build_miniapp_readiness()
+    readiness = build_miniapp_readiness(check_model=False)
+    service_health = build_service_health_summary(check_model=False)
     with _state_lock:
         state = load_beta_state()
         user = ensure_user(state, request.device_id, request.nickname, request.platform, request.code)
@@ -2475,7 +2489,7 @@ def miniapp_bootstrap(request: MiniappBootstrapRequest):
         "bookings": user["bookings"],
         "notifications": user.get("notifications", [])[-30:],
         "service_timeline": user["service_timeline"],
-        "service_health": build_service_health_summary(),
+        "service_health": service_health,
         "wechat_ready": bool(user["profile"].get("wechat_bound")),
         "miniapp_readiness": readiness,
         "community_posts": [serialize_post(post, user["profile"]["user_id"]) for post in state.get("community_posts", [])],

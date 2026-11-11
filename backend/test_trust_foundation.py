@@ -137,6 +137,16 @@ class TrustFoundationTests(unittest.TestCase):
         probe.assert_called_once_with()
         state_health.assert_called_once_with()
 
+    def test_bootstrap_service_health_uses_cache_without_probing_deepseek(self):
+        with patch.dict(main._llm_probe_cache, {"checked_at": 0, "status": None}), patch.object(
+            main, "probe_llm", side_effect=AssertionError("bootstrap must not call DeepSeek")
+        ) as probe:
+            result = main.build_service_health_summary(check_model=False)
+        self.assertFalse(result["online"])
+        self.assertEqual(result["code"], "LLM_NOT_CHECKED")
+        self.assertIn("首次对话", result["summary"])
+        probe.assert_not_called()
+
     def test_json_state_store_round_trip_and_atomic_shape(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "state.json")

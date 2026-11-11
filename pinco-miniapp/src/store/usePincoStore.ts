@@ -168,7 +168,9 @@ const conversationSessionFrom = (
 
 const mergeMessages = (local: MessageItem[], remote: MessageItem[]): MessageItem[] => {
   const merged = new Map<string, MessageItem>()
-  for (const message of [...remote, ...local]) {
+  // Transient failure bubbles are UI-only. Older builds may already have
+  // persisted them, so filter both sources while migrating local history.
+  for (const message of [...remote, ...local].filter((item) => !item.transient)) {
     const fallbackKey = `${message.role}:${message.createdAt}:${message.content}`
     merged.set(message.id || fallbackKey, message)
   }
@@ -312,7 +314,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
   saveMessages: () => {
     try {
       const state = get()
-      Taro.setStorageSync(STORAGE_KEY, JSON.stringify(state.messages))
+      Taro.setStorageSync(STORAGE_KEY, JSON.stringify(state.messages.filter((message) => !message.transient)))
       const userId = state.userProfile?.user_id
       const session = conversationSessionFrom(
         getCurrentConversationId(), state.messages, state.conversationMeta.scenario, state.conversationMeta.title,
@@ -488,7 +490,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         const raw = Taro.getStorageSync(STORAGE_KEY)
         if (raw) {
           const parsed = JSON.parse(raw) as MessageItem[]
-          if (parsed.length > 0) localMessages = parsed
+          if (parsed.length > 0) localMessages = parsed.filter((message) => !message.transient)
         }
       } catch {}
 
@@ -913,8 +915,10 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       // Try non-streaming fallback
       const recoverableSessionFailure = /SESSION_REQUIRED|用户会话已过期/i.test(requestErrorText)
       const retryableTransportFailure = /STREAM_INTERRUPTED|timeout|timed out|network|fail url|连接|服务暂时不可用|HTTP 5\d\d/i.test(requestErrorText)
+      // A retryable SSE error event is still eligible for the JSON recovery
+      // path. The same request_id lets the backend replay a completed turn or
+      // restart a failed one without duplicating a successful charge.
       const canRecover = (!streamRequestStarted || recoverableSessionFailure || retryableTransportFailure)
-        && !streamErrorReceived
         && !/429|rate limit|usage limit|quota|LLM_AUTH_FAILED|CHAT_REQUEST_ID_CONFLICT/i.test(requestErrorText)
       if (canRecover) {
         try {
@@ -935,6 +939,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           if (fallbackRes?.response) {
             fullContent = fallbackRes.response
             streamCompleted = true
+            streamErrorReceived = false
             renderStreamingContent(fullContent, true)
             progressSuggestion = fallbackRes.progress_suggestion || null
             console.info('[Chat] fallback success, content length=', fullContent.length)
