@@ -61,6 +61,41 @@ let privacyListenerBound = false
 let pendingPrivacyResolve: PrivacyResolve | null = null
 let showPrivacyPrompt: ((referrer: string) => void) | null = null
 
+const THINKING_STATUS = [
+  '正在读你的问题…',
+  '正在结合已知背景…',
+  '正在思考规划中…',
+]
+
+const SEARCH_THINKING_STATUS = [
+  '正在梳理岗位搜索条件…',
+  '正在搜索匹配岗位…',
+  '正在核对岗位来源…',
+]
+
+const ThinkingIndicator: React.FC<{ searching?: boolean }> = ({ searching = false }) => {
+  const [statusIndex, setStatusIndex] = useState(0)
+  const statuses = searching ? SEARCH_THINKING_STATUS : THINKING_STATUS
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setStatusIndex((index) => (index + 1) % statuses.length)
+    }, 1800)
+    return () => clearInterval(timer)
+  }, [searching, statuses.length])
+
+  return (
+    <View className={styles.thinkingStatusLine}>
+      <Text key={`${searching}-${statusIndex}`} className={styles.thinkingText}>{statuses[statusIndex]}</Text>
+      <View className={classnames(styles.typingIndicator, styles.thinkingTypingIndicator)}>
+        <View className={styles.typingDot} />
+        <View className={styles.typingDot} />
+        <View className={styles.typingDot} />
+      </View>
+    </View>
+  )
+}
+
 function ensurePrivacyListener() {
   if (privacyListenerBound || !Taro.onNeedPrivacyAuthorization) return
   privacyListenerBound = true
@@ -130,7 +165,7 @@ const ConversationPage: React.FC = () => {
   const submitSupportFeedback = usePincoStore((state) => state.submitSupportFeedback)
   const scrollRef = useRef<any>(null)
   const [conversationScrollKey, setConversationScrollKey] = useState(0)
-  const [scrollAnchorVersion, setScrollAnchorVersion] = useState(0)
+  const [messageScrollTop, setMessageScrollTop] = useState(0)
 
   // 让右上角菜单启用“转发给朋友/复制链接”。不要把当前会话内容或用户资料
   // 拼进分享卡片；被分享者进入的是 Pinco 会话首页。
@@ -292,14 +327,24 @@ const ConversationPage: React.FC = () => {
   })
 
   useEffect(() => {
-    if (messages.length <= 1 && !streamingContent && !showEvidenceBuilder) return
-    // Re-key a bottom sentinel after each committed message/stream update.
-    // WeChat may ignore scrollIntoView when the target id stays unchanged,
-    // especially on first render or when a conversation is switched in place.
-    setScrollAnchorVersion((version) => version + 1)
+    if (messages.length <= 1 && !streamingContent && !showEvidenceBuilder) {
+      setMessageScrollTop(0)
+      return
+    }
+    // WeChat's scroll-into-view can be ignored when a long list keeps the same
+    // sentinel mounted. Set a fresh, deliberately-large scrollTop after render
+    // and native layout; the native ScrollView clamps it to the latest message.
+    const scrollAfterCommit = setTimeout(() => setMessageScrollTop(Date.now()), 0)
+    const scrollAfterLayout = setTimeout(() => setMessageScrollTop(Date.now() + 1), 90)
+    return () => {
+      clearTimeout(scrollAfterCommit)
+      clearTimeout(scrollAfterLayout)
+    }
   }, [messages.length, streamingContent, showEvidenceBuilder, conversationScrollKey])
 
   const hasMessages = messages.length > 1 // welcome message counts as 1
+  const latestUserText = [...messages].reverse().find((message) => message.role === 'user')?.content || ''
+  const isSearchingJobs = /(?:搜索|搜|找|推荐).{0,24}(?:岗位|职位|招聘|在招)|(?:岗位|职位).{0,16}(?:有哪些|有没有|在招|招聘)/.test(latestUserText)
   const latestMessage = [...messages].reverse().find((item) => item.id !== 'welcome')
   const priorityJob = pickPriorityJob(jobProgress)
 
@@ -1323,13 +1368,13 @@ const ConversationPage: React.FC = () => {
       </View>
 
       <ScrollView
-        key={conversationScrollKey}
         ref={scrollRef}
         className={styles.messageScroll}
         scrollY
         enhanced
         showScrollbar={false}
-        scrollIntoView={showEvidenceBuilder ? 'evidence-builder' : (hasMessages ? `conversation-bottom-${scrollAnchorVersion}` : undefined)}
+        scrollTop={showEvidenceBuilder ? undefined : messageScrollTop}
+        scrollIntoView={showEvidenceBuilder ? 'evidence-builder' : undefined}
       >
 
         {/* 空状态引导 */}
@@ -1678,12 +1723,7 @@ const ConversationPage: React.FC = () => {
               <Text>P</Text>
             </View>
             <View className={classnames(styles.messageBubble, styles.bubbleAssistant, styles.thinkingBubble)}>
-              <Text className={styles.thinkingText}>Pinco 正在整理你的问题…</Text>
-              <View className={styles.typingIndicator}>
-                <View className={styles.typingDot} />
-                <View className={styles.typingDot} />
-                <View className={styles.typingDot} />
-              </View>
+              <ThinkingIndicator searching={isSearchingJobs} />
             </View>
           </View>
         )}
@@ -1707,7 +1747,6 @@ const ConversationPage: React.FC = () => {
 
         {/* 底部留白 */}
         <View style={{ height: '20rpx' }} />
-        <View id={`conversation-bottom-${scrollAnchorVersion}`} style={{ height: '1rpx' }} />
       </ScrollView>
 
       {isRecording && (

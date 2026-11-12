@@ -4,12 +4,18 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   background: $color-bg-page;
 }
 
 /* ---- 消息滚动区 ---- */
 .messageScroll {
   flex: 1;
+  // A flex child otherwise keeps its content's automatic minimum height.
+  // On WeChat this lets the page grow instead of scrolling the message pane.
+  min-height: 0;
+  height: 0;
   overflow-y: auto;
   padding: 20rpx $page-padding 0;
 }
@@ -1389,6 +1395,24 @@
 .thinkingText {
   color: $color-text-secondary;
   font-size: 24rpx;
+  animation: thinkingStatusEnter 260ms ease-out both;
+}
+
+.thinkingStatusLine {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  min-height: 34rpx;
+}
+
+.thinkingTypingIndicator {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+@keyframes thinkingStatusEnter {
+  from { opacity: 0.35; transform: translateY(4rpx); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .voiceAccessibleLabel {

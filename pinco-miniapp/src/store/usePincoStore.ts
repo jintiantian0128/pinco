@@ -39,6 +39,22 @@ import { trackProductEvent } from '@/services/analytics'
 
 declare const wx: any
 
+const INTERNAL_NEXT_ACTION_LABELS: Record<string, string> = {
+  ask_user_to_choose_direction: '先选一个想优先解决的方向，也可以直接描述你的经历。',
+  ask_user_for_target_role: '补充你想优先考虑的岗位方向。',
+  ask_user_for_resume: '补充一段项目经历，或上传已有简历。',
+  search_jobs: '确认岗位和城市后，我会继续检索带来源的岗位。',
+}
+
+const normalizeAgentNextAction = (value: unknown) => {
+  const action = String(value || '').trim().slice(0, 200)
+  if (!action) return ''
+  if (INTERNAL_NEXT_ACTION_LABELS[action]) return INTERNAL_NEXT_ACTION_LABELS[action]
+  if (/^[a-z][a-z0-9_]{2,}$/.test(action)) return ''
+  if (/<profile_update|next_action|tool_call|function_call/i.test(action)) return ''
+  return action
+}
+
 interface ConversationMeta {
   title: string
   subtitle: string
@@ -587,6 +603,13 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     const trimmed = content.trim()
     if (!trimmed || get().isSending) return
 
+    // The app bootstrap runs asynchronously on launch. A user can submit the
+    // first message before the session token and user identity are ready; wait
+    // for that in-flight bootstrap instead of racing the first chat request.
+    if (!get().userProfile?.user_id) {
+      await get().bootstrap()
+    }
+
     const now = Date.now()
     const userMessage: MessageItem = {
       id: `user-${now}`,
@@ -782,7 +805,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
                     set({ jobSearchResults: data.search_results })
                     console.info('[Chat] stream search results received:', data.search_results.length)
                   }
-                  if (data.agent?.next_action) agentNextAction = String(data.agent.next_action)
+                  if (data.agent?.next_action) agentNextAction = normalizeAgentNextAction(data.agent.next_action)
                   if (data.progress_suggestion) progressSuggestion = data.progress_suggestion
                   if (data.done) streamCompleted = true
                 } catch {}
@@ -825,7 +848,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
             }
             if (typeof data.replace === 'string') fullContent = data.replace
             if (data.search_results?.length) set({ jobSearchResults: data.search_results })
-            if (data.agent?.next_action) agentNextAction = String(data.agent.next_action)
+            if (data.agent?.next_action) agentNextAction = normalizeAgentNextAction(data.agent.next_action)
             if (data.progress_suggestion) progressSuggestion = data.progress_suggestion
             if (data.done) streamCompleted = true
           } catch {}
@@ -944,7 +967,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
             progressSuggestion = fallbackRes.progress_suggestion || null
             console.info('[Chat] fallback success, content length=', fullContent.length)
             const searchResults = fallbackRes?.search_results
-            agentNextAction = String(fallbackRes?.agent?.next_action || '')
+            agentNextAction = normalizeAgentNextAction(fallbackRes?.agent?.next_action)
             if (searchResults && Array.isArray(searchResults) && searchResults.length > 0) {
               set({ jobSearchResults: searchResults })
               console.info('[Chat] search results received:', searchResults.length)

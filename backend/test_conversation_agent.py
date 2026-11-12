@@ -419,6 +419,26 @@ class ConversationAgentTests(unittest.TestCase):
         self.assertEqual(continued["years"], "3年经验")
         self.assertEqual(continued["missing"], [])
 
+    def test_incomplete_job_search_does_not_hijack_unrelated_chat_turns(self):
+        task = {
+            "type": "job_search",
+            "role": "",
+            "city": "上海",
+            "years": "",
+            "missing": ["目标岗位"],
+        }
+        user = {
+            "active_agent_task": task,
+            "conversation_profile": {"pending_field": "target_role"},
+            "career_profile": {"target_roles": [], "cities": [], "years_experience": 0},
+        }
+
+        self.assertIsNone(main.resolve_job_search_task(user, "你好，帮我看下这个简历怎么改", None))
+        resumed = main.resolve_job_search_task(user, "我想找AI产品经理岗位", None)
+        self.assertEqual(resumed["role"], "AI产品经理")
+        self.assertEqual(resumed["city"], "上海")
+        self.assertEqual(resumed["missing"], [])
+
     def test_job_search_accepts_unlimited_city_as_an_explicit_answer(self):
         user = {"career_profile": {"target_roles": [], "cities": [], "years_experience": 0}}
         task = main.resolve_job_search_task(

@@ -401,7 +401,13 @@ def _deepseek_chat_request_stream(payload: dict, on_delta: Callable[[str], None]
             raise
     raise RuntimeError("DeepSeek stream retry exhausted.")
 
-def llm_chat(messages: list, temperature: float = 0.7, system_prompt: Optional[str] = None, max_tokens: int = 2048) -> str:
+def llm_chat(
+    messages: list,
+    temperature: float = 0.7,
+    system_prompt: Optional[str] = None,
+    max_tokens: int = 2048,
+    thinking: Optional[str] = None,
+) -> str:
     if MOCK_MODE:
         raise RuntimeError("MOCK_MODE")
     config_issue = get_llm_config_issue()
@@ -419,16 +425,26 @@ def llm_chat(messages: list, temperature: float = 0.7, system_prompt: Optional[s
         normalized_messages.append(msg)
     effective_system = "\n\n".join(collected_system + ([system_prompt] if system_prompt else [])) or None
     full_messages = ([{"role": "system", "content": effective_system}] if effective_system else []) + normalized_messages
-    return _deepseek_chat_request({
+    payload = {
         "model": DEFAULT_MODEL,
         "messages": full_messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
         "stream": False,
-    })
+    }
+    if thinking in {"enabled", "disabled"}:
+        payload["thinking"] = {"type": thinking}
+    return _deepseek_chat_request(payload)
 
 
-def llm_chat_stream(messages: list, temperature: float = 0.7, system_prompt: Optional[str] = None, max_tokens: int = 2048, on_delta: Optional[Callable[[str], None]] = None) -> str:
+def llm_chat_stream(
+    messages: list,
+    temperature: float = 0.7,
+    system_prompt: Optional[str] = None,
+    max_tokens: int = 2048,
+    on_delta: Optional[Callable[[str], None]] = None,
+    thinking: Optional[str] = None,
+) -> str:
     if MOCK_MODE:
         raise RuntimeError("MOCK_MODE")
     config_issue = get_llm_config_issue()
@@ -446,12 +462,15 @@ def llm_chat_stream(messages: list, temperature: float = 0.7, system_prompt: Opt
         normalized_messages.append(msg)
     effective_system = "\n\n".join(collected_system + ([system_prompt] if system_prompt else [])) or None
     full_messages = ([{"role": "system", "content": effective_system}] if effective_system else []) + normalized_messages
-    return _deepseek_chat_request_stream({
+    payload = {
         "model": DEFAULT_MODEL,
         "messages": full_messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
-    }, on_delta or (lambda _delta: None))
+    }
+    if thinking in {"enabled", "disabled"}:
+        payload["thinking"] = {"type": thinking}
+    return _deepseek_chat_request_stream(payload, on_delta or (lambda _delta: None))
 
 def sanitize_prompt_text(text: Optional[str]) -> str:
     if not text:
@@ -477,10 +496,16 @@ def _is_llm_recoverable(error_text: str) -> bool:
     lowered = error_text.lower()
     return any(kw in lowered for kw in recoverable)
 
-def llm_chat_with_fallback(messages: list, temperature: float = 0.7, system_prompt: Optional[str] = None, max_tokens: int = 2048) -> str:
+def llm_chat_with_fallback(
+    messages: list,
+    temperature: float = 0.7,
+    system_prompt: Optional[str] = None,
+    max_tokens: int = 2048,
+    thinking: Optional[str] = None,
+) -> str:
     """Retry once with a safer prompt, but never replace a failed model call with canned content."""
     try:
-        return llm_chat(messages, temperature=temperature, system_prompt=system_prompt, max_tokens=max_tokens)
+        return llm_chat(messages, temperature=temperature, system_prompt=system_prompt, max_tokens=max_tokens, thinking=thinking)
     except Exception as error:
         error_text = str(error)
         if not _is_llm_recoverable(error_text):
@@ -494,7 +519,7 @@ def llm_chat_with_fallback(messages: list, temperature: float = 0.7, system_prom
             })
         safe_system = sanitize_prompt_text(system_prompt) or "你是 Pinco 学姐，擅长中文求职与职场建议。先接住情绪，再给温和、具体、可执行的建议。"
         try:
-            return llm_chat(safe_messages, temperature=min(temperature, 0.6), system_prompt=safe_system, max_tokens=max_tokens)
+            return llm_chat(safe_messages, temperature=min(temperature, 0.6), system_prompt=safe_system, max_tokens=max_tokens, thinking=thinking)
         except Exception as retry_error:
             retry_text = str(retry_error)
             if not _is_llm_recoverable(retry_text):
@@ -503,7 +528,14 @@ def llm_chat_with_fallback(messages: list, temperature: float = 0.7, system_prom
             raise retry_error
 
 
-def llm_chat_stream_with_fallback(messages: list, temperature: float = 0.7, system_prompt: Optional[str] = None, max_tokens: int = 2048, on_delta: Optional[Callable[[str], None]] = None) -> str:
+def llm_chat_stream_with_fallback(
+    messages: list,
+    temperature: float = 0.7,
+    system_prompt: Optional[str] = None,
+    max_tokens: int = 2048,
+    on_delta: Optional[Callable[[str], None]] = None,
+    thinking: Optional[str] = None,
+) -> str:
     """Stream a chat response, retrying only a provider policy block before any output is exposed."""
     emitted_output = False
 
@@ -520,6 +552,7 @@ def llm_chat_stream_with_fallback(messages: list, temperature: float = 0.7, syst
             system_prompt=system_prompt,
             max_tokens=max_tokens,
             on_delta=track_delta,
+            thinking=thinking,
         )
     except Exception as error:
         error_text = str(error)
@@ -537,6 +570,7 @@ def llm_chat_stream_with_fallback(messages: list, temperature: float = 0.7, syst
             system_prompt=safe_system,
             max_tokens=max_tokens,
             on_delta=track_delta,
+            thinking=thinking,
         )
 
 def is_balance_error(error: Exception) -> bool:
@@ -658,7 +692,12 @@ def probe_llm(force: bool = False) -> Dict[str, Any]:
                     [{"role": "user", "content": "请只回复 OK"}],
                     temperature=0,
                     system_prompt="你是健康检查接口。只回复 OK。",
-                    max_tokens=8,
+                    # DeepSeek V4 defaults to thinking mode; eight output tokens
+                    # can be consumed before the visible answer is produced.
+                    # Keep the probe cheap and deterministic so liveness does not
+                    # misreport a healthy model as finish_reason=length.
+                    max_tokens=16,
+                    thinking="disabled",
                 )
                 status = {**base, "status": "connected", "online": True, "code": "LLM_CONNECTED", "message": "真实模型连通。", "sample": text[:20]}
             except Exception as error:
@@ -1252,6 +1291,34 @@ def resolve_job_search_task(user: Dict[str, Any], latest_text: str, explicit_req
     existing = deepcopy(user.get("active_agent_task") or {})
     if not explicit_request and existing.get("type") != "job_search":
         return None
+    if not explicit_request and existing.get("type") == "job_search":
+        # A persisted, incomplete search must not hijack every later chat turn.
+        # Resume only when the user appears to answer the currently missing
+        # field, or explicitly asks to continue/retry the search. Otherwise
+        # keep the task saved but let normal conversation handle this message.
+        compact = re.sub(r"\s+", "", latest_text or "").lower()
+        pending_field = (user.get("conversation_profile") or {}).get("pending_field")
+        missing = existing.get("missing") or [
+            key for key, value in (("目标岗位", existing.get("role")), ("工作城市或‘不限’", existing.get("city"))) if not value
+        ]
+        if not pending_field:
+            pending_field = "target_role" if "目标岗位" in missing else "city" if missing else None
+        role_aliases = {
+            alias.replace(" ", "").lower()
+            for _role, aliases in JOB_SEARCH_ROLE_PATTERNS
+            for alias in aliases
+        }
+        role_answer = any(alias in compact for alias in role_aliases)
+        city_answer = any(city.lower() in compact for city in JOB_SEARCH_CITIES) or any(
+            marker in compact for marker in ("不限", "全国", "都可以", "无所谓城市", "不想回答", "不方便说", "不方便透露", "跳过", "保密")
+        )
+        explicit_resume = any(marker in compact for marker in ("继续搜索", "继续找岗位", "重试搜索", "重新搜索", "开始搜索"))
+        explicit_correction = any(marker in compact for marker in ("更正", "改按", "改成", "之前说")) and bool(role_answer or city_answer)
+        if not explicit_resume and not explicit_correction and not (
+            ("target_role" == pending_field and role_answer)
+            or ("city" == pending_field and city_answer)
+        ):
+            return None
     task = existing if existing.get("type") == "job_search" else {
         "type": "job_search",
         "created_at": now_iso(),
@@ -3313,10 +3380,25 @@ def sanitize_agent_result(raw: Dict[str, Any]) -> Dict[str, Any]:
                 "status": status,
                 "prompt": str(progress.get("prompt") or "").strip()[:160],
             }
+    next_action = str(raw.get("next_action") or "").strip()[:200]
+    internal_action_labels = {
+        "ask_user_to_choose_direction": "先选一个想优先解决的方向，也可以直接描述你的经历。",
+        "ask_user_for_target_role": "补充你想优先考虑的岗位方向。",
+        "ask_user_for_resume": "补充一段项目经历，或上传已有简历。",
+        "search_jobs": "确认岗位和城市后，我会继续检索带来源的岗位。",
+    }
+    next_action = internal_action_labels.get(next_action, next_action)
+    # Never expose internal enum/tool names, prompt tags, or model JSON fragments
+    # through the small secondary action label shown under assistant messages.
+    if (
+        re.fullmatch(r"[a-z][a-z0-9_]{2,}", next_action)
+        or any(marker in next_action.lower() for marker in ("<profile_update", "next_action", "tool_call", "function_call"))
+    ):
+        next_action = ""
     return {
         "response": response,
         "intent": str(raw.get("intent") or "general")[:60],
-        "next_action": str(raw.get("next_action") or "")[:200],
+        "next_action": next_action,
         "used_memory_keys": [
             normalize_agent_memory_key(item) or str(item)[:60]
             for item in (raw.get("used_memory_keys") or [])[:12]
@@ -6918,7 +7000,7 @@ confirmed_facts 只能记录用户本轮明确陈述、且能从本轮用户原�
                 llm_chat_stream_with_fallback,
                 conversation,
                 system_prompt=system,
-                max_tokens=2600,
+                max_tokens=1800,
                 on_delta=publish_agent_delta,
             )
         else:
@@ -6926,7 +7008,7 @@ confirmed_facts 只能记录用户本轮明确陈述、且能从本轮用户原�
                 llm_chat_with_fallback,
                 conversation,
                 system_prompt=system,
-                max_tokens=2600,
+                max_tokens=1800,
             )
         try:
             agent_result = sanitize_agent_result(json.loads(clean_json_response(raw_agent)))
@@ -6937,7 +7019,7 @@ confirmed_facts 只能记录用户本轮明确陈述、且能从本轮用户原�
                 [{"role": "user", "content": f"将下面内容修复为符合指定结构的合法 JSON，不要改写 response 的实质内容：\n{raw_agent}"}],
                 temperature=0.1,
                 system_prompt="你是 JSON 格式修复器。只输出 JSON 对象，必须包含 response、intent、next_action、used_memory_keys、memory_updates、profile_update、progress_suggestion。",
-                max_tokens=2600,
+                max_tokens=1800,
             )
             agent_result = sanitize_agent_result(json.loads(clean_json_response(repair)))
         if not agent_result["memory_updates"] and should_extract_agent_memory(latest_user_text):

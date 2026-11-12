@@ -51,6 +51,46 @@ class DeepSeekDirectRequestTests(unittest.TestCase):
             "https://api.deepseek.com/chat/completions",
         )
 
+    def test_career_chat_can_disable_hidden_thinking_for_first_token_latency(self):
+        body = json.dumps({"choices": [{"message": {"content": "{\\\"response\\\":\\\"收到\\\"}"}}]}).encode()
+        with patch.object(main, "MOCK_MODE", False), \
+             patch.object(main, "DEEPSEEK_API_KEY", "unit-test-key"), \
+             patch.object(main, "DEEPSEEK_BASE_URL", "https://api.deepseek.com"), \
+             patch.object(main, "DEFAULT_MODEL", "deepseek-v4-flash"), \
+             patch.object(main, "urlopen", return_value=FakeResponse(body)) as request_call:
+            result = main.llm_chat(
+                [{"role": "user", "content": "请简短回答"}],
+                system_prompt="只输出合法 JSON。",
+                max_tokens=1800,
+                thinking="disabled",
+            )
+
+        self.assertIn("收到", result)
+        payload = json.loads(request_call.call_args.args[0].data)
+        self.assertEqual(payload["thinking"], {"type": "disabled"})
+        self.assertEqual(payload["max_tokens"], 1800)
+
+    def test_llm_health_probe_uses_nonthinking_output_budget(self):
+        with patch.object(main, "MOCK_MODE", False), \
+             patch.object(main, "DEEPSEEK_API_KEY", "unit-test-key"), \
+             patch.object(main, "DEEPSEEK_BASE_URL", "https://api.deepseek.com"), \
+             patch.object(main, "DEFAULT_MODEL", "deepseek-v4-flash"), \
+             patch.object(main, "_llm_probe_cache", {"checked_at": 0, "status": None}), \
+             patch.object(main, "llm_chat", return_value="OK") as chat_call:
+            result = main.probe_llm(force=True)
+
+        self.assertTrue(result["online"])
+        self.assertEqual(chat_call.call_args.kwargs["max_tokens"], 16)
+        self.assertEqual(chat_call.call_args.kwargs["thinking"], "disabled")
+
+    def test_internal_next_action_is_never_exposed_verbatim(self):
+        raw = {"response": "请告诉我你的方向。", "next_action": "ask_user_to_choose_direction"}
+        result = main.sanitize_agent_result(raw)
+        self.assertEqual(result["next_action"], "先选一个想优先解决的方向，也可以直接描述你的经历。")
+
+        raw["next_action"] = "internal_planner_step"
+        self.assertEqual(main.sanitize_agent_result(raw)["next_action"], "")
+
     def test_transient_rate_limit_is_retried_once_then_succeeds(self):
         from urllib.error import HTTPError
 
