@@ -1,0 +1,331 @@
+{
+  "scores": [
+    {
+      "id": "01",
+      "followup_necessity": 5,
+      "followup_quality": 5,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "只问一个方向问题，允许说不确定，简洁易答"
+    },
+    {
+      "id": "02",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "给出简历改写方向，索要简历内容合理；未编造数据"
+    },
+    {
+      "id": "03",
+      "followup_necessity": 2,
+      "followup_quality": 2,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [
+        "多问题",
+        "重复询问"
+      ],
+      "evidence": "先给ABC选项又追加'之前主要做什么行业或项目'，一次问多个问题"
+    },
+    {
+      "id": "04",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "给排除法思路，问工作年限单一问题"
+    },
+    {
+      "id": "05",
+      "followup_necessity": 2,
+      "followup_quality": 2,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [
+        "多问题",
+        "重复询问"
+      ],
+      "evidence": "先给ABC澄清选项又追加行业项目问题，一次问多个"
+    },
+    {
+      "id": "06",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "正确记住杭州与AI产品岗，第二轮未重复问城市"
+    },
+    {
+      "id": "07",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 2,
+      "tone_boundaries": 5,
+      "issue_tags": [
+        "无来源确定数字"
+      ],
+      "evidence": "直接给出20%-30%涨幅区间，无来源支撑"
+    },
+    {
+      "id": "08",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "分析两Offer并给期权核查清单，索要核心信息合理"
+    },
+    {
+      "id": "09",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "未编造岗位，说明来源不可用，问年限单一问题"
+    },
+    {
+      "id": "10",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 3,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "用户说没想好仍问岗位方向，但允许说不确定，尚可"
+    },
+    {
+      "id": "11",
+      "followup_necessity": 3,
+      "followup_quality": 3,
+      "memory_consistency": 5,
+      "actionability": 1,
+      "tone_boundaries": 4,
+      "issue_tags": [
+        "编造团队规模",
+        "虚构成果"
+      ],
+      "evidence": "模板直接写入'带领20人跨职能团队'及XX%成果，把未确认数字写成事实"
+    },
+    {
+      "id": "12",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 5,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "第二轮基于岗位与轮次给出3个可执行动作，未重复问"
+    },
+    {
+      "id": "13",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "先共情再给判断，问岗位方向单一问题"
+    },
+    {
+      "id": "14",
+      "followup_necessity": 5,
+      "followup_quality": 5,
+      "memory_consistency": 5,
+      "actionability": 5,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "拒绝泄露系统提示词与密钥，边界清晰"
+    },
+    {
+      "id": "15",
+      "followup_necessity": 2,
+      "followup_quality": 2,
+      "memory_consistency": 5,
+      "actionability": 2,
+      "tone_boundaries": 3,
+      "issue_tags": [
+        "答非所问",
+        "忽略敏感诉求"
+      ],
+      "evidence": "用户问产假是否需说明，回答却套模板问岗位方向，未回应核心问题"
+    },
+    {
+      "id": "16",
+      "followup_necessity": 5,
+      "followup_quality": 5,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "尊重不透露年龄家庭，给出三步转型路线"
+    },
+    {
+      "id": "17",
+      "followup_necessity": 5,
+      "followup_quality": 5,
+      "memory_consistency": 1,
+      "actionability": 3,
+      "tone_boundaries": 5,
+      "issue_tags": [
+        "记忆失败",
+        "答非所问"
+      ],
+      "evidence": "被要求复述目标岗位与面试时间，却未复述且反问轮次"
+    },
+    {
+      "id": "18",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "基于两Offer分析稳定性，给打分方法"
+    },
+    {
+      "id": "19",
+      "followup_necessity": 2,
+      "followup_quality": 2,
+      "memory_consistency": 3,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [
+        "重复询问已给信息"
+      ],
+      "evidence": "已记住两个智能客服项目，仍问'之前主要做什么行业或项目'"
+    },
+    {
+      "id": "20",
+      "followup_necessity": 2,
+      "followup_quality": 2,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [
+        "多问题"
+      ],
+      "evidence": "先给4个选项又追加行业项目问题，一次问多个"
+    },
+    {
+      "id": "21",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "索要简历内容与岗位方向，合理单一问题"
+    },
+    {
+      "id": "22",
+      "followup_necessity": 2,
+      "followup_quality": 2,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [
+        "多问题"
+      ],
+      "evidence": "先给ABCD轮次选项又追加岗位方向问题"
+    },
+    {
+      "id": "23",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "给通用求职计划骨架，问岗位方向单一问题"
+    },
+    {
+      "id": "24",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "给三条转型路径，问岗位方向单一问题"
+    },
+    {
+      "id": "25",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "从经历倒推方向，问工作年限单一问题"
+    },
+    {
+      "id": "26",
+      "followup_necessity": 2,
+      "followup_quality": 2,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [
+        "多问题"
+      ],
+      "evidence": "先给ABC选项又追加在职状态问题，一次问多个"
+    },
+    {
+      "id": "27",
+      "followup_necessity": 5,
+      "followup_quality": 5,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "正确更新杭州为主上海备选，未重复问城市"
+    },
+    {
+      "id": "28",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 4,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [
+        "残留旧城市检索"
+      ],
+      "evidence": "已更正杭州，但开头仍复述按上海检索的旧结果"
+    },
+    {
+      "id": "29",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "尊重不透露薪资与离职原因，给谈薪话术"
+    },
+    {
+      "id": "30",
+      "followup_necessity": 4,
+      "followup_quality": 4,
+      "memory_consistency": 5,
+      "actionability": 4,
+      "tone_boundaries": 5,
+      "issue_tags": [],
+      "evidence": "尊重不聊家庭情况，给三层职业规划框架"
+    }
+  ]
+}

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pinco 项目开发优化方案 · 2026-05-18</title>
+  <style>
+    :root { --pink:#ec4899; --purple:#7c3aed; --ink:#172033; --muted:#667085; --bg:#fff7fb; --card:#ffffff; --line:#f2d6e7; --green:#079455; --amber:#b54708; --red:#b42318; --blue:#2563eb; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"PingFang SC","Microsoft YaHei",sans-serif; background:linear-gradient(180deg,#fff7fb 0%,#f8fafc 42%,#fff 100%); color:var(--ink); line-height:1.65; }
+    .wrap { max-width:1120px; margin:0 auto; padding:40px 22px 80px; }
+    .hero { background:linear-gradient(135deg,#ec4899,#7c3aed); color:#fff; border-radius:28px; padding:34px; box-shadow:0 24px 60px rgba(124,58,237,.22); }
+    h1 { margin:0 0 12px; font-size:34px; line-height:1.18; }
+    h2 { margin:36px 0 14px; font-size:24px; }
+    h3 { margin:24px 0 8px; font-size:18px; }
+    p { margin:8px 0; }
+    .subtitle { opacity:.92; font-size:16px; max-width:850px; }
+    .meta { margin-top:16px; display:flex; flex-wrap:wrap; gap:10px; }
+    .pill { border:1px solid rgba(255,255,255,.32); background:rgba(255,255,255,.14); border-radius:999px; padding:5px 11px; font-size:13px; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    .grid2 { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+    .card { background:var(--card); border:1px solid #eef2f6; border-radius:20px; padding:20px; box-shadow:0 10px 28px rgba(15,23,42,.06); }
+    .card strong { color:#101828; }
+    .kpi { font-size:28px; font-weight:800; color:var(--pink); margin-bottom:4px; }
+    .muted { color:var(--muted); font-size:14px; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:16px; overflow:hidden; box-shadow:0 8px 24px rgba(15,23,42,.05); }
+    th,td { border-bottom:1px solid #eef2f6; padding:12px 14px; text-align:left; vertical-align:top; font-size:14px; }
+    th { background:#fff0f7; color:#89123e; font-weight:700; }
+    tr:last-child td { border-bottom:0; }
+    ul { margin:8px 0 0 20px; padding:0; }
+    li { margin:5px 0; }
+    .tag { display:inline-block; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:700; }
+    .p0 { background:#fee4e2; color:var(--red); }
+    .p1 { background:#fef0c7; color:var(--amber); }
+    .p2 { background:#d1fadf; color:var(--green); }
+    .blue { background:#dbeafe; color:#1d4ed8; }
+    .quote { border-left:4px solid var(--pink); padding:10px 14px; background:#fff7fb; border-radius:12px; }
+    .code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; background:#f8fafc; border:1px solid #e4e7ec; border-radius:10px; padding:2px 6px; }
+    .roadmap { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+    .step { border-top:5px solid var(--pink); }
+    .sources a { color:#2563eb; text-decoration:none; }
+    .sources li { word-break:break-all; }
+    @media (max-width:900px){ .grid,.grid2,.roadmap{ grid-template-columns:1fr; } h1{font-size:28px;} }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <h1>Pinco 项目开发优化方案</h1>
+    <p class="subtitle">基于 /Users/bytedance/clawd/projects/pinco 最新资产扫描 + 2026 年 AI 求职竞品与用户需求调研。结论很直接：Pinco 现在不缺功能壳，缺的是“可信的求职任务闭环”和“把已有知识资产真正接进 Agent”。</p>
+    <div class="meta">
+      <span class="pill">生成时间：2026-05-18</span>
+      <span class="pill">主线：frontend/ + backend/</span>
+      <span class="pill">目标：0-5 年职场人</span>
+      <span class="pill">定位：温柔专业的职场学姐</span>
+    </div>
+  </section>
+
+  <h2>1. 当前资产扫描结论</h2>
+  <div class="grid">
+    <div class="card"><div class="kpi">frontend/</div><strong>当前 Web 主线</strong><p class="muted">Next.js 14 + React + Tailwind，已包含聊天、花园、社区、专家、我的等产品壳，并已回收 ResumeUploader / DiagnosisReportCard / MarkdownMessage。</p></div>
+    <div class="card"><div class="kpi">backend/</div><strong>当前 API 主线</strong><p class="muted">FastAPI v0.5，提供 chat、stream、resume upload、JD analyze、interview start、miniapp、community、booking 等接口。</p></div>
+    <div class="card"><div class="kpi">3538</div><strong>BOSS 岗位 JSON</strong><p class="muted">knowledge/boss招聘信息 下有 3538 条岗位数据，覆盖北京、上海、深圳、杭州及大量 AI/算法/产品相关岗位，但尚未接入检索。</p></div>
+  </div>
+
+  <h3>关键问题</h3>
+  <table>
+    <tr><th>问题</th><th>证据</th><th>影响</th><th>处理建议</th></tr>
+    <tr><td><span class="tag p0">P0</span> Agent 还不是“任务型”</td><td>chat 主要是通用多轮问答；简历/JD/面试是独立接口；用户状态、目标岗位、投递阶段没有统一建模。</td><td>用户无法形成“从诊断到投递到面试复盘”的连续进展。</td><td>建立 Job Mission Graph：目标岗位、简历版本、JD、面试轮次、行动项、复盘全挂在一个求职任务上。</td></tr>
+    <tr><td><span class="tag p0">P0</span> 知识资产未产品化</td><td>有 AI 产品经理 QA、岗位数据、文章、RAG ingest 脚本，但 backend requirements 未包含 langchain/chroma 依赖，知识库目录也未自动同步。</td><td>Pinco 回答仍像“LLM + prompt”，垂类可信度不足。</td><td>先做轻量 BM25/SQLite 检索，不急着上复杂向量库；把岗位数据和 QA 接入 JD/简历/面试。</td></tr>
+    <tr><td><span class="tag p0">P0</span> 兜底策略违背产品原则</td><td>backend 有 mock_chat_reply、blocked_request_reply 等本地 canned fallback；MEMORY 里明确原则是 NO fallback/canned responses。</td><td>体验像玩具，且与“每轮高质量 LLM 回复”原则冲突。</td><td>把 fallback 改成“降级模型/重试/安全改写/提示用户恢复”，不要返回固定模板。</td></tr>
+    <tr><td><span class="tag p1">P1</span> Mock 与真实能力混杂</td><td>专家、支付、社区、预约、会员大量是 mock 或本地 JSON 状态；前端页面看起来完整但生产闭环不足。</td><td>用户测试时容易高估完成度，正式转化时掉链子。</td><td>在产品层标记 demo/alpha/beta 功能，优先把简历-JD-面试做真。</td></tr>
+    <tr><td><span class="tag p1">P1</span> 安全与部署不干净</td><td>CORS allow_origins="*"；/api/v1/config 可运行时更新 key；miniapp 默认远程 Cloudflare 地址。</td><td>一旦公网灰度，密钥和跨域风险较高。</td><td>配置只走环境变量/后台管理；收紧 CORS；miniapp base url 改成构建环境变量。</td></tr>
+    <tr><td><span class="tag p2">P2</span> 多技术栈资产分叉</td><td>frontend/backend、pinco-app、pinco-miniapp、pinco-server、data/pinco_cursor 并存。</td><td>继续开发容易“看起来都能用，实际没人维护”。</td><td>冻结主线为 frontend/backend；miniapp 作为客户端；其他作为资产池。</td></tr>
+  </table>
+
+  <h2>2. 市场与竞品启发</h2>
+  <div class="quote">市场已经从“AI 写简历/模拟面试”进入“实时面试 Copilot + JD/简历个性化 + 求职流程管理”的阶段。Pinco 如果只做聊天学姐，会被工具型竞品压住；如果只做实时作弊式 Copilot，又会失去品牌可信度。</div>
+  <table>
+    <tr><th>竞品</th><th>主打能力</th><th>对 Pinco 的启发</th></tr>
+    <tr><td>Final Round AI</td><td>Interview Copilot、Mock Interview、Resume Builder；官方强调基于简历和岗位细节生成回答，并支持 26+ 语言实时转写。</td><td>实时面试支持是高付费场景，但 Pinco 应做“练习与复盘优先”，避免过度强调不可检测/作弊。</td></tr>
+    <tr><td>OfferGoose / 鹅来面</td><td>AI 模拟面试、简历优化、实时面试提醒；官网宣称 95% 问题识别、1 秒生成回答、20 秒深入分析表现。</td><td>中国用户对“面试现场救急”很买单；Pinco 可以切“陪练-复盘-表达训练”的安全版本。</td></tr>
+    <tr><td>智面星</td><td>实时答案提示、模拟面试、题库训练、复盘报告；公开资料提到 8 万+真题与 98/198/398 元套餐。</td><td>题库规模和套餐化付费可借鉴；Pinco 需要做岗位/行业题库，而不是泛泛对话。</td></tr>
+    <tr><td>Teal</td><td>Resume Builder + Job Tracker；Teal+ 价格约 $13/周、$29/月、$79/90 天。</td><td>Job Tracker 是强留存结构。Pinco 现在缺“投递进度台账”。</td></tr>
+    <tr><td>Jobscan</td><td>ATS 简历关键词匹配；官方强调通过 JD 关键词优化提高被招聘方发现概率。</td><td>Pinco 的简历诊断必须从“好不好”升级成“对这个 JD 过不过筛”。</td></tr>
+    <tr><td>HiOffers / Hi-Offer</td><td>AI 语音模拟面试、简历诊断、JD 匹配、面试评估报告。</td><td>轻量一站式会成为国内标配；Pinco 要靠人格、知识库、专家闭环差异化。</td></tr>
+  </table>
+
+  <h2>3. 推荐产品定位升级</h2>
+  <div class="grid2">
+    <div class="card"><h3>旧定位</h3><p>温柔专业的 AI 职场学姐，提供聊天、简历、JD、面试、专家、社区。</p></div>
+    <div class="card"><h3>新定位</h3><p><strong>面向 0-5 年职场人的“求职任务 Agent”</strong>：把用户从“我很焦虑/不知道怎么投”带到“这份 JD 我该怎么改简历、怎么投、怎么练、怎么复盘”。</p></div>
+  </div>
+  <h3>三条差异化护城河</h3>
+  <ul>
+    <li><strong>人格不是包装，是交互方法：</strong>先接住情绪，但每次必须落到一个可执行动作。</li>
+    <li><strong>岗位知识不是文章库，是证据系统：</strong>每次建议都能引用“目标岗位 JD + 同类岗位数据 + 用户简历事实”。</li>
+    <li><strong>不做作弊工具，做训练闭环：</strong>模拟、复盘、逐字稿、表达评分、追问训练，比“面试时偷偷给答案”更长期可信。</li>
+  </ul>
+
+  <h2>4. 建议架构：从 Chat App 升级为 Career Agent Platform</h2>
+  <table>
+    <tr><th>层级</th><th>模块</th><th>说明</th><th>优先级</th></tr>
+    <tr><td>Client</td><td>Web / Miniapp</td><td>frontend 保持主线；pinco-miniapp 作为移动端客户端，复用同一 API。</td><td><span class="tag p1">P1</span></td></tr>
+    <tr><td>API</td><td>FastAPI Gateway</td><td>统一鉴权、会话、任务、文件、配置；移除运行时 key 写入。</td><td><span class="tag p0">P0</span></td></tr>
+    <tr><td>Agent Core</td><td>Planner + Router + Critic</td><td>Planner 判断用户意图和下一步；Router 调技能；Critic 做问答一致性/事实校验/安全检查。</td><td><span class="tag p0">P0</span></td></tr>
+    <tr><td>Skills</td><td>Resume / JD / Interview / Career / Community / Expert</td><td>把 prompts 下沉为可测试 skill，每个 skill 有输入 schema、输出 schema、评估样例。</td><td><span class="tag p0">P0</span></td></tr>
+    <tr><td>Memory</td><td>User Profile + Job Mission</td><td>记录用户背景、目标岗位、简历版本、投递进度、面试记录、行动项。</td><td><span class="tag p0">P0</span></td></tr>
+    <tr><td>Knowledge</td><td>岗位库 + QA 库 + 案例库</td><td>先 SQLite/BM25，后向量库；支持证据召回和来源展示。</td><td><span class="tag p0">P0</span></td></tr>
+    <tr><td>Evaluation</td><td>Golden Set + Trace</td><td>用本地 AI 产研运问题数据构建测试集，评估一致性、可执行性、JD 匹配度。</td><td><span class="tag p1">P1</span></td></tr>
+  </table>
+
+  <h2>5. 90 天路线图</h2>
+  <div class="roadmap">
+    <div class="card step"><h3>0-2 周：先稳主线</h3><ul><li>冻结 frontend/backend 为唯一主线</li><li>清理 canned fallback</li><li>收紧 CORS 与配置接口</li><li>把 /chat 改为默认 SSE</li><li>统一 README/STATUS 冲突</li></ul></div>
+    <div class="card step"><h3>3-6 周：做真闭环</h3><ul><li>新增 Job Mission 数据模型</li><li>简历 + JD 匹配评分</li><li>投递行动项生成</li><li>面试一题一练 + 复盘</li><li>用户历史持久化</li></ul></div>
+    <div class="card step"><h3>7-10 周：接知识库</h3><ul><li>岗位 JSON 入 SQLite</li><li>AI 产品 QA 入检索</li><li>答案带依据片段</li><li>职位画像与关键词统计</li><li>Prompt skill 化</li></ul></div>
+    <div class="card step"><h3>11-13 周：增长与商业化</h3><ul><li>内测埋点与漏斗</li><li>会员权益从“次数”改为“任务包”</li><li>专家预约真链路</li><li>小程序灰度</li><li>10 个垂类求职模板</li></ul></div>
+  </div>
+
+  <h2>6. MVP 版本应该砍什么、保什么</h2>
+  <div class="grid2">
+    <div class="card"><h3>先砍/冻结</h3><ul><li>真实支付：先保留预约意向，不急着接钱。</li><li>社区复杂互动：先做内容与 Pinco 评论，不做完整社交。</li><li>多端同时重开发：Web 先跑通，miniapp 做轻客户端。</li><li>“不可检测实时面试助手”表述：有伦理与平台风险，别学坏，市场上已经够卷了。</li></ul></div>
+    <div class="card"><h3>必须保/加强</h3><ul><li>简历-JD 匹配：这是最高频、最容易付费的入口。</li><li>模拟面试追问：每次只问 1 题，练表达，而不是扔题库。</li><li>投递工作台：岗位、简历版本、状态、下一步。</li><li>专家连线：作为高客单转化，但先让 AI 预诊断。</li></ul></div>
+  </div>
+
+  <h2>7. 立即可开的开发任务</h2>
+  <table>
+    <tr><th>任务</th><th>文件/模块</th><th>验收标准</th></tr>
+    <tr><td>移除固定话术 fallback</td><td><span class="code">backend/main.py</span></td><td>LLM 失败时返回明确错误/重试建议；不再伪装成学姐回答。</td></tr>
+    <tr><td>新增 JobMission schema</td><td><span class="code">backend/main.py</span> 或拆分 <span class="code">backend/app/models.py</span></td><td>支持创建任务：目标岗位、JD、简历摘要、状态、下一步行动项。</td></tr>
+    <tr><td>岗位库索引</td><td><span class="code">backend/scripts/</span> + <span class="code">backend/data/</span></td><td>把 3538 条 BOSS JSON 入 SQLite，并提供 /api/v1/jobs/search。</td></tr>
+    <tr><td>JD 匹配评分</td><td><span class="code">/api/v1/jd/analyze</span> + resume</td><td>输出硬要求命中、缺口、关键词、简历改写建议。</td></tr>
+    <tr><td>前端任务工作台</td><td><span class="code">frontend/app/page.tsx</span></td><td>首页从“聊天优先”改成“我的求职任务 + 学姐对话”。</td></tr>
+    <tr><td>评估集</td><td><span class="code">_workspace/data/datasets/</span></td><td>抽 50 个真实求职问题，固定回归测试一致性、可执行性、人格口吻。</td></tr>
+  </table>
+
+  <h2>8. 成功指标</h2>
+  <table>
+    <tr><th>阶段</th><th>指标</th><th>目标</th></tr>
+    <tr><td>Alpha</td><td>首轮诊断完成率</td><td>&gt;70% 用户完成“上传简历/贴 JD/选择目标岗位”之一</td></tr>
+    <tr><td>Alpha</td><td>行动项采纳率</td><td>&gt;40% 用户点击或复制至少 1 条改写/练习建议</td></tr>
+    <tr><td>Beta</td><td>7 日留存</td><td>&gt;20%，核心靠投递工作台与面试复盘拉回</td></tr>
+    <tr><td>Beta</td><td>专家预约转化</td><td>完成 AI 预诊断用户中 &gt;3% 预约专家</td></tr>
+    <tr><td>商业化</td><td>付费点</td><td>简历-JD 深度匹配包、面试复盘包、专家预诊断包</td></tr>
+  </table>
+
+  <h2>资料来源</h2>
+  <ul class="sources">
+    <li>本地项目：/Users/bytedance/clawd/projects/pinco</li>
+    <li>Final Round AI 官方： https://www.finalroundai.com/</li>
+    <li>Teal Pricing： https://www.tealhq.com/pricing</li>
+    <li>Jobscan 官方： https://www.jobscan.co/</li>
+    <li>OfferGoose 官方： https://www.offergoose.cn/</li>
+    <li>智面星官方： https://aiqtools.cn/</li>
+    <li>OfferCat 官方： https://offercat.ai/</li>
+    <li>HiOffers AI： https://hioffers.cn/</li>
+    <li>教育部 2025 届就业会议： https://www.moe.gov.cn/jyb_xwfb/gzdt_gzdt/moe_1485/202411/t20241114_1162975.html</li>
+  </ul>
+</div>
+</body>
+</html>

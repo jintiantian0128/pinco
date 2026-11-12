@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pinco V1 公测版能力与 PMF 迭代判断</title>
+  <style>
+    :root{--ink:#17131f;--muted:#6f6879;--paper:#fffdfd;--pink:#ec4899;--purple:#7c3aed;--line:#eadff0;--soft:#faf5ff;--green:#15803d;--amber:#b45309}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#fff8fb 0,#f7f4ff 48%,#f1f7ff 100%);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.65}
+    main{max-width:1120px;margin:auto;padding:54px 24px 90px}.hero{padding:44px;border:1px solid rgba(124,58,237,.12);border-radius:28px;background:rgba(255,255,255,.86);box-shadow:0 22px 70px rgba(75,40,110,.09)}
+    .eyebrow{color:var(--purple);font-weight:750;letter-spacing:.08em}.hero h1{font-size:42px;line-height:1.16;margin:12px 0 18px}.lead{font-size:20px;max-width:900px}.note{color:var(--muted);font-size:14px}.pill{display:inline-block;padding:6px 11px;margin:4px;border-radius:999px;background:var(--soft);color:var(--purple);font-size:13px;font-weight:700}
+    section{margin-top:44px}h2{font-size:28px;margin:0 0 18px}h3{font-size:18px;margin:0 0 9px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:22px}.card p{margin:6px 0;color:var(--muted)}
+    .kicker{font-size:13px;font-weight:800;color:var(--pink)}.big{font-size:26px;font-weight:800;line-height:1.25}.advantage{border-left:5px solid var(--pink);background:linear-gradient(90deg,#fff1f7,#faf5ff);padding:26px;border-radius:4px 22px 22px 4px;font-size:22px;font-weight:750}
+    table{width:100%;border-collapse:separate;border-spacing:0;background:white;border:1px solid var(--line);border-radius:18px;overflow:hidden}th,td{padding:14px 15px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{background:#faf7fc;font-size:13px;color:var(--muted)}tr:last-child td{border-bottom:0}.good{color:var(--green);font-weight:700}.warn{color:var(--amber);font-weight:700}
+    .timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:17px}.step{position:relative;padding-top:45px}.step:before{position:absolute;top:0;left:0;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--purple);color:white;font-weight:800}.step:nth-child(1):before{content:"1"}.step:nth-child(2):before{content:"2"}.step:nth-child(3):before{content:"3"}.step ul{padding-left:18px;margin-bottom:0}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric{padding:18px;background:#17131f;color:white;border-radius:17px}.metric strong{display:block;font-size:24px;color:#f9a8d4}.metric span{font-size:13px;color:#ddd6e5}
+    a{color:var(--purple)}footer{margin-top:48px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+    @media(max-width:800px){main{padding:24px 14px 60px}.hero{padding:26px}.hero h1{font-size:31px}.grid,.timeline,.metrics{grid-template-columns:1fr}table{display:block;overflow-x:auto}}
+  </style>
+</head>
+<body><main>
+  <header class="hero">
+    <div class="eyebrow">PINCO · V1 PUBLIC BETA REVIEW</div>
+    <h1>从“功能完整”走向<br>“十分钟感知核心价值”</h1>
+    <p class="lead">Pinco 已经具备求职 Agent、面试练习、情感支持、学社与专家的完整骨架。下一步不是再加模块，而是把它们编排成一个可信、可复用、能让用户持续推进的 AI 岗求职系统。</p>
+    <p class="note">评估基于当前 main（78d5e32）和已有验证记录。用户称审核版为 V1.0.2；本地记录显示支付整改后的上传包曾记为 1.0.3，因此报告统一称“当前审核版”。</p>
+    <div><span class="pill">AI 产品 / AI 运营</span><span class="pill">1–3 年优先切口</span><span class="pill">免费公测</span><span class="pill">不含虚拟支付入口</span></div>
+  </header>
+
+  <section><h2>当前审核版能力地图</h2><div class="grid">
+    <div class="card"><div class="kicker">可信基础</div><h3>真实模型与持久化</h3><p>微信身份、MySQL、DeepSeek、透明失败、数据导出/删除；图片、文件、录音、复制等关键输入输出。</p></div>
+    <div class="card"><div class="kicker">求职主循环</div><h3>从证据到行动</h3><p>四步作战台、职业记忆、证据库、八维雷达、真实 JD、岗位材料、投递判断、7 天补缺。</p></div>
+    <div class="card"><div class="kicker">面试训练</div><h3>绑定 JD 的自适应练习</h3><p>5/10/20/30 分钟，三档强度，救场框架、六维评分、前后进步对比与匿名复盘。</p></div>
+    <div class="card"><div class="kicker">情感价值</div><h3>关键节点的温暖支持</h3><p>覆盖等待、拒绝、面试和 Offer；可选择陪伴方式，低落跟进、微行动、安全边界。</p></div>
+    <div class="card"><div class="kicker">学社</div><h3>内容直接进入实战</h3><p>树洞/问答/干货/上岸、岗位和轮次标签、召唤学姐、内容转练习、举报与精选。</p></div>
+    <div class="card"><div class="kicker">专家</div><h3>审核供给与上下文接力</h3><p>申请审核、固定服务、档期预约、授权摘要、交付清单和评价；当前仅免费公测意向。</p></div>
+  </div></section>
+
+  <section><h2>市场已经把哪些能力做成标配</h2>
+    <table><thead><tr><th>战场</th><th>代表产品</th><th>成熟能力</th><th>Pinco 的选择</th></tr></thead><tbody>
+      <tr><td>求职工作台</td><td>Teal、Huntr</td><td>岗位追踪、简历版本、关键词、浏览器收藏与自动填表</td><td>补齐基本效率，但不与成熟工具拼“更全”</td></tr>
+      <tr><td>岗位匹配</td><td>Jobright、LinkedIn</td><td>岗位供给、匹配分、自然语言搜索、人脉</td><td>聚焦“值不值得投、缺什么证据”</td></tr>
+      <tr><td>面试练习</td><td>Yoodli、LinkedIn</td><td>语音/视频、动态追问、表达反馈、进度跟踪</td><td>用个人真实证据与 AI 岗量表做深</td></tr>
+      <tr><td>实时辅助</td><td>Final Round AI、OfferGoose</td><td>监听正式面试并实时生成建议</td><td class="good">继续暂停：伦理与平台风险高</td></tr>
+      <tr><td>中文轻量工具</td><td>CareerX 等</td><td>简历、JD、模拟面试快速组合</td><td class="warn">高度同质化，不能作为核心卖点</td></tr>
+      <tr><td>社区内容</td><td>牛客、小红书、知乎</td><td>真实经验、搜索流量、关系网络</td><td>用“内容→练习→行动”建立小而深闭环</td></tr>
+    </tbody></table>
+  </section>
+
+  <section><h2>核心竞争优势</h2>
+    <div class="advantage">证据驱动、持续记忆、情绪知情的 AI 岗求职推进系统。</div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card"><div class="big">真实证据</div><p>不是帮用户编经历，而是把已有项目翻译成可被追问、可被验证的 AI 岗能力。</p></div>
+      <div class="card"><div class="big">长期关系</div><p>记住目标、证据、练习与有效的支持方式，避免每次从零开始。</p></div>
+      <div class="card"><div class="big">生态接力</div><p>学社经验可进入练习；高风险节点由审核专家接力，行动清单再回到 Agent。</p></div>
+    </div>
+    <p class="note">这还是潜在壁垒，不是已证实壁垒。只有用户持续带回新 JD、练习表现提升、内容或专家促成真实推进，它才成立。</p>
+  </section>
+
+  <section><h2>下一步：三个阶段</h2><div class="timeline">
+    <div class="card step"><h3>P0 · 1–2 周</h3><p>只打磨黄金路径</p><ul><li>首屏改为“今天推进哪一步”</li><li>简历+JD→证据缺口→材料→5 分钟练习→今日行动</li><li>每个结论显示证据、推测和缺口</li><li>完成 iOS/Android 真机验收</li><li>启动 10–20 人设计伙伴</li></ul></div>
+    <div class="card step"><h3>P1 · 2–4 周</h3><p>做深垂直能力</p><ul><li>AI 产品 / AI 运营专属量表</li><li>材料版本、证据引用与导出</li><li>第二次练习展示真实进步</li><li>30 条可核验高价值内容</li><li>5–10 位专家真实履约</li></ul></div>
+    <div class="card step"><h3>P2 · 数据成立后</h3><p>再扩效率与商业化</p><ul><li>轻量岗位导入与联系人跟进</li><li>官方虚拟支付能力</li><li>明确结果的冲刺包和专家服务</li><li>扩展 AI 应用/解决方案岗位</li></ul></div>
+  </div></section>
+
+  <section><h2>PMF 决策门槛</h2><div class="metrics">
+    <div class="metric"><strong>≥60%</strong><span>24 小时黄金闭环完成率</span></div>
+    <div class="metric"><strong>&lt;10 分钟</strong><span>首次可信产出时间</span></div>
+    <div class="metric"><strong>≥50%</strong><span>14 天第二个 JD 复用</span></div>
+    <div class="metric"><strong>≥70%</strong><span>产出可直接用 / 小改可用</span></div>
+  </div><p class="note">以上为内部试点阈值，不是行业基准。北极星指标：每周有效求职推进用户（WJPU），普通浏览和闲聊不计入。</p></section>
+
+  <section><h2>最终产品判断</h2>
+    <div class="card"><p class="big">不要再开发一个新的大模块。</p><p>把已经具备的能力重新编排成一个极强的首次体验，验证用户是否愿意带第二个真实 JD 回来、是否相信产出、练习是否进步，以及低落时是否真的因此继续行动。四件事成立，学社和专家才会成为飞轮；否则只会成为更多页面。</p></div>
+  </section>
+
+  <footer>详细能力清单、验证边界、用户任务、分阶段需求和公开来源见同目录 <a href="report-source.md">report-source.md</a>。竞品厂商自报成功率未作为效果证据。</footer>
+</main></body></html>

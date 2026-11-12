@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pinco Agent 评测记录 · 2026-11-04</title>
+  <style>
+    :root { color-scheme: light; --ink:#211b31; --muted:#6b647b; --line:#e8e2f1; --accent:#7548e8; --soft:#f7f3ff; --warn:#9b4d00; --red:#b42335; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f7f5fa; color:var(--ink); font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:980px; margin:40px auto; padding:0 22px 48px; }
+    header,.card { background:white; border:1px solid var(--line); border-radius:20px; padding:26px 30px; margin-bottom:18px; box-shadow:0 8px 28px #29194b0a; }
+    .eyebrow { color:var(--accent); font-weight:700; letter-spacing:.08em; font-size:13px; }
+    h1 { margin:6px 0 8px; font-size:32px; line-height:1.25; }
+    h2 { font-size:20px; margin:0 0 14px; }
+    p { margin:8px 0; }
+    .muted { color:var(--muted); }
+    .status { background:#fff6e8; border:1px solid #ffdda8; border-radius:14px; padding:16px 18px; color:var(--warn); }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .metric { background:var(--soft); padding:16px; border-radius:14px; }
+    .metric strong { display:block; font-size:23px; color:var(--accent); }
+    table { width:100%; border-collapse:collapse; }
+    th,td { text-align:left; vertical-align:top; padding:10px 12px; border-bottom:1px solid var(--line); }
+    th { color:var(--muted); font-weight:600; }
+    .not-rated { color:var(--red); font-weight:700; }
+    code { background:#f3eff9; padding:2px 6px; border-radius:6px; }
+    ol { padding-left:22px; }
+    @media(max-width:700px) { main{margin:18px auto}.grid{grid-template-columns:1fr}header,.card{padding:20px}h1{font-size:27px}table{font-size:14px} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">PINCO · AGENT QUALITY</div>
+    <h1>Agent 评测与复盘</h1>
+    <p class="muted">日期：2026-11-04　｜　目标：按用户提供的 15 类多轮场景与 30-case 建议分布评估追问、记忆、工具和安全边界。</p>
+  </header>
+
+  <section class="card">
+    <h2>结论先行</h2>
+    <div class="status"><strong>30 个 Agent case 已用真实 DeepSeek 执行；总体不建议判定通过。</strong><br>共 36 轮真实模型对话，含 4 组多轮/跨会话记忆验证。平均分看似尚可，但暴露出简历虚构、无来源薪资数据、忽略敏感问题、旧搜索结果残留等关键失败；均分不能抵消这些高风险问题。</div>
+    <p>另用真实模型评审全部 30 条，并人工抽查 6 条（20%）。记忆正确性有正向样本，但职业信息追问、事实可靠性及工具状态恢复均未达到上线门槛。</p>
+    <p><strong>样本分布：</strong>需求清晰/信息完整 5；需求模糊/信息缺失 8；用户说“不知道”4；信息矛盾 3；敏感信息/拒答 4；多轮记忆 4；跑题/超出能力/情绪/注入 2。与截图建议的 30-case 配比一致。</p>
+  </section>
+
+  <section class="card">
+    <h2>合并与代码验证</h2>
+    <div class="grid">
+      <div class="metric"><strong>30 / 30</strong><span>真实 DeepSeek 评测用例完成，共 36 轮对话。</span></div>
+      <div class="metric"><strong>86 / 86</strong><span>后端 unittest 全量通过。</span></div>
+      <div class="metric"><strong>6 / 30</strong><span>人工独立抽查，覆盖率 20%；两条人工判为关键失败。</span></div>
+    </div>
+    <p>本轮会话分享修复已提交到本地 main：<code>20e3491 fix: enable conversation page sharing</code>。尚未推送 GitHub、上传体验版或提交微信审核。</p>
+    <p class="muted">开发者工具原生窗口读取连续超时，故未能在模拟器/真机实际点测微信右上角转发与复制链接；不能宣称 UI 验证通过。</p>
+  </section>
+
+  <section class="card">
+    <h2>评测维度得分</h2>
+    <table>
+      <thead><tr><th>维度（1–5）</th><th>得分</th><th>原因</th></tr></thead>
+      <tbody>
+        <tr><td>追问必要性</td><td>3.67 / 5</td><td>仍有用户已经提供信息后重复询问；模糊意图时偶尔走错业务路径。</td></tr>
+        <tr><td>追问质量</td><td>3.67 / 5</td><td>多个案例先给选项又附加第二个问题，未稳定做到“一轮一个问题”。</td></tr>
+        <tr><td>记忆一致性</td><td>4.73 / 5*</td><td>可跨新会话记住杭州与目标岗位；但目标岗位/面试时间复述 case 失败，城市更正后旧搜索结果残留。</td></tr>
+        <tr><td>建议可执行性</td><td>3.63 / 5*</td><td>简历示例写入未证实的团队规模；薪资涨幅及岗位分布缺少来源。</td></tr>
+        <tr><td>语气与边界</td><td>4.90 / 5</td><td>注入与明确拒绝信息处理较好；但产假问题答非所问，情绪支持后有模板化追问。</td></tr>
+      </tbody>
+    </table>
+    <p><strong>人工复核后维度均分：4.12 / 5。</strong>记忆与语气分被高通过率拉高；但 30 个 case 中存在多个 P0/P1 级风险，当前不应以该均分作为发布通过标准。* 记忆一致性和可执行性已根据人工抽样对 06、28 降分。</p>
+  </section>
+
+  <section class="card">
+    <h2>测试结果与失败归因</h2>
+    <table>
+      <thead><tr><th>环节</th><th>结果</th><th>证据/归因</th></tr></thead>
+      <tbody>
+        <tr><td>分支并入 main</td><td>已完成（此前已合入）</td><td><code>codex/career-lifecycle-shortcuts</code> 已包含在 main 历史中。</td></tr>
+        <tr><td>后端逻辑单测</td><td>通过</td><td>86 个测试通过；覆盖会话隔离、画像/记忆、澄清策略、岗位任务状态与校验等代码路径。</td></tr>
+        <tr><td>客户端关键流程检查</td><td>通过</td><td><code>critical-flows.test.mjs</code> 静态检查通过。</td></tr>
+        <tr><td>小程序构建</td><td>通过</td><td>Taro WeChat build 编译成功，生成页含分享开关。</td></tr>
+        <tr><td>DeepSeek API</td><td>通过（本地）</td><td>旧 shell 环境变量覆盖 .env 是 401 根因；修复本地启动方式后，聊天请求成功；云端 /health 显示模型 connected。密钥未在报告中留存。</td></tr>
+        <tr><td>30-case Agent 行为</td><td class="not-rated">未通过质量门槛</td><td>真实对话均完成；关键失败包括虚构简历事实、无来源薪资数字、忽略产假问题、城市更正后残留旧搜索候选。</td></tr>
+        <tr><td>岗位搜索工具</td><td>部分通过</td><td>上海 AI PM 检索只返回列表/搜索页而非具体职位，Agent正确拒绝当作已验证岗位；但又输出无来源的市场判断，需阻止工具失败后的自由补写。</td></tr>
+        <tr><td>记忆与状态恢复</td><td>部分通过</td><td>跨新会话记忆杭州/目标岗位成功；在面试时间复述测试未回答用户问题；改城市时旧搜索结果仍出现在回复前部。</td></tr>
+        <tr><td>人工抽检</td><td>完成 6 / 30</td><td>抽检 06、07、11、14、15、28；关键人工发现及降分见 <code>pinco_agent_eval_2026-11-04.manual_review.json</code>。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>复盘与下一步</h2>
+    <ol>
+      <li><strong>P0：简历防虚构。</strong>任何未被用户确认的团队规模、业绩数字只能作为“待补证据”字段，不能出现在可直接粘贴的简历文案中；加规则校验与负例测试。</li>
+      <li><strong>P0：工具失败隔离。</strong>搜索结果无效/失败时，不得拼接旧结果或输出无来源公司分布、薪资范围；用户更正条件后清空受影响结果并仅按新条件重跑。</li>
+      <li><strong>P1：意图与追问统一。</strong>对“产假面试披露”“薪资”等主题问答先直接回应用户问题，再由规则层判断是否只补一个必要字段；移除已给事实后的泛化追加追问。</li>
+      <li><strong>P1：memory 闭环。</strong>对“复述我的岗位/时间”直接引用已存画像；未取到记忆时明确承认，不要改成追问。把跨会话恢复纳入自动化回归。</li>
+      <li>修复以上问题后，先重跑对应 bad cases，再跑完整 30-case 并与本次基线对比；这份报告只记录基线，不代表当前版本质量通过或已部署。</li>
+    </ol>
+    <p class="muted">原始对话与五维逐 case 分数：<code>pinco_agent_eval_2026-11-04.results.json</code> / <code>pinco_agent_eval_2026-11-04.scores.json</code>。完整输入集和固定评分脚本分别为 <code>run_agent_eval.mjs</code> 与 <code>score_agent_eval.py</code>。</p>
+  </section>
+</main>
+</body>
+</html>

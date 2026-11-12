@@ -1,0 +1,968 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Pinco 首批用户 PMF 路线图",
+    "description": "面向 0–5 年 AI 求职者的竞品扫描、产品审计、首批用户版本取舍与 PMF 验证方案。",
+    "generatedAt": "2026-08-04T23:25:00+08:00",
+    "charts": [
+      {
+        "id": "retention_mechanisms",
+        "title": "四类竞品中可观察的留存机制",
+        "subtitle": "计数表示该机制出现在多少类产品中；这是功能编码，不是市场份额或效果排名。",
+        "headerMarkdown": "竞品类别包括：一体化求职工作流、岗位供给 + AI、面试训练 / 辅助、中文轻量一体化。",
+        "type": "bar",
+        "dataset": "retention_mechanisms",
+        "sourceId": "retention_mechanism_coding",
+        "encodings": {
+          "x": { "field": "mechanism", "type": "ordinal", "label": "留存机制" },
+          "y": { "field": "category_count", "type": "quantitative", "label": "覆盖的竞品类别数", "format": "number" }
+        },
+        "yAxisTitle": "覆盖的竞品类别数（共 4 类）",
+        "valueFormat": "number",
+        "layout": "full"
+      }
+    ],
+    "tables": [
+      {
+        "id": "competitor_matrix",
+        "title": "同类产品的核心抓手",
+        "subtitle": "基于官方产品页与帮助中心的可观察功能，不采用厂商自报用户量或转化率作为结论依据。",
+        "dataset": "competitors",
+        "sourceId": "competitor_matrix_coding",
+        "defaultSort": { "field": "category", "direction": "asc" },
+        "density": "comfortable",
+        "layout": "full",
+        "columns": [
+          { "field": "category", "label": "赛道", "type": "text" },
+          { "field": "products", "label": "代表产品", "type": "text" },
+          { "field": "winning_moment", "label": "用户反复使用的时刻", "type": "text" },
+          { "field": "product_mechanism", "label": "产品机制", "type": "text" },
+          { "field": "pinco_lesson", "label": "对 Pinco 的启示", "type": "text" }
+        ]
+      },
+      {
+        "id": "current_audit",
+        "title": "Pinco 当前能力与首发风险",
+        "subtitle": "“有入口”不等于“可交付”；状态综合代码审计与 2026 年 8 月 4 日线上接口实测。",
+        "dataset": "current_capabilities",
+        "sourceId": "current_capability_audit",
+        "defaultSort": { "field": "priority", "direction": "asc" },
+        "density": "comfortable",
+        "layout": "full",
+        "columns": [
+          { "field": "priority", "label": "优先级", "type": "text" },
+          { "field": "capability", "label": "能力", "type": "text" },
+          { "field": "verified_state", "label": "已核实状态", "type": "text" },
+          { "field": "gap", "label": "首批用户前缺口", "type": "text" }
+        ]
+      },
+      {
+        "id": "core_loop",
+        "title": "以“岗位对象”而不是聊天记录组织产品",
+        "subtitle": "每一步都产生可复用资产、下一动作与可观测事件。",
+        "dataset": "job_loop",
+        "sourceId": "job_loop_strategy",
+        "defaultSort": { "field": "step", "direction": "asc" },
+        "density": "comfortable",
+        "layout": "full",
+        "columns": [
+          { "field": "step", "label": "步骤", "type": "text" },
+          { "field": "user_action", "label": "用户动作", "type": "text" },
+          { "field": "pinco_output", "label": "Pinco 必须交付", "type": "text" },
+          { "field": "progress_event", "label": "可验证进展", "type": "text" },
+          { "field": "emotional_value", "label": "情感价值如何落地", "type": "text" }
+        ]
+      },
+      {
+        "id": "interview_practice",
+        "title": "面试前练习产品结构",
+        "subtitle": "所有练习均绑定真实 JD、用户简历、面试轮次和历史薄弱项；不覆盖面试中的实时隐形辅助。",
+        "dataset": "interview_practice",
+        "sourceId": "interview_practice_strategy",
+        "defaultSort": { "field": "order", "direction": "asc" },
+        "density": "comfortable",
+        "layout": "full",
+        "columns": [
+          { "field": "order", "label": "序号", "type": "number" },
+          { "field": "module", "label": "练习模块", "type": "text" },
+          { "field": "experience", "label": "用户体验", "type": "text" },
+          { "field": "system_output", "label": "系统产出", "type": "text" },
+          { "field": "success_signal", "label": "成功信号", "type": "text" }
+        ]
+      },
+      {
+        "id": "emotional_support",
+        "title": "求职关键状态下的情感支持",
+        "subtitle": "对话承载表达，但触发、记忆、行动和升级贯穿首页、岗位、面试、进度、学社与专家。",
+        "dataset": "emotional_support",
+        "sourceId": "emotional_support_strategy",
+        "defaultSort": { "field": "order", "direction": "asc" },
+        "density": "comfortable",
+        "layout": "full",
+        "columns": [
+          { "field": "order", "label": "序号", "type": "number" },
+          { "field": "state", "label": "求职状态", "type": "text" },
+          { "field": "support", "label": "Pinco 如何接住", "type": "text" },
+          { "field": "next_action", "label": "只推进的一步", "type": "text" },
+          { "field": "surface", "label": "主要产品位置", "type": "text" }
+        ]
+      },
+      {
+        "id": "roadmap",
+        "title": "六周双轮产品迭代顺序",
+        "subtitle": "求职 Agent 主闭环与学社 / 专家生态同步建设，但每项都绑定真实岗位和可验证交付。",
+        "dataset": "roadmap_items",
+        "sourceId": "roadmap_strategy",
+        "defaultSort": { "field": "phase", "direction": "asc" },
+        "density": "comfortable",
+        "layout": "full",
+        "columns": [
+          { "field": "phase", "label": "阶段", "type": "text" },
+          { "field": "build", "label": "必须完成", "type": "text" },
+          { "field": "acceptance", "label": "验收标准", "type": "text" },
+          { "field": "defer", "label": "同期边界", "type": "text" }
+        ]
+      },
+      {
+        "id": "pmf_metrics",
+        "title": "首批用户的 PMF 判定指标",
+        "subtitle": "阈值是本次试点的 go / no-go 决策线，不是外部行业基准。",
+        "dataset": "pmf_metrics",
+        "sourceId": "pmf_metric_strategy",
+        "defaultSort": { "field": "order", "direction": "asc" },
+        "density": "comfortable",
+        "layout": "full",
+        "columns": [
+          { "field": "order", "label": "序号", "type": "number" },
+          { "field": "metric", "label": "指标", "type": "text" },
+          { "field": "definition", "label": "定义", "type": "text" },
+          { "field": "pilot_threshold", "label": "4 周试点阈值", "type": "text" },
+          { "field": "why", "label": "判断意义", "type": "text" }
+        ]
+      },
+      {
+        "id": "launch_gates",
+        "title": "第一批用户放量门槛",
+        "subtitle": "全部通过后再从 10 人白名单扩大到 30–50 人。",
+        "dataset": "launch_gates",
+        "sourceId": "launch_gate_audit",
+        "defaultSort": { "field": "order", "direction": "asc" },
+        "density": "comfortable",
+        "layout": "full",
+        "columns": [
+          { "field": "order", "label": "序号", "type": "number" },
+          { "field": "gate", "label": "门槛", "type": "text" },
+          { "field": "pass_condition", "label": "通过条件", "type": "text" },
+          { "field": "current_state", "label": "当前状态", "type": "text" }
+        ]
+      }
+    ],
+    "sources": [
+      { "id": "competitor_matrix_coding", "label": "竞品工作流分类编码" },
+      { "id": "current_capability_audit", "label": "Pinco 当前能力审计表" },
+      { "id": "job_loop_strategy", "label": "Pinco 岗位闭环策略表" },
+      { "id": "interview_practice_strategy", "label": "Pinco 面试前练习设计" },
+      { "id": "emotional_support_strategy", "label": "Pinco 情感支持系统设计" },
+      { "id": "roadmap_strategy", "label": "Pinco 六周路线图" },
+      { "id": "pmf_metric_strategy", "label": "Pinco 首批用户 PMF 指标" },
+      { "id": "launch_gate_audit", "label": "Pinco 首批用户发布门槛" },
+      {
+        "id": "market_scan",
+        "label": "求职 Agent 官方产品页与帮助中心扫描",
+        "query": {
+          "engine": "manual_research",
+          "description": "2026 年 8 月 4 日复核 Teal、Huntr、Simplify、Jobright、Careerflow、Final Round AI、Yoodli、LinkedIn、OfferGoose、牛客、OfferKit 与 AI求职助手的官方页面，按用户工作流而非营销口号编码。",
+          "executed_at": "2026-08-04T21:40:00+08:00",
+          "language": "web_review",
+          "documents_reviewed": [
+            "https://www.tealhq.com/pricing",
+            "https://help.huntr.co/en/articles/10477521-what-is-huntr",
+            "https://help.simplify.jobs/en/help/articles/5623502-whats-included-in-simplify-features-and-pricing",
+            "https://jobright.ai/",
+            "https://www.careerflow.ai/how-it-works",
+            "https://www.finalroundai.com/",
+            "https://e.yoodli.ai/use-cases/interview-preparation",
+            "https://www.linkedin.com/help/learning/answer/a9308146",
+            "https://offergoose.cn/?souce=aibot",
+            "https://www.nowcoder.com/interview/ai/index",
+            "https://www.offerkit.ai/",
+            "https://www.resum.cn/"
+          ]
+        }
+      },
+      {
+        "id": "retention_mechanism_coding",
+        "label": "竞品留存机制人工编码",
+        "query": {
+          "engine": "duckdb",
+          "description": "把四类竞品官方页面中可观察到的核心机制按类别出现次数汇总；用于结构比较，不代表市场份额、使用率或效果。",
+          "sql": "SELECT * FROM (VALUES ('岗位对象 / 工作流', 3, '一体化、岗位供给、中文轻量', 'Teal、Huntr、Simplify、Jobright、LinkedIn、OfferKit', '让后续材料、申请和提醒围绕同一岗位累积'), ('岗位定制产出', 3, '一体化、岗位供给、中文轻量', 'Teal、Simplify、Jobright、LinkedIn、OfferKit', '把通用建议变成可直接使用的岗位版材料'), ('进度记录 / 跟进', 2, '一体化、中文轻量', 'Teal、Huntr、Simplify、Careerflow、OfferKit', '在多次投递之间建立持续使用'), ('练习与反馈', 3, '一体化、面试训练、中文轻量', 'Careerflow、Final Round AI、Yoodli、OfferGoose、牛客、OfferKit', '在面试前后形成高压高价值回访'), ('自动填写 / 申请', 2, '一体化、岗位供给', 'Simplify、Jobright', '节省时间，但依赖浏览器和岗位生态，不宜作为 Pinco 首发重点')) AS t(mechanism, category_count, covered_categories, examples, interpretation)",
+          "executed_at": "2026-08-04T22:30:00+08:00",
+          "language": "sql",
+          "filters": [
+            "产品按一体化求职工作流、岗位供给 + AI、面试训练 / 辅助、中文轻量一体化四类编码",
+            "只记录官方页面可观察到的核心产品机制"
+          ],
+          "metric_definitions": [
+            "category_count：四类竞品中至少有一个代表产品把该机制作为明确核心流程的类别数量。"
+          ]
+        }
+      },
+      {
+        "id": "pinco_audit",
+        "label": "Pinco 代码审计与线上实测",
+        "query": {
+          "engine": "code_and_http_review",
+          "description": "审阅小程序页面、状态管理和后端实现；对生产健康检查、就绪检查、真实 DeepSeek 对话以及两种录音格式执行只读/测试性请求。",
+          "executed_at": "2026-08-04T22:24:00+08:00",
+          "language": "code_review_and_http",
+          "documents_reviewed": [
+            "pinco-miniapp/src/store/usePincoStore.ts",
+            "pinco-miniapp/src/pages/conversation/index.tsx",
+            "pinco-miniapp/src/pages/hub/index.tsx",
+            "pinco-miniapp/src/pages/job-search/index.tsx",
+            "backend/main.py",
+            "backend/DEPLOY_CLOUDRUN.md"
+          ],
+          "endpoints_reviewed": [
+            "https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health",
+            "https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/api/v1/miniapp/readiness",
+            "https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/api/v1/miniapp/message",
+            "https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/api/v1/voice/upload"
+          ]
+        }
+      },
+      {
+        "id": "strategy_synthesis",
+        "label": "Pinco PMF 策略综合",
+        "query": {
+          "engine": "analyst_synthesis",
+          "description": "将竞品工作流、Pinco 当前能力、目标用户和首批用户约束转化为产品取舍、试点阈值与发布门槛。",
+          "executed_at": "2026-08-04T22:30:00+08:00",
+          "language": "product_strategy",
+          "metric_definitions": [
+            "每周有效求职推进用户：一周内至少完成一次可核实推进事件的仍在求职用户；单纯聊天不计入。",
+            "首轮闭环激活：新用户在 24 小时内完成上传简历、绑定一个真实 JD 并拿到可执行计划。",
+            "可直接使用率：用户评价产出为可直接使用或只需小改的比例。"
+          ]
+        }
+      }
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# Pinco 首批用户 PMF 路线图"
+      },
+      {
+        "id": "executive_summary",
+        "type": "markdown",
+        "body": "## Executive Summary\n\n- **Pinco 的产品架构应是“一层情感陪伴底座 + 三层专业价值飞轮”。** 情感支持贯穿全部场景；AI Agent 完成高频任务，学社沉淀真实经验与同伴支持，专家市场承接高风险、高客单问题。Pinco 学姐不是一个单独的树洞按钮，而是用户每次受挫、等待和重新行动时都能感受到的关系。\n- **建议把首批切口从“0–5 年所有 AI 求职者”收窄到“有 1–3 年经验、正在转入或升级到 AI 产品 / AI 应用岗位的人”。** 他们既有可迁移经历，又急需把旧经验翻译成 AI 岗位证据，最适合验证 Pinco 的“专业学姐”差异化。产品对外仍可服务 0–5 年人群，但首轮研究和交付必须窄。\n- **面试前练习应升为首批版本核心能力。** 围绕真实 JD 和简历提供 5 分钟诊断、10 分钟弱项复练、20 分钟项目深挖和 30 分钟全真模拟；练习前接住焦虑、练习中尊重用户选择的强度、练习后先确认进步再给一两个改进动作。实时隐形面试辅助继续暂停。\n- **当前还不能直接宣称“可供首批用户稳定使用”。** 线上 DeepSeek 已实测能真实回复，但后端未识别微信 AppID、AppSecret 和合法请求域名；真实微信 WebM/Opus 录音仍识别失败；核心记录大量依赖本机缓存或容器 JSON；部分失败场景仍会给通用模板。先完成 P0 放量门槛，再启动 10 人白名单。"
+      },
+      {
+        "id": "market_finding",
+        "type": "markdown",
+        "body": "## 市场已经把单点能力做成标配，留存来自“岗位工作流”\n\n**海外一体化工具的共同结构是：先保存岗位，再围绕这份岗位触发简历定制、申请材料、状态追踪和下一步提醒。** [Teal](https://www.tealhq.com/pricing)、[Huntr](https://help.huntr.co/en/articles/10477521-what-is-huntr)、[Simplify](https://help.simplify.jobs/en/help/articles/5623502-whats-included-in-simplify-features-and-pricing) 和 [Careerflow](https://www.careerflow.ai/how-it-works) 的优势并不是聊天更像人，而是把用户从“看到 JD”一直带到“申请和跟进”。\n\n**岗位平台把 AI 嵌入职位本身。** [Jobright](https://jobright.ai/) 把匹配、简历定制、申请填写和内推连接在同一流程；[LinkedIn](https://www.linkedin.com/help/learning/answer/a9308146) 则直接用真实职位生成匹配洞察与面试练习。Pinco 没有岗位供给优势，因此不应把“更全的岗位搜索”当第一护城河。\n\n**高意愿付费集中在临近结果的高压时刻。** [Final Round AI](https://www.finalroundai.com/) 和 [Yoodli](https://e.yoodli.ai/use-cases/interview-preparation) 围绕面试实时辅助、角色扮演、表达反馈和进步跟踪收费；国内 [OfferGoose](https://offergoose.cn/?souce=aibot) 与 [牛客](https://www.nowcoder.com/interview/ai/index) 也在公司题库和面试训练上形成心智。对 Pinco 而言，模拟面试必须能输出可复用复盘，而不只是继续对话。"
+      },
+      {
+        "id": "competitor_matrix_block",
+        "type": "table",
+        "tableId": "competitor_matrix",
+        "layout": "full"
+      },
+      {
+        "id": "retention_mechanisms_block",
+        "type": "chart",
+        "chartId": "retention_mechanisms",
+        "layout": "full"
+      },
+      {
+        "id": "defensible_wedge",
+        "type": "markdown",
+        "body": "## Pinco 的可守差异不是“温柔”，而是“有证据的长期陪伴”\n\n**第一层：AI 岗位能力模型。** 首版只覆盖 AI 产品经理、AI 应用工程师、AI 运营 / 解决方案三个相邻方向，建立统一能力雷达：业务问题、模型与 LLM 基础、RAG / Agent / 多模态、数据与评测、产品化、ROI、安全、项目表达。不同岗位再叠加专项题库。算法研究岗暂不承诺深度。\n\n**第二层：职业证据库。** 保存用户历次简历、项目、指标、STAR 故事、技能与目标，让每次改写都能指出“用了哪段真实经历、缺了什么证据、哪里不确定”。一项 2026 年案例研究也指出，只看单份简历会漏掉历史经历，而带来源追踪的长期职业档案能改善匹配，但在领域不重合时必须做置信度门控；这正好对应 Pinco 的“不编经历”原则。[研究摘要](https://arxiv.org/abs/2605.05257)\n\n**第三层：行动型情感支持。** 同样的建议并不适合所有人。AI 建议研究显示，温暖与有效性都影响用户是否愿意再次求助；Pinco 应让用户选择“先抱抱 / 直接拆解 / 严格督促”，但无论哪种风格都必须落到今天的一步。[CHI 2026 论文摘要](https://arxiv.org/abs/2512.08937)"
+      },
+      {
+        "id": "audit_finding",
+        "type": "markdown",
+        "body": "## 当前产品是“功能面宽、闭环深度浅”\n\nPinco 已有会话、简历上传、JD 分析、模拟面试、岗位搜索、求职进度、学社、专家和会员入口，这比从零起步强。但用户的关键资产没有围绕同一个岗位持续累积：会话、任务、岗位进度和社区内容大量存于本机缓存；云端状态是容器文件；简历分析没有可编辑版本和导出；面试结束没有结构化能力报告；岗位来源的新鲜度和原始链接尚未形成强约束。\n\n**最危险的不是功能缺失，而是可信度断裂。** 当前 JD 分析与模拟面试在接口失败时仍可能返回通用内容。对“专业求职 Agent”而言，宁可明确告诉用户服务失败并保留材料，也不能把固定模板包装成针对性分析。"
+      },
+      {
+        "id": "current_audit_block",
+        "type": "table",
+        "tableId": "current_audit",
+        "layout": "full"
+      },
+      {
+        "id": "wedge",
+        "type": "markdown",
+        "body": "## 首批用户只验证一个任务：把旧经历转成 AI 岗位的可信证据\n\n**建议首批画像：** 1–3 年产品、运营、开发或解决方案经验；正在转入 AI 产品 / AI 应用岗位；未来 30 天内会真实投递；愿意提供简历和至少一份目标 JD。先排除纯算法研究、资深管理、无明确求职计划和只想浏览内容的人。\n\n**核心待办（JTBD）：** “我给你一个真实 AI 岗位和我的过往经历，你在今天之内告诉我值不值得投、应该拿什么证据去投、怎么讲清楚；之后记住每次结果，直到我进入下一轮。”\n\n**首屏不再让用户先选很多功能。** 只问四件事：目标岗位、求职时间、当前简历、第一份真实 JD。五分钟内生成一个“求职作战台”：适配判断、三条证据、两个缺口、今天唯一行动。"
+      },
+      {
+        "id": "core_loop_block",
+        "type": "table",
+        "tableId": "core_loop",
+        "layout": "full"
+      },
+      {
+        "id": "emotional_support_finding",
+        "type": "markdown",
+        "body": "## 情感支持不是一个对话模块，而是 Pinco 的底层操作系统\n\n**对话模块仍然是主要表达界面，但不是唯一位置。** 用户可以在树洞里主动倾诉；更重要的是，Pinco 要在上传简历、开始练习、等待回复、收到拒绝、连续受挫和做 Offer 决策时识别状态，并用用户偏好的方式回应。首页负责轻量 check-in 和今日一步，岗位进度负责事件触发，面试练习负责热身与复盘，学社提供同伴共鸣，专家承担复杂问题升级。\n\n**统一陪伴协议建议采用四步：看见 → 允许 → 选择 → 行动。** 先准确复述用户现在的感受和处境；允许难过而不急着纠正；让用户选择“先抱抱 / 直接拆解 / 严格督促”；最后只给一个足够小、今天能完成的动作，并在约定时间回来跟进。这里的目标不是延长聊天，而是帮助用户恢复控制感。\n\n**Pinco 要记住关系，而不是给用户贴心理标签。** 可以在用户授权后记住偏好的陪伴方式、容易卡住的求职阶段、曾经做成的事情和有效的恢复动作；不保存或推断心理疾病诊断。遇到自伤等高风险表达时，应停止普通求职建议，鼓励立即联系可信任的人和当地紧急 / 专业支持，并清楚说明 Pinco 不是医疗服务。"
+      },
+      {
+        "id": "emotional_support_block",
+        "type": "table",
+        "tableId": "emotional_support",
+        "layout": "full"
+      },
+      {
+        "id": "ecosystem_flywheel",
+        "type": "markdown",
+        "body": "## 学社与专家市场不暂停，而是从第一天就进入同一个求职飞轮\n\n**学社不是资讯流，而是 AI 求职经验数据库。** 首批只做四类高价值内容：真实 JD 拆解、公司 / 岗位面试真题与复盘、AI 项目证据拆解、失败恢复与上岸复盘。每条内容绑定岗位方向、公司、面试轮次和时间；被验证有用的内容可以一键加入面试练习题库或个人行动计划。\n\n**开放专家市场不等于任何人都能上架。** 产品入口和交易闭环可以从首批版本保留，但供给端采用邀请制和审核制：核验经历与擅长岗位，把服务包装成“30 分钟 AI 产品项目深挖”“岗位版简历终审”“Offer 谈判”等固定交付，而不是泛咨询。Pinco 在预约前自动整理用户简历、JD、练习报告和三个关键问题，咨询后沉淀行动清单。\n\n**商业飞轮：** Agent 发现能力缺口 → 学社提供真实经验与同伴支持 → 专家处理高风险问题 → 经用户授权后把匿名洞察回流为题库和方法论 → Agent 下一次判断更准。会员可以承载 AI 练习额度、精品内容和专家折扣；专家服务收取佣金。关键边界是隐私授权、内容真实性、专家履约和不让付费入口干扰首次价值。"
+      },
+      {
+        "id": "interview_practice_finding",
+        "type": "markdown",
+        "body": "## 面试前练习应成为第一批用户最强的高频价值点\n\n**练习不能从“请输入岗位名称”开始，而要从面试任务开始：** 用户上传简历和 JD，选择公司、岗位、轮次、面试日期和当前焦虑点；Pinco 基于已确认职业证据生成题目，并明确哪些问题来自 JD、学社真实面经或用户历史弱项。\n\n**反馈节奏要像真实面试。** 回答过程中只做自然追问，不每题打断讲课；一轮结束后再按岗位匹配、项目证据、AI 深度、结构逻辑、量化结果、表达节奏六个维度评分。每个弱项必须生成一条改进话术和一次复练任务，第二次练习展示前后对比。\n\n**情感价值嵌入练习而不是额外弹鸡汤。** 开始前允许选择“陪我热身 / 按真实强度 / 压力追问”；卡住时提供一次救场框架；结束后先确认做得好的证据，再只安排 1–2 个最高优先级改进动作。"
+      },
+      {
+        "id": "interview_practice_block",
+        "type": "table",
+        "tableId": "interview_practice",
+        "layout": "full"
+      },
+      {
+        "id": "roadmap_finding",
+        "type": "markdown",
+        "body": "## 六周用“双轮推进”，而不是在主工具和生态之间二选一\n\n**P0 先补可信基础，同时定义生态的数据结构和准入规则。** 修身份、云数据库、真实录音与错误透明；同时把学社内容绑定岗位标签，把专家服务定义成有明确输入和交付物的商品。\n\n**P1 把面试前练习做深，并打通学社。** 用户可从一条真实面经直接开始专项练习，练习后可匿名发布复盘；高质量内容由 Pinco 结构化进入题库。首批邀请 5–10 名 AI 相关专家完成审核、上架和真实预约。\n\n**P2 开放经过审核的专家市场与生态商业化。** 扩大专家供给、上线履约与评价机制，并用会员提供练习额度、精品内容和专家折扣。仍暂停实时隐形面试辅助，以及无审核的专家上架和泛内容灌水。"
+      },
+      {
+        "id": "roadmap_block",
+        "type": "table",
+        "tableId": "roadmap",
+        "layout": "full"
+      },
+      {
+        "id": "pmf_experiment",
+        "type": "markdown",
+        "body": "## 用 30 名设计伙伴、四周真实求职验证 PMF 假设\n\n1. **研究期（第 0 周）：** 访谈 15 人，必须带一份真实简历和近期 JD，重点看他们现有工作流、付费过什么、被拒后如何复盘，不问空泛的“你会不会用”。同时邀请 5–10 名 AI 相关专家，核验履历、服务边界和可标准化交付。\n2. **白名单（第 1 周）：** 先放 10 人，每人完成“简历 + 1 份 JD + 一次面试前练习 + 一份结构化报告”；至少体验一次“学社内容 → 专项练习”，并由团队逐单检查事实、岗位链接和建议质量。\n3. **扩展期（第 2–4 周）：** 达到上线门槛后扩至 30–50 人，每周跟访真实投递、第二次练习、学社贡献、面试邀请与拒绝复盘；完成首批专家预约、履约和评价。\n4. **付费验证：** 首个岗位闭环免费；再测试 ¥29 的“AI 岗面试冲刺周”、包含更多练习与精品内容的会员，以及按次专家服务。小样本不要做复杂 A/B；先判断用户分别为什么愿意为 AI、内容和真人服务付费。\n\n**北极星指标：每周有效求职推进用户（WJPU）。** 只有保存合格目标岗位、导出岗位版简历、完成面试练习、记录真实投递、提交真实面试复盘或更新 Offer 阶段才计入；单纯打开页面、浏览内容或聊天不计入。学社和专家的价值看它们是否促成这些推进事件。"
+      },
+      {
+        "id": "pmf_metrics_block",
+        "type": "table",
+        "tableId": "pmf_metrics",
+        "layout": "full"
+      },
+      {
+        "id": "launch_gate_finding",
+        "type": "markdown",
+        "body": "## 先过放量门槛，再邀请第一批用户\n\n建议分两步：**内部 / 熟人真机 10 人**可以在 P0 修复后马上启动；**30–50 人正式首批**必须等身份、持久化、语音、岗位来源、错误透明和埋点全部通过。每个关键流程至少用微信开发者工具和真机连续跑三次，包括一次异常路径。"
+      },
+      {
+        "id": "launch_gates_block",
+        "type": "table",
+        "tableId": "launch_gates",
+        "layout": "full"
+      },
+      {
+        "id": "further_questions",
+        "type": "markdown",
+        "body": "## 下一轮必须回答的四个问题\n\n- **首个岗位方向到底选哪个？** AI 产品经理、AI 应用工程师、AI 运营 / 解决方案三者只能选一个作为内容和评测最深的首发方向，答案应由 15 次访谈和真实转化决定。\n- **用户愿意为什么付费？** 是定制材料、模拟面试、进度督促，还是“有人记得我并推动我”？先卖冲刺结果，不先卖无限次数。\n- **怎样证明建议没有编造？** 每条简历改写都要绑定来源证据；没有证据时标记为待补，不允许模型自行补数字或经历。\n- **求职结束后还剩什么留存？** 如果用户拿到 Offer 就离开是正常现象，早期不要强求全年留存；先验证同一求职周期内的多岗位复用与结果改善。"
+      },
+      {
+        "id": "caveats",
+        "type": "markdown",
+        "body": "## Caveats and assumptions\n\n- 本报告是 **PMF 搜索方案，不是 PMF 已达成证明**。当前没有可用的真实首批用户留存、付费或面试转化数据，内部测试状态也不能替代用户研究。\n- 竞品结论来自 2026 年 8 月 4 日可访问的官方产品页和帮助中心；厂商自报用户量、通过率和效率提升没有作为决策证据。\n- 线上实测确认 DeepSeek 健康检查与一次真实消息回复成功；这证明后端模型链路可用，**不等于本轮已完成小程序页面端到端验收**。\n- 真实微信开发者工具录音样本（WebM / Opus）上传仍返回 ASR 上游错误；同一音频转为标准 MP3 后识别成功，说明当前生产部署仍存在录音格式兼容问题。\n- 后端就绪接口当前显示微信 AppID、AppSecret 和合法请求域名三项未配置；容器 JSON 状态会在重启后丢失。这两项都属于扩大白名单前的阻塞项。\n- 本报告没有绘制定量竞争图，因为目前只有异构功能与定价信息，强行评分会制造虚假精度；以可审计表格呈现。"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-04T23:25:00+08:00",
+    "status": "ready",
+    "datasets": {
+      "retention_mechanisms": [
+        {
+          "mechanism": "岗位对象 / 工作流",
+          "category_count": 3,
+          "covered_categories": "一体化、岗位供给、中文轻量",
+          "examples": "Teal、Huntr、Simplify、Jobright、LinkedIn、OfferKit",
+          "interpretation": "让后续材料、申请和提醒围绕同一岗位累积"
+        },
+        {
+          "mechanism": "岗位定制产出",
+          "category_count": 3,
+          "covered_categories": "一体化、岗位供给、中文轻量",
+          "examples": "Teal、Simplify、Jobright、LinkedIn、OfferKit",
+          "interpretation": "把通用建议变成可直接使用的岗位版材料"
+        },
+        {
+          "mechanism": "进度记录 / 跟进",
+          "category_count": 2,
+          "covered_categories": "一体化、中文轻量",
+          "examples": "Teal、Huntr、Simplify、Careerflow、OfferKit",
+          "interpretation": "在多次投递之间建立持续使用"
+        },
+        {
+          "mechanism": "练习与反馈",
+          "category_count": 3,
+          "covered_categories": "一体化、面试训练、中文轻量",
+          "examples": "Careerflow、Final Round AI、Yoodli、OfferGoose、牛客、OfferKit",
+          "interpretation": "在面试前后形成高压高价值回访"
+        },
+        {
+          "mechanism": "自动填写 / 申请",
+          "category_count": 2,
+          "covered_categories": "一体化、岗位供给",
+          "examples": "Simplify、Jobright",
+          "interpretation": "节省时间，但依赖浏览器和岗位生态，不宜作为 Pinco 首发重点"
+        }
+      ],
+      "competitors": [
+        {
+          "category": "一体化求职工作流",
+          "products": "Teal / Huntr / Simplify / Careerflow",
+          "winning_moment": "保存 JD 后持续定制简历、申请、跟进",
+          "product_mechanism": "岗位对象 + 简历版本 + 看板 + 浏览器扩展 / 自动填写",
+          "pinco_lesson": "聊天必须挂到岗位和材料上，不能成为孤立历史记录"
+        },
+        {
+          "category": "岗位供给 + AI",
+          "products": "Jobright / LinkedIn",
+          "winning_moment": "发现更匹配的真实岗位并立即行动",
+          "product_mechanism": "职位供给、匹配解释、岗位版材料、申请 / 连接",
+          "pinco_lesson": "没有供给优势时，不要靠更全搜索竞争；聚焦判断和转化"
+        },
+        {
+          "category": "面试训练 / 辅助",
+          "products": "Final Round AI / Yoodli / OfferGoose / 牛客",
+          "winning_moment": "面试前高压准备与面后复盘",
+          "product_mechanism": "岗位题目、角色扮演、语音反馈、实时提示、进步记录",
+          "pinco_lesson": "面试结束必须输出能力差距、证据问题和下一轮练习"
+        },
+        {
+          "category": "中文轻量一体化",
+          "products": "OfferKit / AI求职助手",
+          "winning_moment": "低成本完成一次简历—JD—面试流程",
+          "product_mechanism": "积分 / 免费额度、ATS 匹配、模拟面试、进度追踪",
+          "pinco_lesson": "通用功能价格会被压低，必须用 AI 岗位深度和长期记忆增值"
+        },
+        {
+          "category": "通用大模型替代",
+          "products": "ChatGPT / DeepSeek 等",
+          "winning_moment": "随时问问题或生成一段文案",
+          "product_mechanism": "低边际成本、通用推理、用户自己维护上下文",
+          "pinco_lesson": "凡是一次 Prompt 能完成的功能都不是护城河"
+        }
+      ],
+      "current_capabilities": [
+        {
+          "priority": "P0",
+          "capability": "真实会话",
+          "verified_state": "生产健康检查连接 deepseek-chat；真实测试消息获得针对性回复",
+          "gap": "本轮未完成小程序页面端到端复测；需增加可观测错误与会话质量埋点"
+        },
+        {
+          "priority": "P0",
+          "capability": "微信身份与持久化",
+          "verified_state": "线上就绪仅 1/4；后端未识别 AppID、AppSecret、请求域名；状态写入容器 JSON",
+          "gap": "配置真实微信用户态，迁移云数据库，支持跨设备、重启不丢失与删除 / 导出"
+        },
+        {
+          "priority": "P0",
+          "capability": "语音 / ASR",
+          "verified_state": "标准 MP3 成功；真实微信 WebM / Opus 样本返回 ASR_UPSTREAM_ERROR",
+          "gap": "部署并验证转码兼容；开发者工具与真机各连续三次通过"
+        },
+        {
+          "priority": "P0",
+          "capability": "错误透明",
+          "verified_state": "简历失败会明确降级；JD 与面试仍存在接口失败后返回通用模板的路径",
+          "gap": "移除伪针对性结果；保留用户输入并提供重试 / 纯文本继续选项"
+        },
+        {
+          "priority": "P1",
+          "capability": "简历 + JD",
+          "verified_state": "已有文件上传、简历评分、JD 要求 / 面试重点分析",
+          "gap": "缺职业证据库、岗位版简历编辑 / 导出、逐条来源与事实校验"
+        },
+        {
+          "priority": "P1",
+          "capability": "模拟面试",
+          "verified_state": "已有按岗位开场、追问与结束指令",
+          "gap": "缺统一能力量表、结构化复盘、历史进步对比和 AI 岗位专项题库"
+        },
+        {
+          "priority": "P1",
+          "capability": "岗位与进度",
+          "verified_state": "已有搜索接口、状态识别和本机进度板",
+          "gap": "岗位新鲜度 / 原始链接未完成质量审计；材料与进度未云端绑定"
+        },
+        {
+          "priority": "P1",
+          "capability": "情感支持",
+          "verified_state": "已有情绪陪伴会话、树洞、抱抱、召唤学姐，以及先接住情绪再给行动的提示词",
+          "gap": "仍偏场景入口和文案；缺跨场景状态触发、陪伴偏好记忆、后续跟进、安全协议与效果埋点"
+        },
+        {
+          "priority": "P1",
+          "capability": "学社 / 专家 / 会员",
+          "verified_state": "页面和部分接口已存在；学社支持干货、树洞、召唤学姐",
+          "gap": "需与岗位、练习和进度互通；补专家审核、固定交付、履约评价、真实支付与内容治理"
+        }
+      ],
+      "job_loop": [
+        {
+          "step": "1 目标",
+          "user_action": "上传简历，选择目标 AI 岗，粘贴真实 JD",
+          "pinco_output": "Go / Maybe / No-go 判断，能力雷达，关键证据与红线",
+          "progress_event": "保存合格目标岗位",
+          "emotional_value": "减少无方向海投，给出明确优先级"
+        },
+        {
+          "step": "2 证据",
+          "user_action": "确认可用经历、补充指标和项目细节",
+          "pinco_output": "带来源的职业证据库；不确定处标记待补",
+          "progress_event": "完成关键证据校验",
+          "emotional_value": "把“我不够好”改写为“我还缺哪条证据”"
+        },
+        {
+          "step": "3 材料",
+          "user_action": "审阅岗位版摘要和项目 bullet",
+          "pinco_output": "可编辑、可导出的岗位版简历与投递话术",
+          "progress_event": "导出 / 复制岗位版材料",
+          "emotional_value": "一次只改最影响结果的三处，降低启动阻力"
+        },
+        {
+          "step": "4 演练",
+          "user_action": "完成 10–15 分钟语音模拟面试",
+          "pinco_output": "岗位专项追问、证据缺口、表达评分、下一轮话术",
+          "progress_event": "完成模拟面试与复盘",
+          "emotional_value": "面前焦虑转化成一轮可完成训练"
+        },
+        {
+          "step": "5 推进",
+          "user_action": "记录投递、面试、拒绝或 Offer",
+          "pinco_output": "自动更新岗位状态，提醒跟进，沉淀真实面试题",
+          "progress_event": "更新真实求职阶段",
+          "emotional_value": "拒绝先接住，再只安排一个恢复动作"
+        },
+        {
+          "step": "6 学习",
+          "user_action": "复盘多岗位反馈",
+          "pinco_output": "跨岗位能力趋势、7 天补缺项目、下一批岗位策略",
+          "progress_event": "启动下一轮有依据的投递",
+          "emotional_value": "让失败成为可积累信息，而不是自我否定"
+        }
+      ],
+      "interview_practice": [
+        {
+          "order": 1,
+          "module": "面试任务建档",
+          "experience": "上传简历与 JD，选择公司、岗位、轮次、日期、焦虑点",
+          "system_output": "题目蓝图与证据引用；标记 JD、学社面经和历史弱项来源",
+          "success_signal": "用户确认练习目标和强度"
+        },
+        {
+          "order": 2,
+          "module": "5 分钟快速诊断",
+          "experience": "回答自我介绍、求职动机、项目概述三个问题",
+          "system_output": "识别最高风险项，推荐后续练习模式",
+          "success_signal": "完成首轮并选择一个弱项"
+        },
+        {
+          "order": 3,
+          "module": "10 分钟弱项复练",
+          "experience": "围绕一个薄弱问题重复回答 2–3 次",
+          "system_output": "前后版本对比、救场框架和可直接复用话术",
+          "success_signal": "第二次回答在目标维度提升"
+        },
+        {
+          "order": 4,
+          "module": "20 分钟项目深挖",
+          "experience": "对一个真实项目连续追问业务、技术、数据、ROI 和复盘",
+          "system_output": "证据缺口、追问树、需要补充的指标与 STAR 故事",
+          "success_signal": "能连续讲清一个项目且无编造"
+        },
+        {
+          "order": 5,
+          "module": "30 分钟全真模拟",
+          "experience": "按真实轮次连续面试，中途不讲课，只做自然追问",
+          "system_output": "六维评分、关键片段、建议话术和下一轮计划",
+          "success_signal": "完整结束并生成结构化报告"
+        },
+        {
+          "order": 6,
+          "module": "学社 / 专家升级",
+          "experience": "从真实面经启动练习，或把报告交给匹配专家",
+          "system_output": "匿名复盘发布、题库回流、专家会前摘要和会后行动清单",
+          "success_signal": "内容或专家服务促成下一次有效推进"
+        }
+      ],
+      "emotional_support": [
+        {
+          "order": 1,
+          "state": "刚进入 / 很迷茫",
+          "support": "不让用户先做复杂选择；询问今天最难受或最想改变的一件事",
+          "next_action": "确认一个求职目标和今天唯一任务",
+          "surface": "首页 check-in + 对话"
+        },
+        {
+          "order": 2,
+          "state": "拖延 / 不敢开始",
+          "support": "承认任务很重，让用户选择先抱抱、直接拆解或严格督促",
+          "next_action": "完成一个 5 分钟微任务",
+          "surface": "今日任务 + 对话"
+        },
+        {
+          "order": 3,
+          "state": "面试前焦虑",
+          "support": "选择陪练强度，先回忆一条真实优势，再进入短练习",
+          "next_action": "完成 5 分钟热身或一个弱项复练",
+          "surface": "面试练习"
+        },
+        {
+          "order": 4,
+          "state": "面试后反刍",
+          "support": "先允许情绪落地，不立刻给总评；分开事实、猜测和自我评价",
+          "next_action": "只记录三个事实和一个待改问题",
+          "surface": "面试复盘 + 岗位进度"
+        },
+        {
+          "order": 5,
+          "state": "收到拒绝",
+          "support": "明确结果不等于个人价值；当天不强迫深度复盘，约定次日再处理",
+          "next_action": "次日完成一次 10 分钟复练或材料修正",
+          "surface": "岗位进度触发 + 对话"
+        },
+        {
+          "order": 6,
+          "state": "连续受挫 / 孤独",
+          "support": "回顾已完成的努力和有效证据，引导匿名求助或同伴支持",
+          "next_action": "进入树洞、召唤学姐或匹配专家",
+          "surface": "学社 + 专家市场"
+        },
+        {
+          "order": 7,
+          "state": "等待回复 / 反复刷消息",
+          "support": "给出可控与不可控边界，避免高频提醒制造更多焦虑",
+          "next_action": "设定一次跟进时间并切换到下一岗位",
+          "surface": "岗位进度 + 轻提醒"
+        },
+        {
+          "order": 8,
+          "state": "Offer 决策焦虑",
+          "support": "允许兴奋和担心同时存在，把情绪偏好与事实条件分开",
+          "next_action": "完成价值排序，必要时预约谈薪 / 决策专家",
+          "surface": "Offer 看板 + 专家市场"
+        }
+      ],
+      "roadmap_items": [
+        {
+          "phase": "P0｜第 1–2 周",
+          "build": "微信身份 + 云数据库；真实录音转码；错误透明；岗位来源；埋点；陪伴偏好与安全协议；同时定义学社岗位标签、专家审核和固定服务包",
+          "acceptance": "关键流程各连续三次通过；用户可选陪伴方式；内容和专家订单都可绑定用户岗位对象",
+          "defer": "不做泛资讯灌量、不允许未审核专家上架、不增加复杂会员档位"
+        },
+        {
+          "phase": "P1｜第 2–4 周",
+          "build": "职业证据库；AI 岗能力雷达；5 / 10 / 20 / 30 分钟面试练习；面试前 / 后与拒绝状态支持；学社面经进入题库；首批专家预约",
+          "acceptance": "第二次练习展示进步；关键求职事件触发恰当陪伴与下一步；学社可启动练习；专家完成履约闭环",
+          "defer": "算法岗全覆盖、实时隐形面试辅助、无岗位标签的泛社区增长"
+        },
+        {
+          "phase": "P2｜第 4–6 周",
+          "build": "开放经审核的专家市场；履约 / 退款 / 评价；精品内容与贡献积分；会员权益；个性化陪伴记忆与低打扰跟进",
+          "acceptance": "学社、专家和情感支持都可归因到有效推进事件；用户认为被理解且未被催促或越界",
+          "defer": "未验证专家自由上架、隐形面试辅助、以浏览量为目标的内容扩张"
+        }
+      ],
+      "pmf_metrics": [
+        {
+          "order": 1,
+          "metric": "首轮闭环激活率",
+          "definition": "受邀新用户 24 小时内完成简历 + 1 个真实 JD + 行动计划",
+          "pilot_threshold": "≥ 60%",
+          "why": "验证产品是否能快速进入真实任务，而不是停在浏览和聊天"
+        },
+        {
+          "order": 2,
+          "metric": "首次可信产出时间",
+          "definition": "从进入产品到获得第一份经用户确认没有编造的岗位建议 / 材料",
+          "pilot_threshold": "中位数 < 10 分钟",
+          "why": "验证首用价值是否足够快"
+        },
+        {
+          "order": 3,
+          "metric": "14 天第二岗位复用率",
+          "definition": "首轮激活后 14 天内完成第二个 JD 闭环的仍在求职用户比例",
+          "pilot_threshold": "≥ 50%",
+          "why": "验证长期记忆和岗位工作流是否形成重复使用"
+        },
+        {
+          "order": 4,
+          "metric": "第 4 周求职中留存",
+          "definition": "到第 4 周仍在求职且当周产生至少一次有效推进事件的用户比例",
+          "pilot_threshold": "≥ 25%",
+          "why": "排除已结束求职用户后验证周期内留存"
+        },
+        {
+          "order": 5,
+          "metric": "产出可直接使用率",
+          "definition": "用户评价简历、话术或复盘为可直接用或只需小改",
+          "pilot_threshold": "≥ 70%",
+          "why": "验证专业价值而非回答流畅度"
+        },
+        {
+          "order": 6,
+          "metric": "信任护栏",
+          "definition": "岗位卡有来源 URL 与时间；简历改写绑定证据；用户发现编造单独计数",
+          "pilot_threshold": "来源覆盖 100%；编造经历 0 次",
+          "why": "一旦失真，专业和情感价值都会同时崩塌"
+        },
+        {
+          "order": 7,
+          "metric": "学社行动转化率",
+          "definition": "浏览或互动高价值学社内容后 7 天内完成专项练习、保存岗位或更新进度的用户比例",
+          "pilot_threshold": "≥ 20%",
+          "why": "验证学社是求职基础设施，而不是独立内容消费"
+        },
+        {
+          "order": 8,
+          "metric": "专家有效履约率",
+          "definition": "已支付订单中按时完成且用户确认获得明确下一步的比例",
+          "pilot_threshold": "按时履约 ≥ 90%；明确下一步 ≥ 80%",
+          "why": "验证开放市场的供给质量与商业价值"
+        },
+        {
+          "order": 9,
+          "metric": "情感支持有效率",
+          "definition": "触发情感支持后，用户评价被理解且在 24 小时内完成约定微行动的比例；高风险事件另行统计",
+          "pilot_threshold": "被理解评分 ≥ 4/5；微行动完成 ≥ 40%",
+          "why": "验证温暖不是话术，而是在不施压的前提下恢复行动能力"
+        }
+      ],
+      "launch_gates": [
+        {
+          "order": 1,
+          "gate": "真实用户态",
+          "pass_condition": "微信 AppID / AppSecret / 合法域名全部被线上就绪接口识别，用户稳定绑定 openid",
+          "current_state": "未通过：线上仅 1/4 就绪"
+        },
+        {
+          "order": 2,
+          "gate": "云端持久化",
+          "pass_condition": "简历、证据、岗位、进度、会话在容器重启与换设备后不丢失",
+          "current_state": "未通过：本机缓存 + 容器 JSON"
+        },
+        {
+          "order": 3,
+          "gate": "真实录音",
+          "pass_condition": "开发者工具和真机 WebM / Opus 或实际输出格式各连续三次识别成功并可松手发送",
+          "current_state": "未通过：真实样本 ASR_UPSTREAM_ERROR"
+        },
+        {
+          "order": 4,
+          "gate": "错误透明",
+          "pass_condition": "模型 / 上传 / ASR 失败不输出伪分析；用户输入可保留、重试、复制或改用文本",
+          "current_state": "部分通过：JD / 面试仍有通用降级模板"
+        },
+        {
+          "order": 5,
+          "gate": "岗位真实性",
+          "pass_condition": "每个岗位有原始链接、来源平台、抓取时间和失效状态；抽查无虚构",
+          "current_state": "待完整审计"
+        },
+        {
+          "order": 6,
+          "gate": "端到端验收",
+          "pass_condition": "从微信页面完成登录、上传、JD、对话、录音、进度和召唤学姐；关键路径各三次并留证",
+          "current_state": "本轮只确认线上接口，不宣称页面端到端已通过"
+        },
+        {
+          "order": 7,
+          "gate": "PMF 埋点",
+          "pass_condition": "能够按用户、岗位和时间记录激活、产出、投递、面试、复盘、留存和付费事件",
+          "current_state": "未发现完整事件体系"
+        }
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "competitor_matrix_coding",
+      "label": "竞品工作流分类编码",
+      "query": {
+        "engine": "duckdb",
+        "description": "根据官方产品页，将竞品按核心用户工作流分为五类并记录对 Pinco 的启示。",
+        "sql": "SELECT * FROM (VALUES ('一体化求职工作流', 'Teal / Huntr / Simplify / Careerflow', '保存 JD 后持续定制简历、申请、跟进', '岗位对象 + 简历版本 + 看板 + 浏览器扩展 / 自动填写', '聊天必须挂到岗位和材料上，不能成为孤立历史记录'), ('岗位供给 + AI', 'Jobright / LinkedIn', '发现更匹配的真实岗位并立即行动', '职位供给、匹配解释、岗位版材料、申请 / 连接', '没有供给优势时，不要靠更全搜索竞争；聚焦判断和转化'), ('面试训练 / 辅助', 'Final Round AI / Yoodli / OfferGoose / 牛客', '面试前高压准备与面后复盘', '岗位题目、角色扮演、语音反馈、实时提示、进步记录', '面试结束必须输出能力差距、证据问题和下一轮练习'), ('中文轻量一体化', 'OfferKit / AI求职助手', '低成本完成一次简历—JD—面试流程', '积分 / 免费额度、ATS 匹配、模拟面试、进度追踪', '通用功能价格会被压低，必须用 AI 岗位深度和长期记忆增值'), ('通用大模型替代', 'ChatGPT / DeepSeek 等', '随时问问题或生成一段文案', '低边际成本、通用推理、用户自己维护上下文', '凡是一次 Prompt 能完成的功能都不是护城河')) AS t(category, products, winning_moment, product_mechanism, pinco_lesson)",
+        "executed_at": "2026-08-04T22:30:00+08:00",
+        "language": "sql",
+        "filters": ["只采用 2026 年 8 月 4 日可访问的官方产品页和帮助中心描述"]
+      }
+    },
+    {
+      "id": "current_capability_audit",
+      "label": "Pinco 当前能力审计表",
+      "query": {
+        "engine": "duckdb",
+        "description": "把代码审计与当日生产接口验证归纳为当前能力和首发缺口。",
+        "sql": "SELECT * FROM (VALUES ('P0', '真实会话', '生产健康检查连接 deepseek-chat；真实测试消息获得针对性回复', '本轮未完成小程序页面端到端复测；需增加可观测错误与会话质量埋点'), ('P0', '微信身份与持久化', '线上就绪仅 1/4；后端未识别 AppID、AppSecret、请求域名；状态写入容器 JSON', '配置真实微信用户态，迁移云数据库，支持跨设备、重启不丢失与删除 / 导出'), ('P0', '语音 / ASR', '标准 MP3 成功；真实微信 WebM / Opus 样本返回 ASR_UPSTREAM_ERROR', '部署并验证转码兼容；开发者工具与真机各连续三次通过'), ('P0', '错误透明', '简历失败会明确降级；JD 与面试仍存在接口失败后返回通用模板的路径', '移除伪针对性结果；保留用户输入并提供重试 / 纯文本继续选项'), ('P1', '简历 + JD', '已有文件上传、简历评分、JD 要求 / 面试重点分析', '缺职业证据库、岗位版简历编辑 / 导出、逐条来源与事实校验'), ('P1', '模拟面试', '已有按岗位开场、追问与结束指令', '缺统一能力量表、结构化复盘、历史进步对比和 AI 岗位专项题库'), ('P1', '岗位与进度', '已有搜索接口、状态识别和本机进度板', '岗位新鲜度 / 原始链接未完成质量审计；材料与进度未云端绑定'), ('P1', '情感支持', '已有情绪陪伴会话、树洞、抱抱、召唤学姐，以及先接住情绪再给行动的提示词', '仍偏场景入口和文案；缺跨场景状态触发、陪伴偏好记忆、后续跟进、安全协议与效果埋点'), ('P1', '学社 / 专家 / 会员', '页面和部分接口已存在；学社支持干货、树洞、召唤学姐', '需与岗位、练习和进度互通；补专家审核、固定交付、履约评价、真实支付与内容治理')) AS t(priority, capability, verified_state, gap)",
+        "executed_at": "2026-08-04T22:24:00+08:00",
+        "language": "sql",
+        "filters": ["只记录代码可见或线上请求已验证的状态；页面存在不等同于端到端可用"]
+      }
+    },
+    {
+      "id": "job_loop_strategy",
+      "label": "Pinco 岗位闭环策略表",
+      "query": {
+        "engine": "duckdb",
+        "description": "将目标用户待办拆成六步岗位闭环，并为每一步定义产出、进展事件和行动型情感支持。",
+        "sql": "SELECT * FROM (VALUES ('1 目标', '上传简历，选择目标 AI 岗，粘贴真实 JD', 'Go / Maybe / No-go 判断，能力雷达，关键证据与红线', '保存合格目标岗位', '减少无方向海投，给出明确优先级'), ('2 证据', '确认可用经历、补充指标和项目细节', '带来源的职业证据库；不确定处标记待补', '完成关键证据校验', '把我不够好改写为我还缺哪条证据'), ('3 材料', '审阅岗位版摘要和项目 bullet', '可编辑、可导出的岗位版简历与投递话术', '导出 / 复制岗位版材料', '一次只改最影响结果的三处，降低启动阻力'), ('4 演练', '完成 10–15 分钟语音模拟面试', '岗位专项追问、证据缺口、表达评分、下一轮话术', '完成模拟面试与复盘', '面前焦虑转化成一轮可完成训练'), ('5 推进', '记录投递、面试、拒绝或 Offer', '自动更新岗位状态，提醒跟进，沉淀真实面试题', '更新真实求职阶段', '拒绝先接住，再只安排一个恢复动作'), ('6 学习', '复盘多岗位反馈', '跨岗位能力趋势、7 天补缺项目、下一批岗位策略', '启动下一轮有依据的投递', '让失败成为可积累信息，而不是自我否定')) AS t(step, user_action, pinco_output, progress_event, emotional_value)",
+        "executed_at": "2026-08-04T22:30:00+08:00",
+        "language": "sql"
+      }
+    },
+    {
+      "id": "interview_practice_strategy",
+      "label": "Pinco 面试前练习设计",
+      "query": {
+        "engine": "duckdb",
+        "description": "把面试前练习拆成任务建档、快速诊断、弱项复练、项目深挖、全真模拟和生态升级六个模块。",
+        "sql": "SELECT order_no AS \"order\", module, experience, system_output, success_signal FROM (VALUES (1, '面试任务建档', '上传简历与 JD，选择公司、岗位、轮次、日期、焦虑点', '题目蓝图与证据引用；标记 JD、学社面经和历史弱项来源', '用户确认练习目标和强度'), (2, '5 分钟快速诊断', '回答自我介绍、求职动机、项目概述三个问题', '识别最高风险项，推荐后续练习模式', '完成首轮并选择一个弱项'), (3, '10 分钟弱项复练', '围绕一个薄弱问题重复回答 2–3 次', '前后版本对比、救场框架和可直接复用话术', '第二次回答在目标维度提升'), (4, '20 分钟项目深挖', '对一个真实项目连续追问业务、技术、数据、ROI 和复盘', '证据缺口、追问树、需要补充的指标与 STAR 故事', '能连续讲清一个项目且无编造'), (5, '30 分钟全真模拟', '按真实轮次连续面试，中途不讲课，只做自然追问', '六维评分、关键片段、建议话术和下一轮计划', '完整结束并生成结构化报告'), (6, '学社 / 专家升级', '从真实面经启动练习，或把报告交给匹配专家', '匿名复盘发布、题库回流、专家会前摘要和会后行动清单', '内容或专家服务促成下一次有效推进')) AS t(order_no, module, experience, system_output, success_signal)",
+        "executed_at": "2026-08-04T23:05:00+08:00",
+        "language": "sql"
+      }
+    },
+    {
+      "id": "emotional_support_strategy",
+      "label": "Pinco 情感支持系统设计",
+      "query": {
+        "engine": "duckdb",
+        "description": "将情感支持从独立对话场景扩展为覆盖求职关键事件的跨模块陪伴协议。",
+        "sql": "SELECT order_no AS \"order\", state, support, next_action, surface FROM (VALUES (1, '刚进入 / 很迷茫', '不让用户先做复杂选择；询问今天最难受或最想改变的一件事', '确认一个求职目标和今天唯一任务', '首页 check-in + 对话'), (2, '拖延 / 不敢开始', '承认任务很重，让用户选择先抱抱、直接拆解或严格督促', '完成一个 5 分钟微任务', '今日任务 + 对话'), (3, '面试前焦虑', '选择陪练强度，先回忆一条真实优势，再进入短练习', '完成 5 分钟热身或一个弱项复练', '面试练习'), (4, '面试后反刍', '先允许情绪落地，不立刻给总评；分开事实、猜测和自我评价', '只记录三个事实和一个待改问题', '面试复盘 + 岗位进度'), (5, '收到拒绝', '明确结果不等于个人价值；当天不强迫深度复盘，约定次日再处理', '次日完成一次 10 分钟复练或材料修正', '岗位进度触发 + 对话'), (6, '连续受挫 / 孤独', '回顾已完成的努力和有效证据，引导匿名求助或同伴支持', '进入树洞、召唤学姐或匹配专家', '学社 + 专家市场'), (7, '等待回复 / 反复刷消息', '给出可控与不可控边界，避免高频提醒制造更多焦虑', '设定一次跟进时间并切换到下一岗位', '岗位进度 + 轻提醒'), (8, 'Offer 决策焦虑', '允许兴奋和担心同时存在，把情绪偏好与事实条件分开', '完成价值排序，必要时预约谈薪 / 决策专家', 'Offer 看板 + 专家市场')) AS t(order_no, state, support, next_action, surface)",
+        "executed_at": "2026-08-04T23:25:00+08:00",
+        "language": "sql",
+        "metric_definitions": ["情感支持目标是帮助用户恢复控制感和行动能力，不以增加聊天时长为目标。"]
+      }
+    },
+    {
+      "id": "roadmap_strategy",
+      "label": "Pinco 六周路线图",
+      "query": {
+        "engine": "duckdb",
+        "description": "根据首批用户风险和闭环依赖安排 P0–P2 的六周产品顺序。",
+        "sql": "SELECT * FROM (VALUES ('P0｜第 1–2 周', '微信身份 + 云数据库；真实录音转码；错误透明；岗位来源；埋点；陪伴偏好与安全协议；同时定义学社岗位标签、专家审核和固定服务包', '关键流程各连续三次通过；用户可选陪伴方式；内容和专家订单都可绑定用户岗位对象', '不做泛资讯灌量、不允许未审核专家上架、不增加复杂会员档位'), ('P1｜第 2–4 周', '职业证据库；AI 岗能力雷达；5 / 10 / 20 / 30 分钟面试练习；面试前 / 后与拒绝状态支持；学社面经进入题库；首批专家预约', '第二次练习展示进步；关键求职事件触发恰当陪伴与下一步；学社可启动练习；专家完成履约闭环', '算法岗全覆盖、实时隐形面试辅助、无岗位标签的泛社区增长'), ('P2｜第 4–6 周', '开放经审核的专家市场；履约 / 退款 / 评价；精品内容与贡献积分；会员权益；个性化陪伴记忆与低打扰跟进', '学社、专家和情感支持都可归因到有效推进事件；用户认为被理解且未被催促或越界', '未验证专家自由上架、隐形面试辅助、以浏览量为目标的内容扩张')) AS t(phase, build, acceptance, defer)",
+        "executed_at": "2026-08-04T23:25:00+08:00",
+        "language": "sql"
+      }
+    },
+    {
+      "id": "pmf_metric_strategy",
+      "label": "Pinco 首批用户 PMF 指标",
+      "query": {
+        "engine": "duckdb",
+        "description": "定义四周设计伙伴试点的激活、复用、留存、质量和信任决策线。",
+        "sql": "SELECT order_no AS \"order\", metric, definition, pilot_threshold, why FROM (VALUES (1, '首轮闭环激活率', '受邀新用户 24 小时内完成简历 + 1 个真实 JD + 行动计划', '≥ 60%', '验证产品是否能快速进入真实任务，而不是停在浏览和聊天'), (2, '首次可信产出时间', '从进入产品到获得第一份经用户确认没有编造的岗位建议 / 材料', '中位数 < 10 分钟', '验证首用价值是否足够快'), (3, '14 天第二岗位复用率', '首轮激活后 14 天内完成第二个 JD 闭环的仍在求职用户比例', '≥ 50%', '验证长期记忆和岗位工作流是否形成重复使用'), (4, '第 4 周求职中留存', '到第 4 周仍在求职且当周产生至少一次有效推进事件的用户比例', '≥ 25%', '排除已结束求职用户后验证周期内留存'), (5, '产出可直接使用率', '用户评价简历、话术或复盘为可直接用或只需小改', '≥ 70%', '验证专业价值而非回答流畅度'), (6, '信任护栏', '岗位卡有来源 URL 与时间；简历改写绑定证据；用户发现编造单独计数', '来源覆盖 100%；编造经历 0 次', '一旦失真，专业和情感价值都会同时崩塌'), (7, '学社行动转化率', '浏览或互动高价值学社内容后 7 天内完成专项练习、保存岗位或更新进度的用户比例', '≥ 20%', '验证学社是求职基础设施，而不是独立内容消费'), (8, '专家有效履约率', '已支付订单中按时完成且用户确认获得明确下一步的比例', '按时履约 ≥ 90%；明确下一步 ≥ 80%', '验证开放市场的供给质量与商业价值'), (9, '情感支持有效率', '触发情感支持后，用户评价被理解且在 24 小时内完成约定微行动的比例；高风险事件另行统计', '被理解评分 ≥ 4/5；微行动完成 ≥ 40%', '验证温暖不是话术，而是在不施压的前提下恢复行动能力')) AS t(order_no, metric, definition, pilot_threshold, why)",
+        "executed_at": "2026-08-04T23:25:00+08:00",
+        "language": "sql",
+        "metric_definitions": ["试点阈值是本轮 go / no-go 决策线，不是外部行业基准。"]
+      }
+    },
+    {
+      "id": "launch_gate_audit",
+      "label": "Pinco 首批用户发布门槛",
+      "query": {
+        "engine": "duckdb",
+        "description": "根据当日线上状态与产品可信要求定义从 10 人白名单扩大到 30–50 人前的发布门槛。",
+        "sql": "SELECT order_no AS \"order\", gate, pass_condition, current_state FROM (VALUES (1, '真实用户态', '微信 AppID / AppSecret / 合法域名全部被线上就绪接口识别，用户稳定绑定 openid', '未通过：线上仅 1/4 就绪'), (2, '云端持久化', '简历、证据、岗位、进度、会话在容器重启与换设备后不丢失', '未通过：本机缓存 + 容器 JSON'), (3, '真实录音', '开发者工具和真机 WebM / Opus 或实际输出格式各连续三次识别成功并可松手发送', '未通过：真实样本 ASR_UPSTREAM_ERROR'), (4, '错误透明', '模型 / 上传 / ASR 失败不输出伪分析；用户输入可保留、重试、复制或改用文本', '部分通过：JD / 面试仍有通用降级模板'), (5, '岗位真实性', '每个岗位有原始链接、来源平台、抓取时间和失效状态；抽查无虚构', '待完整审计'), (6, '端到端验收', '从微信页面完成登录、上传、JD、对话、录音、进度和召唤学姐；关键路径各三次并留证', '本轮只确认线上接口，不宣称页面端到端已通过'), (7, 'PMF 埋点', '能够按用户、岗位和时间记录激活、产出、投递、面试、复盘、留存和付费事件', '未发现完整事件体系')) AS t(order_no, gate, pass_condition, current_state)",
+        "executed_at": "2026-08-04T22:30:00+08:00",
+        "language": "sql"
+      }
+    },
+    {
+      "id": "market_scan",
+      "label": "求职 Agent 官方产品页与帮助中心扫描",
+      "query": {
+        "engine": "manual_research",
+        "description": "2026 年 8 月 4 日复核 12 个同类产品的官方页面并按用户工作流编码。",
+        "executed_at": "2026-08-04T21:40:00+08:00",
+        "language": "web_review",
+        "documents_reviewed": [
+          "https://www.tealhq.com/pricing",
+          "https://help.huntr.co/en/articles/10477521-what-is-huntr",
+          "https://help.simplify.jobs/en/help/articles/5623502-whats-included-in-simplify-features-and-pricing",
+          "https://jobright.ai/",
+          "https://www.careerflow.ai/how-it-works",
+          "https://www.finalroundai.com/",
+          "https://e.yoodli.ai/use-cases/interview-preparation",
+          "https://www.linkedin.com/help/learning/answer/a9308146",
+          "https://offergoose.cn/?souce=aibot",
+          "https://www.nowcoder.com/interview/ai/index",
+          "https://www.offerkit.ai/",
+          "https://www.resum.cn/"
+        ]
+      }
+    },
+    {
+      "id": "retention_mechanism_coding",
+      "label": "竞品留存机制人工编码",
+      "query": {
+        "engine": "duckdb",
+        "description": "把四类竞品官方页面中可观察到的核心机制按类别出现次数汇总；用于结构比较，不代表市场份额、使用率或效果。",
+        "sql": "SELECT * FROM (VALUES ('岗位对象 / 工作流', 3, '一体化、岗位供给、中文轻量', 'Teal、Huntr、Simplify、Jobright、LinkedIn、OfferKit', '让后续材料、申请和提醒围绕同一岗位累积'), ('岗位定制产出', 3, '一体化、岗位供给、中文轻量', 'Teal、Simplify、Jobright、LinkedIn、OfferKit', '把通用建议变成可直接使用的岗位版材料'), ('进度记录 / 跟进', 2, '一体化、中文轻量', 'Teal、Huntr、Simplify、Careerflow、OfferKit', '在多次投递之间建立持续使用'), ('练习与反馈', 3, '一体化、面试训练、中文轻量', 'Careerflow、Final Round AI、Yoodli、OfferGoose、牛客、OfferKit', '在面试前后形成高压高价值回访'), ('自动填写 / 申请', 2, '一体化、岗位供给', 'Simplify、Jobright', '节省时间，但依赖浏览器和岗位生态，不宜作为 Pinco 首发重点')) AS t(mechanism, category_count, covered_categories, examples, interpretation)",
+        "executed_at": "2026-08-04T22:30:00+08:00",
+        "language": "sql",
+        "filters": [
+          "产品按一体化求职工作流、岗位供给 + AI、面试训练 / 辅助、中文轻量一体化四类编码",
+          "只记录官方页面可观察到的核心产品机制"
+        ],
+        "metric_definitions": [
+          "category_count：四类竞品中至少有一个代表产品把该机制作为明确核心流程的类别数量。"
+        ]
+      }
+    },
+    {
+      "id": "pinco_audit",
+      "label": "Pinco 代码审计与线上实测",
+      "query": {
+        "engine": "code_and_http_review",
+        "description": "审阅小程序与后端实现，并实测生产健康检查、就绪检查、真实对话和录音格式兼容。",
+        "executed_at": "2026-08-04T22:24:00+08:00",
+        "language": "code_review_and_http",
+        "documents_reviewed": [
+          "pinco-miniapp/src/store/usePincoStore.ts",
+          "pinco-miniapp/src/pages/conversation/index.tsx",
+          "pinco-miniapp/src/pages/hub/index.tsx",
+          "pinco-miniapp/src/pages/job-search/index.tsx",
+          "backend/main.py",
+          "backend/DEPLOY_CLOUDRUN.md"
+        ],
+        "endpoints_reviewed": [
+          "https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/health",
+          "https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/api/v1/miniapp/readiness",
+          "https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/api/v1/miniapp/message",
+          "https://flask-jk7n-277209-9-1430442234.sh.run.tcloudbase.com/api/v1/voice/upload"
+        ]
+      }
+    },
+    {
+      "id": "strategy_synthesis",
+      "label": "Pinco PMF 策略综合",
+      "query": {
+        "engine": "analyst_synthesis",
+        "description": "将竞品工作流、Pinco 当前能力、目标用户和首批用户约束转化为产品取舍、试点阈值与发布门槛。",
+        "executed_at": "2026-08-04T22:30:00+08:00",
+        "language": "product_strategy",
+        "metric_definitions": [
+          "每周有效求职推进用户：一周内至少完成一次可核实推进事件的仍在求职用户；单纯聊天不计入。",
+          "首轮闭环激活：新用户在 24 小时内完成上传简历、绑定一个真实 JD 并拿到可执行计划。",
+          "可直接使用率：用户评价产出为可直接使用或只需小改的比例。"
+        ]
+      }
+    }
+  ],
+  "package_info": {}
+}
