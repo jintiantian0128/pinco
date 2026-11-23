@@ -13,6 +13,15 @@
 .button { color: #fff; background: $color-primary; }
 .secondaryButton { color: $color-primary; background: rgba(124, 77, 255, .1); }
 .item { padding: 20rpx 0; border-top: 1rpx solid #f0eef5; }
+.taskEmpty { padding-top: 10rpx; }
+.taskItem { padding: 20rpx 0; border-top: 1rpx solid #f0eef5; }
+.taskHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14rpx; }
+.taskHeading .itemTitle { flex: 1; }
+.taskStatus { flex-shrink: 0; padding: 6rpx 12rpx; border-radius: 999rpx; color: #6D28D9; background: #F3EFFF; font-size: 20rpx; }
+.taskStatusFailed { color: #B42318; background: #FEF3F2; }
+.taskStep { display: block; margin-top: 8rpx; color: #047857; font-size: 21rpx; line-height: 1.45; }
+.taskNotice, .taskFailure { display: block; margin-top: 10rpx; color: #8A5A00; font-size: 21rpx; line-height: 1.5; }
+.taskFailure { color: #B42318; }
 .itemTitle { margin-bottom: 8rpx; color: $color-text-primary; font-size: 26rpx; font-weight: 700; }
 .itemText, .materialText { margin-top: 6rpx; color: $color-text-secondary; font-size: 22rpx; line-height: 1.55; }
 .materialText { color: $color-text-primary; }

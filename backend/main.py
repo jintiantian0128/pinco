@@ -6296,8 +6296,8 @@ def detect_agentic_task_request(text: str) -> Optional[str]:
     return None
 
 
-def _agent_task_plan(task_type: str, user: Dict[str, Any], user_request: str) -> List[Dict[str, str]]:
-    """Ask the model for a bounded plan, validate tools against our allowlist, repair once."""
+def _agent_task_plan_with_source(task_type: str, user: Dict[str, Any], user_request: str) -> tuple[List[Dict[str, str]], str]:
+    """Ask the model for a bounded plan and report whether it was model-validated or fixed recovery."""
     fixed = AGENTIC_TASK_PLANS[task_type]
     profile = user.get("career_profile") or {}
     facts = user.get("career_memory") or {}
@@ -6333,16 +6333,16 @@ def _agent_task_plan(task_type: str, user: Dict[str, Any], user_request: str) ->
     steps = payload.get("steps") if isinstance(payload, dict) else None
     allowed = AGENT_TASK_TOOLS[task_type]
     if not isinstance(steps, list) or not 3 <= len(steps) <= 5:
-        return deepcopy(fixed)
+        return deepcopy(fixed), "fixed_recovery_plan"
     normalized = []
     seen_tools = set()
     fixed_by_tool = {step["tool"]: step for step in fixed}
     for index, step in enumerate(steps):
         if not isinstance(step, dict) or step.get("tool") not in allowed:
-            return deepcopy(fixed)
+            return deepcopy(fixed), "fixed_recovery_plan"
         tool = str(step["tool"])
         if tool in seen_tools:
-            return deepcopy(fixed)
+            return deepcopy(fixed), "fixed_recovery_plan"
         seen_tools.add(tool)
         fixed_step = fixed_by_tool[tool]
         normalized.append({
@@ -6353,7 +6353,12 @@ def _agent_task_plan(task_type: str, user: Dict[str, Any], user_request: str) ->
             "status": "pending",
             "attempts": 0,
         })
-    return normalized if seen_tools == allowed else deepcopy(fixed)
+    return (normalized, "model_validated") if seen_tools == allowed else (deepcopy(fixed), "fixed_recovery_plan")
+
+
+def _agent_task_plan(task_type: str, user: Dict[str, Any], user_request: str) -> List[Dict[str, str]]:
+    """Compatibility wrapper returning only the bounded, allowlisted plan."""
+    return _agent_task_plan_with_source(task_type, user, user_request)[0]
 
 
 def _save_agent_task(user_id: str, task: Dict[str, Any]) -> Dict[str, Any]:
@@ -6549,7 +6554,8 @@ async def _execute_agent_task(user_id: str, task: Dict[str, Any], user: Dict[str
                         city = str(task.get("inputs", {}).get("city") or "") or "、".join(profile.get("cities") or []) or str((memory.get("target_city") or {}).get("value") or "")
                         if not role or not city:
                             task["missing_inputs"] = [label for label, value in (("目标岗位", role), ("目标城市或‘不限’", city)) if not value]
-                            task["failure"] = {"code": "MISSING_PROFILE", "message": "请先补齐求职画像中的目标岗位和城市，再确认执行。"}
+                            task["next_input"] = "target_role" if not role else "city"
+                            task["failure"] = {"code": "MISSING_PROFILE", "message": "执行前需要补充一项必要信息。"}
                             task["handoff_count"] = int(task.get("handoff_count", 0)) + 1
                             _persist_task_step(user_id, task, step_id, "failed", error=task["failure"])
                             task["status"] = "awaiting_input"
@@ -6582,6 +6588,8 @@ async def _execute_agent_task(user_id: str, task: Dict[str, Any], user: Dict[str
                     if step_id == "context":
                         evidence = _agent_task_source_evidence(user)
                         if not evidence:
+                            task["next_input"] = "resume_or_evidence"
+                            task["missing_inputs"] = ["一份旧简历或一条已确认的职业经历"]
                             task["failure"] = {"code": "NO_RESUME_SOURCE", "message": "我还没有可依据的简历或已确认职业证据。请先上传一份旧简历，或在职业证据库确认一条经历，再继续。"}
                             task["handoff_count"] = int(task.get("handoff_count", 0)) + 1
                             _persist_task_step(user_id, task, step_id, "failed", error=task["failure"])
@@ -6677,9 +6685,15 @@ def public_agent_task(task: Dict[str, Any]) -> Dict[str, Any]:
 def render_agent_task_result(task: Dict[str, Any]) -> str:
     status = task.get("status")
     if status == "awaiting_input":
+        next_input = task.get("next_input")
+        if next_input == "target_role":
+            return "我先停在信息校验这一步，不会替你猜岗位。为了继续推荐，想先确认一个问题：你最想优先了解哪类岗位？例如 AI 产品经理、AI 产品运营；还没想好也可以直接说“不确定”，我们先一起梳理方向。"
+        if next_input == "city":
+            return "岗位方向已经有了。为了筛选更有用的候选，再确认一项：你希望在哪个城市找？也可以回复“远程”或“暂不限定”。"
+        if next_input == "resume_or_evidence":
+            return "我还没有能可靠改写的经历材料。你可以上传一份旧简历，或先到求职证据库确认一条项目经历；在有真实依据前，我不会替你编简历内容。"
         missing = "、".join(task.get("missing_inputs", []))
-        message = (task.get("failure") or {}).get("message") or "还缺少完成任务所需的信息。"
-        return f"我先停在信息校验这一步，没有继续猜。{message}" + (f"\n\n还需要：{missing}。补齐后回复「继续任务」。" if missing else "")
+        return "我先停在信息校验这一步，没有继续猜。" + (f"还需要：{missing}。" if missing else "请补充完成任务所需的信息。")
     if status == "failed":
         failure = task.get("failure") or {}
         return f"任务在「{failure.get('step_id', '执行')}」步骤没有完成：{failure.get('message', '工具暂时失败')}\n\n我已保存已完成步骤和错误位置。可以回复「重试」继续；若已达到单步重试上限，我会说明替代方案，不会无限重跑。"
@@ -6803,6 +6817,48 @@ async def _chat_core_uncached(request: ChatRequest, on_response_chunk: Optional[
             )
         if pending_task and pending_task.get("status") in {"failed", "awaiting_input", "running"} and any(token in latest_compact for token in ("重试", "继续任务", "继续执行")):
             user_snapshot, pending_task = _get_agent_task(request.user_id, pending_task["id"])
+            if pending_task.get("status") == "awaiting_input":
+                if pending_task.get("type") == "job_recommendation":
+                    continuation = resolve_job_search_task(
+                        {**user_snapshot, "active_agent_task": {"type": "job_search", **(pending_task.get("inputs") or {})}},
+                        latest_user_text,
+                        latest_user_text,
+                    )
+                    if continuation:
+                        pending_task.setdefault("inputs", {}).update({
+                            key: continuation[key] for key in ("role", "city") if continuation.get(key)
+                        })
+                        pending_task["missing_inputs"] = continuation.get("missing", [])
+                        pending_task["next_input"] = "target_role" if not pending_task["inputs"].get("role") else "city" if not pending_task["inputs"].get("city") else None
+                        if not continuation.get("missing"):
+                            pending_task["status"] = "approved"
+                            failed_step = next((step for step in pending_task.get("steps", []) if step.get("status") == "failed"), None)
+                            if failed_step:
+                                failed_step.update({"status": "pending", "error": None})
+                            pending_task["failure"] = None
+                            _save_agent_task(request.user_id, pending_task)
+                            completed_task = await _execute_agent_task(request.user_id, pending_task, user_snapshot)
+                            return ChatResponse(
+                                response=render_agent_task_result(completed_task),
+                                agent={"intent": completed_task.get("type"), "next_action": "查看结果或调整条件后重新发起。", "task": public_agent_task(completed_task)},
+                            )
+                        _save_agent_task(request.user_id, pending_task)
+                elif pending_task.get("type") == "jd_resume" and _agent_task_source_evidence(user_snapshot):
+                    pending_task["status"] = "approved"
+                    failed_step = next((step for step in pending_task.get("steps", []) if step.get("status") == "failed"), None)
+                    if failed_step:
+                        failed_step.update({"status": "pending", "error": None})
+                    pending_task["failure"] = None
+                    _save_agent_task(request.user_id, pending_task)
+                    completed_task = await _execute_agent_task(request.user_id, pending_task, user_snapshot)
+                    return ChatResponse(
+                        response=render_agent_task_result(completed_task),
+                        agent={"intent": completed_task.get("type"), "next_action": "查看结果或调整条件后重新发起。", "task": public_agent_task(completed_task)},
+                    )
+                return ChatResponse(
+                    response=render_agent_task_result(pending_task),
+                    agent={"intent": pending_task.get("type"), "next_action": "等待用户补充一项必要信息", "task": public_agent_task(pending_task)},
+                )
             if pending_task.get("status") == "running":
                 completed_task = await _execute_agent_task(request.user_id, pending_task, user_snapshot)
                 return ChatResponse(
@@ -6824,8 +6880,11 @@ async def _chat_core_uncached(request: ChatRequest, on_response_chunk: Optional[
                 latest_user_text,
                 latest_user_text,
             )
+            if continuation_task:
+                pending_task.setdefault("inputs", {}).update({key: continuation_task[key] for key in ("role", "city") if continuation_task.get(key)})
+                pending_task["missing_inputs"] = continuation_task.get("missing", [])
+                pending_task["next_input"] = "target_role" if not pending_task["inputs"].get("role") else "city" if not pending_task["inputs"].get("city") else None
             if continuation_task and not continuation_task.get("missing"):
-                pending_task.setdefault("inputs", {}).update({"role": continuation_task["role"], "city": continuation_task["city"]})
                 pending_task["status"] = "approved"
                 failed_step = next((step for step in pending_task.get("steps", []) if step.get("status") == "failed"), None)
                 if failed_step:
@@ -6836,6 +6895,12 @@ async def _chat_core_uncached(request: ChatRequest, on_response_chunk: Optional[
                 return ChatResponse(
                     response=render_agent_task_result(completed_task),
                     agent={"intent": completed_task.get("type"), "next_action": "查看结果或调整条件后重新发起。", "task": public_agent_task(completed_task)},
+                )
+            if continuation_task:
+                _save_agent_task(request.user_id, pending_task)
+                return ChatResponse(
+                    response=render_agent_task_result(pending_task),
+                    agent={"intent": pending_task.get("type"), "next_action": "等待用户补充一项必要信息", "task": public_agent_task(pending_task)},
                 )
         if task_request_type:
             if not request.user_id:
@@ -6850,8 +6915,7 @@ async def _chat_core_uncached(request: ChatRequest, on_response_chunk: Optional[
                 task_inputs["role"] = extracted.get("role") or "、".join(profile.get("target_roles") or []) or str((memory.get("target_role") or {}).get("value") or "")
                 task_inputs["city"] = extracted.get("city") or "、".join(profile.get("cities") or []) or str((memory.get("target_city") or {}).get("value") or "")
             try:
-                plan = await asyncio.to_thread(_agent_task_plan, task_request_type, user_snapshot, latest_user_text)
-                plan_source = "model_validated"
+                plan, plan_source = await asyncio.to_thread(_agent_task_plan_with_source, task_request_type, user_snapshot, latest_user_text)
             except Exception as plan_error:
                 print(f"[Agent task] planner used fixed plan after failure: {type(plan_error).__name__}")
                 plan = deepcopy(AGENTIC_TASK_PLANS[task_request_type])

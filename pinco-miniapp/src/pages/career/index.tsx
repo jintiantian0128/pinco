@@ -3,7 +3,7 @@ import { ScrollView, Text, Textarea, View } from '@tarojs/components'
 import Taro, { usePullDownRefresh } from '@tarojs/taro'
 import { apiRequest } from '@/services/api'
 import { usePincoStore } from '@/store/usePincoStore'
-import { CareerWorkspace, WorkspaceJob } from '@/types/pinco'
+import { CareerAgentTask, CareerWorkspace, WorkspaceJob } from '@/types/pinco'
 import styles from './index.module.scss'
 import { usePageAnalytics } from '@/hooks/usePageAnalytics'
 
@@ -13,6 +13,7 @@ const emptyWorkspace: CareerWorkspace = {
   conversation_profile: { fields: {}, confirmed_facts: [], assumptions: [], open_questions: [], user_declined_to_answer: [] },
   evidence: [],
   jobs: [],
+  agent_tasks: [],
   interview_sessions: [],
   resume_analyses: [],
   capability_radar: { dimensions: [], disclaimer: '' },
@@ -40,6 +41,14 @@ const conversationProfileLabels: Record<string, string> = {
   need_type: '本轮需求', city: '目标城市', industry_or_background: '行业/背景',
   expected_salary_range: '期望薪资', resume_content: '简历材料', interview_round: '面试轮次',
   job_description: '目标 JD', offer_details: 'Offer 条件',
+}
+
+const agentTaskStatusLabels: Record<string, string> = {
+  awaiting_confirmation: '等待你确认',
+  awaiting_input: '等待补充信息',
+  running: '执行中',
+  failed: '暂时失败，可恢复',
+  completed: '已完成',
 }
 
 const CareerPage: React.FC = () => {
@@ -344,6 +353,14 @@ const CareerPage: React.FC = () => {
     })
   }
 
+  const continueAgentTask = (task: CareerAgentTask) => {
+    const prompt = task.status === 'awaiting_confirmation'
+      ? '确认开始'
+      : task.status === 'failed' ? '重试' : '继续任务'
+    Taro.switchTab({ url: '/pages/conversation/index' })
+    seedConversation('general', prompt, `继续：${task.title}`)
+  }
+
   const toggleLearningDay = async (day: number, completed: boolean) => {
     if (!userId || !workspace.learning_plan) return
     try {
@@ -387,12 +404,58 @@ const CareerPage: React.FC = () => {
   const completedSessions = workspace.interview_sessions.filter((item) => item.status === 'completed' && item.report)
   const latestScore = Number(completedSessions[0]?.report?.overall_score || 0)
   const previousScore = Number(completedSessions[1]?.report?.overall_score || 0)
+  const sortedAgentTasks = [...(workspace.agent_tasks || [])]
+    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
+  const activeAgentTask = sortedAgentTasks.find((task) => ['awaiting_confirmation', 'awaiting_input', 'running', 'failed'].includes(task.status))
+  const visibleAgentTasks = [
+    ...(activeAgentTask ? [activeAgentTask] : []),
+    ...sortedAgentTasks.filter((task) => task.status === 'completed').slice(0, 3),
+  ]
 
   return (
     <ScrollView className={styles.page} scrollY>
       <View className={styles.hero}>
         <Text className={styles.heroTitle}>求职证据库</Text>
         <Text className={styles.heroDesc}>先存真实事实，再让 AI 为不同 JD 重组表达。没有证据的内容会标成缺口，不会替你编经历。</Text>
+      </View>
+
+      <View className={styles.card}>
+        <Text className={styles.title}>求职 Agent 任务</Text>
+        <Text className={styles.desc}>计划、执行进度和待补信息会保存在这里；离开页面后也可以继续。</Text>
+        {visibleAgentTasks.length === 0 && (
+          <View className={styles.taskEmpty}>
+            <Text className={styles.itemText}>还没有保存的多步任务。可以先让 Pinco 按你的背景推荐岗位，再一起筛选投递优先级。</Text>
+            <View className={styles.secondaryButton} onClick={() => {
+              Taro.switchTab({ url: '/pages/conversation/index' })
+              seedConversation('general', '请按我的背景推荐岗位并给出投递优先级。', '开始岗位推荐计划')
+            }}><Text>开始岗位推荐计划</Text></View>
+          </View>
+        )}
+        {visibleAgentTasks.map((task) => {
+          const steps = task.steps || []
+          const completedSteps = steps.filter((step) => step.status === 'completed').length
+          const canResume = task.status !== 'completed'
+          return (
+            <View key={task.id} className={styles.taskItem}>
+              <View className={styles.taskHeading}>
+                <Text className={styles.itemTitle}>{task.title || '求职任务'}</Text>
+                <Text className={`${styles.taskStatus} ${task.status === 'failed' ? styles.taskStatusFailed : ''}`}>
+                  {agentTaskStatusLabels[task.status] || task.status}
+                </Text>
+              </View>
+              {task.plan_source === 'fixed_recovery_plan' && <Text className={styles.taskNotice}>个性化规划暂不可用；当前使用受限标准计划，执行仍会逐步校验。</Text>}
+              {steps.length > 0 && <Text className={styles.itemText}>步骤进度：{completedSteps}/{steps.length} 完成</Text>}
+              {steps.filter((step) => step.status === 'completed').slice(-3).map((step) => (
+                <Text key={step.id} className={styles.taskStep}>✓ {step.title}</Text>
+              ))}
+              {task.missing_inputs?.length ? <Text className={styles.taskNotice}>待补充：{task.missing_inputs.join('、')}</Text> : null}
+              {task.failure?.message && <Text className={styles.taskFailure}>上次未完成：{task.failure.message}</Text>}
+              {canResume && <View className={styles.secondaryButton} onClick={() => continueAgentTask(task)}>
+                <Text>{task.status === 'awaiting_confirmation' ? '查看计划并确认' : task.status === 'failed' ? '重试此任务' : task.status === 'awaiting_input' ? '查看待补信息' : '继续此任务'}</Text>
+              </View>}
+            </View>
+          )
+        })}
       </View>
 
       <View className={styles.card}>

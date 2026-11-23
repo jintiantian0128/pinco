@@ -31,49 +31,12 @@ class AgenticWorkflowTests(unittest.TestCase):
                 self.assertEqual(main.detect_agentic_task_request(utterance), expected)
 
     def test_job_candidate_validation_eval_cases(self):
-        base = {"title": "AI产品经理", "company": "甲公司", "location": "上海", "summary": "AI产品职位", "url": "https://jobs.example/1", "verified_source": True}
-        cases = [
-            (base, "上海", True),
-            ({**base, "title": ""}, "上海", False),
-            ({**base, "company": ""}, "上海", False),
-            ({**base, "location": ""}, "上海", False),
-            ({**base, "summary": ""}, "上海", False),
-            ({**base, "url": ""}, "上海", False),
-            ({**base, "url": "javascript:alert(1)"}, "上海", False),
-            ({**base, "verified_source": False}, "上海", False),
-            ({**base, "location": "北京"}, "上海", False),
-            ({**base, "location": "上海/远程"}, "上海", True),
-            ({**base, "location": "北京"}, "不限", True),
-            ({**base, "location": "上海"}, "远程", False),
-            ({**base, "location": "远程"}, "远程", True),
-            ({**base, "company": "未知公司"}, "上海", False),
-            ("not-a-job", "上海", False),
-        ]
-        for candidate, city, expected in cases:
+        for candidate, city, expected in self._job_candidate_cases():
             with self.subTest(candidate=candidate):
                 self.assertEqual(bool(main._validate_job_candidates([candidate] if isinstance(candidate, dict) else [candidate], city)), expected)
 
     def test_resume_grounding_eval_cases(self):
-        evidence = [{
-            "id": "ev-1", "title": "智能客服项目", "situation": "客服问题多",
-            "action": "搭建知识库召回并优化流程", "result": "转化率提升18%",
-            "metrics": "18%", "skills": ["知识库", "评估"],
-        }]
-        cases = [
-            ({"text": "搭建知识库召回并优化流程", "evidence_ids": ["ev-1"]}, True),
-            ({"text": "转化率提升18%", "evidence_ids": ["ev-1"]}, True),
-            ({"text": "转化率提升28%", "evidence_ids": ["ev-1"]}, False),
-            ({"text": "主导团队完成项目", "evidence_ids": []}, False),
-            ({"text": "主导团队完成项目", "evidence_ids": ["missing"]}, False),
-            ({"text": "", "evidence_ids": ["ev-1"]}, False),
-            ({"text": "使用知识库", "evidence_ids": ["ev-1", "missing"]}, True),
-            ({"text": "转化率提升18.0%", "evidence_ids": ["ev-1"]}, False),
-            ({"text": "转化率提升18%并降低成本30%", "evidence_ids": ["ev-1"]}, False),
-            ({"text": "优化客服流程", "evidence_ids": ["ev-1"]}, True),
-            ({"text": "使用 Python 构建系统", "evidence_ids": ["ev-1"]}, False),
-            ({"text": "实现 18% 增长", "evidence_ids": ["ev-1"]}, False),
-        ]
-        for bullet, expected in cases:
+        for bullet, evidence, expected in self._resume_grounding_cases():
             with self.subTest(bullet=bullet):
                 verified = main._verify_resume_draft({"resume_bullets": [bullet]}, evidence)
                 self.assertEqual(bool(verified["resume_bullets"]), expected)
@@ -127,6 +90,144 @@ class AgenticWorkflowTests(unittest.TestCase):
             self.assertTrue(all(step["status"] == "completed" for step in saved_task["steps"]))
             self.assertIn("jobs.example/ai-pm", completed.response)
             self.assertIn("来源页确认", completed.response)
+
+    def test_invalid_model_plan_is_reported_as_fixed_recovery_plan(self):
+        invalid = {"steps": [
+            {"id": "context", "title": "读取画像", "tool": "read_everything", "expected_output": "画像"},
+            {"id": "search", "title": "搜索", "tool": "search_jobs", "expected_output": "候选"},
+            {"id": "verify", "title": "校验", "tool": "verify_jobs", "expected_output": "结果"},
+        ]}
+        with patch.object(main, "llm_chat_with_fallback", return_value=json.dumps(invalid, ensure_ascii=False)):
+            plan, source = main._agent_task_plan_with_source("job_recommendation", {}, "推荐岗位")
+        self.assertEqual(source, "fixed_recovery_plan")
+        self.assertEqual({step["tool"] for step in plan}, main.AGENT_TASK_TOOLS["job_recommendation"])
+
+    def test_missing_profile_clarifies_one_field_and_does_not_repeat_tool_without_input(self):
+        async def fake_search(_request):
+            return SimpleNamespace(jobs=[main.JobResult(
+                title="AI产品经理", company="甲公司", location="杭州", summary="AI产品与Agent",
+                url="https://jobs.example/hz-ai-pm", source="招聘来源", verified_source=True,
+            )], query_analysis={"status": "source_linked_candidates"})
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "agentic-clarification-device", "求职者", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["agent_tasks"] = [{
+                "id": "task-clarify", "type": "job_recommendation", "title": "岗位推荐与投递优先级",
+                "status": "awaiting_input", "inputs": {"role": "", "city": ""}, "outputs": {},
+                "missing_inputs": ["目标岗位", "目标城市或‘不限’"], "next_input": "target_role",
+                "steps": [
+                    {**step, "status": "failed" if step["id"] == "context" else "pending", "attempts": 1 if step["id"] == "context" else 0}
+                    for step in main.AGENTIC_TASK_PLANS["job_recommendation"]
+                ],
+                "failure": {"code": "MISSING_PROFILE", "message": "需要补充信息"},
+            }]
+            store.save(state)
+            initial_messages = [main.Message(id="resume-task", role="user", content="继续任务")]
+            with patch.object(main, "_state_store", store), patch.object(main, "search_jobs", side_effect=fake_search):
+                clarification = asyncio.run(main.chat(main.ChatRequest(user_id=user_id, messages=initial_messages)))
+                saved = store.load()["users"][user_id]["agent_tasks"][0]
+                self.assertEqual(saved["steps"][0]["attempts"], 1)
+                self.assertIn("哪类岗位", clarification.response)
+
+                role_messages = initial_messages + [
+                    main.Message(role="assistant", content=clarification.response),
+                    main.Message(id="role-answer", role="user", content="AI产品经理"),
+                ]
+                city_question = asyncio.run(main.chat(main.ChatRequest(user_id=user_id, messages=role_messages)))
+                saved = store.load()["users"][user_id]["agent_tasks"][0]
+                self.assertEqual(saved["inputs"]["role"], "AI产品经理")
+                self.assertEqual(saved["status"], "awaiting_input")
+                self.assertIn("哪个城市", city_question.response)
+
+                city_messages = role_messages + [
+                    main.Message(role="assistant", content=city_question.response),
+                    main.Message(id="city-answer", role="user", content="杭州"),
+                ]
+                completed = asyncio.run(main.chat(main.ChatRequest(user_id=user_id, messages=city_messages)))
+            saved = store.load()["users"][user_id]["agent_tasks"][0]
+        self.assertEqual(saved["status"], "completed")
+        self.assertIn("杭州", completed.response, json.dumps(saved, ensure_ascii=False))
+
+    def test_jd_resume_task_runs_plan_grounding_and_user_review_end_to_end(self):
+        plan_json = json.dumps({"steps": [
+            {"id": step["id"], "title": step["title"], "tool": step["tool"], "expected_output": step["expected_output"]}
+            for step in main.AGENTIC_TASK_PLANS["jd_resume"]
+        ]}, ensure_ascii=False)
+        draft_json = json.dumps({
+            "jd_requirements": ["知识库召回优化"],
+            "gaps": ["尚未提供项目结果数字"],
+            "resume_bullets": [{"text": "搭建智能客服知识库召回并优化流程", "evidence_ids": ["ev-grounded"]}],
+        }, ensure_ascii=False)
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            state = main.default_beta_state()
+            user = main.ensure_user(state, "agentic-jd-device", "求职者", "weapp")
+            user_id = user["profile"]["user_id"]
+            user["evidence"] = [{
+                "id": "ev-grounded", "title": "智能客服项目", "situation": "客服知识查找效率低",
+                "action": "搭建智能客服知识库召回并优化流程", "result": "检索流程可用",
+                "metrics": "", "skills": ["知识库召回"],
+            }]
+            store.save(state)
+            messages = [main.Message(id="jd-task", role="user", content="针对这个JD改简历：负责知识库召回优化和客服效率提升")]
+            with patch.object(main, "_state_store", store), patch.object(main, "llm_chat_with_fallback", side_effect=[plan_json, draft_json]):
+                planned = asyncio.run(main.chat(main.ChatRequest(user_id=user_id, messages=messages)))
+                self.assertIn("确认开始", planned.response)
+                approved = messages + [
+                    main.Message(role="assistant", content=planned.response),
+                    main.Message(id="confirm-jd", role="user", content="确认开始"),
+                ]
+                finished = asyncio.run(main.chat(main.ChatRequest(user_id=user_id, messages=approved)))
+                task = store.load()["users"][user_id]["agent_tasks"][0]
+        self.assertEqual(task["status"], "completed")
+        self.assertTrue(all(step["status"] == "completed" for step in task["steps"]))
+        self.assertIn("搭建智能客服知识库召回", finished.response)
+        self.assertIn("不会自动覆盖简历", finished.response)
+
+    def test_benchmark_case_counts_meet_planned_minimum(self):
+        # Existing deterministic case tables: 15 job-source/city cases and 12
+        # resume-evidence grounding cases, matching the 10–15 case plan.
+        self.assertEqual(len(self._job_candidate_cases()), 15)
+        self.assertEqual(len(self._resume_grounding_cases()), 12)
+
+    @staticmethod
+    def _job_candidate_cases():
+        base = {"title": "AI产品经理", "company": "甲公司", "location": "上海", "summary": "AI产品职位", "url": "https://jobs.example/1", "verified_source": True}
+        return [
+            (base, "上海", True), ({**base, "title": ""}, "上海", False),
+            ({**base, "company": ""}, "上海", False), ({**base, "location": ""}, "上海", False),
+            ({**base, "summary": ""}, "上海", False), ({**base, "url": ""}, "上海", False),
+            ({**base, "url": "javascript:alert(1)"}, "上海", False), ({**base, "verified_source": False}, "上海", False),
+            ({**base, "location": "北京"}, "上海", False), ({**base, "location": "上海/远程"}, "上海", True),
+            ({**base, "location": "北京"}, "不限", True), ({**base, "location": "上海"}, "远程", False),
+            ({**base, "location": "远程"}, "远程", True), ({**base, "company": "未知公司"}, "上海", False),
+            ("not-a-job", "上海", False),
+        ]
+
+    @staticmethod
+    def _resume_grounding_cases():
+        evidence = [{
+            "id": "ev-1", "title": "智能客服项目", "situation": "客服问题多",
+            "action": "搭建知识库召回并优化流程", "result": "转化率提升18%",
+            "metrics": "18%", "skills": ["知识库", "评估"],
+        }]
+        return [(bullet, evidence, expected) for bullet, expected in [
+            ({"text": "搭建知识库召回并优化流程", "evidence_ids": ["ev-1"]}, True),
+            ({"text": "转化率提升18%", "evidence_ids": ["ev-1"]}, True),
+            ({"text": "转化率提升28%", "evidence_ids": ["ev-1"]}, False),
+            ({"text": "主导团队完成项目", "evidence_ids": []}, False),
+            ({"text": "主导团队完成项目", "evidence_ids": ["missing"]}, False),
+            ({"text": "", "evidence_ids": ["ev-1"]}, False),
+            ({"text": "使用知识库", "evidence_ids": ["ev-1", "missing"]}, True),
+            ({"text": "转化率提升18.0%", "evidence_ids": ["ev-1"]}, False),
+            ({"text": "转化率提升18%并降低成本30%", "evidence_ids": ["ev-1"]}, False),
+            ({"text": "优化客服流程", "evidence_ids": ["ev-1"]}, True),
+            ({"text": "使用 Python 构建系统", "evidence_ids": ["ev-1"]}, False),
+            ({"text": "实现 18% 增长", "evidence_ids": ["ev-1"]}, False),
+        ]]
 
     def test_revised_task_keeps_unaffected_completed_steps(self):
         with tempfile.TemporaryDirectory() as directory:

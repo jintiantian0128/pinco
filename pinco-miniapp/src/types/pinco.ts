@@ -437,6 +437,7 @@ export interface CareerWorkspace {
   jobs: WorkspaceJob[]
   interview_sessions: any[]
   resume_analyses: any[]
+  agent_tasks?: CareerAgentTask[]
   capability_radar?: {
     target_track?: string
     competency_version?: string
@@ -456,6 +457,24 @@ export interface CareerWorkspace {
     next_batch_strategy: string
     disclaimer: string
   }
+}
+
+export interface CareerAgentTask {
+  id: string
+  type: 'job_recommendation' | 'jd_resume' | string
+  title: string
+  status: 'awaiting_confirmation' | 'awaiting_input' | 'running' | 'failed' | 'completed' | string
+  plan_source?: 'model_validated' | 'fixed_recovery_plan' | string
+  steps: Array<{
+    id: string
+    title: string
+    status: 'pending' | 'running' | 'failed' | 'completed' | string
+    error?: { message?: string }
+  }>
+  failure?: { message?: string }
+  missing_inputs?: string[]
+  next_input?: string
+  updated_at?: string
 }
 
 export interface ContributionStatus {
