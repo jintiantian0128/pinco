@@ -11,6 +11,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Any, Callable, Dict, Optional
@@ -43,6 +44,15 @@ class StateStore(ABC):
         """Atomically reserve one billable operation or fail closed."""
         raise RuntimeError("当前状态仓库不支持跨实例的原子用量限制")
 
+    def start_chat_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        raise NotImplementedError("当前状态仓库不支持对话任务持久化")
+
+    def update_chat_task(self, task_id: str, user_id: str, updates: Dict[str, Any]) -> None:
+        raise NotImplementedError("当前状态仓库不支持对话任务持久化")
+
+    def get_chat_task(self, task_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        raise NotImplementedError("当前状态仓库不支持对话任务持久化")
+
 
 class JsonFileStateStore(StateStore):
     backend_name = "file"
@@ -51,6 +61,59 @@ class JsonFileStateStore(StateStore):
     def __init__(self, file_path: str, default_factory: Callable[[], State]):
         self.file_path = file_path
         self.default_factory = default_factory
+        self.chat_task_path = f"{file_path}.chat_tasks.json"
+        self.chat_task_lock = threading.Lock()
+
+    def _load_chat_tasks(self) -> Dict[str, Dict[str, Any]]:
+        if not os.path.exists(self.chat_task_path):
+            return {}
+        with open(self.chat_task_path, "r", encoding="utf-8") as file:
+            return json.load(file)
+
+    def _save_chat_tasks(self, tasks: Dict[str, Dict[str, Any]]) -> None:
+        directory = os.path.dirname(self.chat_task_path)
+        os.makedirs(directory, exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(prefix="pinco-chat-tasks-", suffix=".json", dir=directory)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as file:
+                json.dump(tasks, file, ensure_ascii=False, separators=(",", ":"))
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temp_path, self.chat_task_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def start_chat_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        with self.chat_task_lock:
+            tasks = self._load_chat_tasks()
+            existing = next((item for item in tasks.values() if item.get("user_id") == task.get("user_id") and item.get("request_id") == task.get("request_id")), None)
+            if existing:
+                if existing.get("fingerprint") != task.get("fingerprint"):
+                    return {"conflict": True, "task": existing, "started": False}
+                started = existing.get("status") in {"failed", "interrupted"}
+                if started:
+                    existing.update({**task, "task_id": existing["task_id"], "status": "queued", "content": "", "result": None, "error": None})
+                    tasks[existing["task_id"]] = existing
+                    self._save_chat_tasks(tasks)
+                return {"conflict": False, "task": existing, "started": started}
+            tasks[task["task_id"]] = dict(task)
+            self._save_chat_tasks(tasks)
+            return {"conflict": False, "task": task, "started": True}
+
+    def update_chat_task(self, task_id: str, user_id: str, updates: Dict[str, Any]) -> None:
+        with self.chat_task_lock:
+            tasks = self._load_chat_tasks()
+            task = tasks.get(task_id)
+            if task and task.get("user_id") == user_id:
+                task.update(updates)
+                tasks[task_id] = task
+                self._save_chat_tasks(tasks)
+
+    def get_chat_task(self, task_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        with self.chat_task_lock:
+            task = self._load_chat_tasks().get(task_id)
+            return dict(task) if task and task.get("user_id") == user_id else None
 
     def load(self) -> State:
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
@@ -101,6 +164,38 @@ class MongoStateStore(StateStore):
         self.default_factory = default_factory
         self.client = MongoClient(uri, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
         self.collection = self.client[database][collection]
+        self.chat_tasks = self.client[database][f"{collection}_chat_tasks"]
+        self.chat_tasks.create_index([("user_id", 1), ("request_id", 1)], unique=True)
+
+    def start_chat_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        from pymongo import ReturnDocument
+        from pymongo.errors import DuplicateKeyError
+
+        query = {"user_id": task["user_id"], "request_id": task["request_id"]}
+        try:
+            self.chat_tasks.insert_one(dict(task))
+            return {"conflict": False, "task": task, "started": True}
+        except DuplicateKeyError:
+            existing = self.chat_tasks.find_one(query)
+        if not existing:
+            return {"conflict": False, "task": task, "started": False}
+        if existing.get("fingerprint") != task.get("fingerprint"):
+            return {"conflict": True, "task": existing, "started": False}
+        if existing.get("status") in {"failed", "interrupted"}:
+            updated = self.chat_tasks.find_one_and_update(
+                {**query, "status": existing.get("status")},
+                {"$set": {**task, "task_id": existing["task_id"], "status": "queued", "content": "", "result": None, "error": None}},
+                return_document=ReturnDocument.AFTER,
+            )
+            return {"conflict": False, "task": updated or existing, "started": updated is not None}
+        return {"conflict": False, "task": existing, "started": False}
+
+    def update_chat_task(self, task_id: str, user_id: str, updates: Dict[str, Any]) -> None:
+        self.chat_tasks.update_one({"task_id": task_id, "user_id": user_id}, {"$set": updates})
+
+    def get_chat_task(self, task_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        task = self.chat_tasks.find_one({"task_id": task_id, "user_id": user_id}, {"_id": 0})
+        return task
 
     def load(self) -> State:
         document = self.collection.find_one({"_id": "pinco_state"})
@@ -183,6 +278,7 @@ class MySQLStateStore(StateStore):
         self.database = self._validated_identifier(database, "MYSQL_DATABASE")
         self.table = self._validated_identifier(table, "MYSQL_STATE_TABLE")
         self.usage_table = self._validated_identifier(f"{self.table}_usage", "MYSQL_STATE_TABLE")
+        self.chat_tasks_table = self._validated_identifier(f"{self.table}_chat_tasks", "MYSQL_STATE_TABLE")
         self.default_factory = default_factory
         self._ensure_schema()
 
@@ -249,6 +345,23 @@ class MySQLStateStore(StateStore):
                         state_json LONGTEXT NOT NULL,
                         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                             ON UPDATE CURRENT_TIMESTAMP
+                    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                    """
+                )
+                cursor.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS `{self.chat_tasks_table}` (
+                        task_id VARCHAR(80) NOT NULL PRIMARY KEY,
+                        user_id VARCHAR(128) NOT NULL,
+                        request_id VARCHAR(80) NOT NULL,
+                        fingerprint CHAR(64) NOT NULL,
+                        status VARCHAR(24) NOT NULL,
+                        content LONGTEXT NOT NULL,
+                        result_json LONGTEXT NULL,
+                        error_json TEXT NULL,
+                        created_at_epoch DOUBLE NOT NULL,
+                        updated_at_epoch DOUBLE NOT NULL,
+                        UNIQUE KEY user_request (user_id, request_id)
                     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
                     """
                 )
@@ -326,6 +439,101 @@ class MySQLStateStore(StateStore):
         except Exception:
             connection.rollback()
             raise
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _decode_chat_task(row) -> Optional[Dict[str, Any]]:
+        if not row:
+            return None
+        return {
+            "task_id": row[0], "user_id": row[1], "request_id": row[2],
+            "fingerprint": row[3], "status": row[4], "content": row[5] or "",
+            "result": json.loads(row[6]) if row[6] else None,
+            "error": json.loads(row[7]) if row[7] else None,
+            "created_at_epoch": float(row[8]), "updated_at_epoch": float(row[9]),
+        }
+
+    def start_chat_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"INSERT IGNORE INTO `{self.chat_tasks_table}` "
+                    "(task_id,user_id,request_id,fingerprint,status,content,result_json,error_json,created_at_epoch,updated_at_epoch) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,NULL,NULL,%s,%s)",
+                    (task["task_id"], task["user_id"], task["request_id"], task["fingerprint"], task["status"], task.get("content", ""), task["created_at_epoch"], task["updated_at_epoch"]),
+                )
+                inserted = cursor.rowcount == 1
+                if inserted:
+                    connection.commit()
+                    return {"conflict": False, "task": task, "started": True}
+                cursor.execute(
+                    f"SELECT task_id,user_id,request_id,fingerprint,status,content,result_json,error_json,created_at_epoch,updated_at_epoch "
+                    f"FROM `{self.chat_tasks_table}` WHERE user_id=%s AND request_id=%s FOR UPDATE",
+                    (task["user_id"], task["request_id"]),
+                )
+                existing = self._decode_chat_task(cursor.fetchone())
+                if not existing:
+                    connection.commit()
+                    return {"conflict": False, "task": task, "started": False}
+                if existing.get("fingerprint") != task.get("fingerprint"):
+                    connection.commit()
+                    return {"conflict": True, "task": existing, "started": False}
+                started = False
+                if existing.get("status") in {"failed", "interrupted"}:
+                    cursor.execute(
+                        f"UPDATE `{self.chat_tasks_table}` SET status='queued',content='',result_json=NULL,error_json=NULL,updated_at_epoch=%s "
+                        "WHERE task_id=%s AND status IN ('failed','interrupted')",
+                        (task["updated_at_epoch"], existing["task_id"]),
+                    )
+                    started = cursor.rowcount == 1
+                    if started:
+                        existing.update({**task, "task_id": existing["task_id"], "status": "queued", "content": "", "result": None, "error": None})
+                connection.commit()
+                return {"conflict": False, "task": existing, "started": started}
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def update_chat_task(self, task_id: str, user_id: str, updates: Dict[str, Any]) -> None:
+        allowed = {"status", "content", "result", "error", "updated_at_epoch"}
+        values = {key: value for key, value in updates.items() if key in allowed}
+        if not values:
+            return
+        columns = []
+        params = []
+        for key, value in values.items():
+            column = {"result": "result_json", "error": "error_json"}.get(key, key)
+            columns.append(f"`{column}`=%s")
+            params.append(json.dumps(value, ensure_ascii=False) if key in {"result", "error"} and value is not None else value)
+        params.extend([task_id, user_id])
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"UPDATE `{self.chat_tasks_table}` SET {','.join(columns)} WHERE task_id=%s AND user_id=%s",
+                    params,
+                )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def get_chat_task(self, task_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"SELECT task_id,user_id,request_id,fingerprint,status,content,result_json,error_json,created_at_epoch,updated_at_epoch "
+                    f"FROM `{self.chat_tasks_table}` WHERE task_id=%s AND user_id=%s",
+                    (task_id, user_id),
+                )
+                return self._decode_chat_task(cursor.fetchone())
         finally:
             connection.close()
 

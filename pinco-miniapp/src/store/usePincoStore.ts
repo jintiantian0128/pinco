@@ -717,7 +717,10 @@ export const usePincoStore = create<PincoState>((set, get) => ({
     }
 
     let fullContent = ''
-    let useFallback = false
+    // Chat generation now uses the cloud-hosting private route: start once,
+    // then retrieve persisted model deltas. This avoids the public request
+    // domain requirement while keeping the model call itself single-shot.
+    let useFallback = true
     let streamRequestStarted = false
     let streamErrorReceived = false
     let streamCompleted = false
@@ -948,16 +951,43 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           // SSE may have completed at the server while its connection dropped.
           // Reuse request_id so the JSON endpoint replays, rather than executes,
           // the same turn. A partial stream is replaced by the authoritative full response.
-          let fallbackRes: any
-          for (let attempt = 0; attempt < 30; attempt += 1) {
-            try {
-              fallbackRes = await apiRequest<any>('/api/v1/chat', 'POST', payload)
-              break
-            } catch (fallbackError: any) {
-              const message = String(fallbackError?.message || fallbackError || '')
-              if (!/CHAT_REQUEST_IN_PROGRESS|上一条请求仍在处理/i.test(message) || attempt === 29) throw fallbackError
-              await new Promise((resolve) => setTimeout(resolve, 1000))
+          const taskStartedAt = Date.now()
+          let fallbackRes: any = null
+          let taskState: any = await apiRequest<any>(
+            '/api/v1/chat/tasks',
+            'POST',
+            payload,
+            { requireCallContainer: true }
+          )
+          let lastVisibleContent = ''
+          while (taskState?.status === 'queued' || taskState?.status === 'running') {
+            const currentContent = String(taskState.content || '')
+            if (currentContent !== lastVisibleContent) {
+              lastVisibleContent = currentContent
+              fullContent = currentContent
+              renderStreamingContent(fullContent, true)
             }
+            if (Date.now() - taskStartedAt > 180000) {
+              throw new Error('CHAT_TASK_TIMEOUT: 等待模型回复超时，请重试上一问')
+            }
+            await new Promise((resolve) => setTimeout(resolve, 450))
+            taskState = await apiRequest<any>(
+              `/api/v1/chat/tasks/${encodeURIComponent(taskState.task_id)}?user_id=${encodeURIComponent(payload.user_id)}`,
+              'GET',
+              undefined,
+              { requireCallContainer: true }
+            )
+          }
+          if (taskState?.status === 'completed') {
+            fallbackRes = taskState.result
+            if (typeof fallbackRes?.response === 'string') {
+              fullContent = fallbackRes.response
+              streamCompleted = Boolean(fullContent)
+              renderStreamingContent(fullContent, true)
+            }
+          } else {
+            const taskError = taskState?.error || {}
+            throw new Error(`${taskError.code || 'CHAT_TASK_FAILED'}: ${taskError.message || '这次对话没有完成，请重试上一问'}`)
           }
           if (fallbackRes?.response) {
             fullContent = fallbackRes.response
@@ -1028,7 +1058,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
         get().saveMessages()
         trackProductEvent('chat.send.succeeded', get().userProfile?.user_id, {
           scenario: get().conversationMeta.scenario,
-          mode: 'non_stream',
+          mode: 'call_container_polling',
         })
       } else {
         // Both failed

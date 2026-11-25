@@ -156,6 +156,79 @@ class TrustFoundationTests(unittest.TestCase):
             self.assertEqual(store.load()["users"]["u1"]["messages"], [])
             self.assertFalse(store.health()["durable"])
 
+    def test_chat_task_store_replays_by_request_id_and_recovers_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), lambda: {"users": {}})
+            task = {
+                "task_id": "chat-task-1",
+                "user_id": "user-1",
+                "request_id": "request-1",
+                "fingerprint": "a" * 64,
+                "status": "queued",
+                "content": "",
+                "result": None,
+                "error": None,
+                "created_at_epoch": 1.0,
+                "updated_at_epoch": 1.0,
+            }
+
+            first = store.start_chat_task(task)
+            duplicate = store.start_chat_task({**task, "task_id": "chat-task-duplicate"})
+            conflict = store.start_chat_task({**task, "fingerprint": "b" * 64})
+
+            self.assertTrue(first["started"])
+            self.assertFalse(duplicate["started"])
+            self.assertEqual(duplicate["task"]["task_id"], "chat-task-1")
+            self.assertTrue(conflict["conflict"])
+            self.assertIsNone(store.get_chat_task("chat-task-1", "different-user"))
+
+            store.update_chat_task("chat-task-1", "user-1", {"status": "failed", "error": {"code": "UPSTREAM"}})
+            retry = store.start_chat_task({**task, "task_id": "chat-task-retry", "updated_at_epoch": 2.0})
+            restored = store.get_chat_task("chat-task-1", "user-1")
+
+            self.assertTrue(retry["started"])
+            self.assertEqual(retry["task"]["task_id"], "chat-task-1")
+            self.assertEqual(restored["status"], "queued")
+            self.assertIsNone(restored["error"])
+
+    def test_chat_poll_task_persists_real_model_deltas_and_final_result(self):
+        async def fake_chat_core(request, on_response_chunk=None):
+            self.assertEqual(request.request_id, "request-poll-1")
+            on_response_chunk("第一段")
+            on_response_chunk("，第二段")
+            return main.ChatResponse(response="第一段，第二段", agent={"next_action": "continue"})
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), lambda: {"users": {}})
+            store.start_chat_task({
+                "task_id": "chat-poll-1",
+                "user_id": "user-poll-1",
+                "request_id": "request-poll-1",
+                "fingerprint": "a" * 64,
+                "status": "queued",
+                "content": "",
+                "result": None,
+                "error": None,
+                "created_at_epoch": 1.0,
+                "updated_at_epoch": 1.0,
+            })
+            request = main.ChatRequest(
+                user_id="user-poll-1",
+                request_id="request-poll-1",
+                messages=[main.Message(role="user", content="请给我一个建议")],
+            )
+            with patch.object(main, "get_state_store", return_value=store), patch.object(
+                main, "_chat_core", new=AsyncMock(side_effect=fake_chat_core)
+            ) as chat_core, patch.dict(main._chat_poll_tasks, {}, clear=True):
+                asyncio.run(main._run_chat_poll_task("chat-poll-1", request))
+
+            task = store.get_chat_task("chat-poll-1", "user-poll-1")
+            self.assertEqual(task["status"], "completed")
+            self.assertEqual(task["content"], "第一段，第二段")
+            self.assertEqual(task["result"]["response"], "第一段，第二段")
+            self.assertEqual(task["result"]["agent"]["next_action"], "continue")
+            chat_core.assert_awaited_once()
+
     def test_llm_quota_failure_is_not_retried_with_a_rewritten_prompt(self):
         with patch.object(main, "llm_chat", side_effect=RuntimeError("429 quota")) as mocked:
             with self.assertRaises(RuntimeError):

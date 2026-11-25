@@ -1421,7 +1421,7 @@ JSON 结构要求：
 }}
 """
 
-app = FastAPI(title="Pinco API", version="0.7.0")
+app = FastAPI(title="Pinco API", version="0.7.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1461,6 +1461,7 @@ _state_lock = Lock()
 _admin_login_lock = Lock()
 _admin_login_failures: Dict[str, List[float]] = {}
 _state_store: Optional[StateStore] = None
+_chat_poll_tasks: Dict[str, asyncio.Task] = {}
 
 # --- Helpers ---
 
@@ -2432,7 +2433,7 @@ def health_check():
     return {
         "status": "online",
         "model": DEFAULT_MODEL,
-        "version": "0.7.0",
+        "version": "0.7.1",
         "release_sha": PINCO_RELEASE_SHA,
         "mock_mode": MOCK_MODE,
         "provider": LLM_PROVIDER,
@@ -2447,7 +2448,7 @@ def readiness_check():
     return {
         "status": "online",
         "model": DEFAULT_MODEL,
-        "version": "0.7.0",
+        "version": "0.7.1",
         "release_sha": PINCO_RELEASE_SHA,
         "mock_mode": MOCK_MODE,
         "provider": LLM_PROVIDER,
@@ -7321,6 +7322,169 @@ async def _chat_core(request: ChatRequest, on_response_chunk: Optional[Callable[
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     return await _chat_core(request)
+
+
+def _chat_task_error(error: Exception) -> Dict[str, Any]:
+    if isinstance(error, HTTPException):
+        detail = error.detail
+        if isinstance(detail, dict):
+            return {
+                "code": str(detail.get("code") or "CHAT_AGENT_ERROR"),
+                "message": str(detail.get("message") or detail.get("code") or "模型请求失败"),
+                "status_code": int(error.status_code),
+            }
+        return {"code": "CHAT_AGENT_ERROR", "message": str(detail), "status_code": int(error.status_code)}
+    if is_balance_error(error):
+        return {"code": "LLM_INSUFFICIENT_BALANCE", "message": "模型服务账户余额不足，请充值后重试。", "status_code": 402}
+    if is_rate_limit_error(error):
+        return {"code": "LLM_RATE_LIMITED", "message": "模型服务额度已用完或请求限流，请稍后重试。", "status_code": 429}
+    if is_auth_error(error):
+        return {"code": "LLM_AUTH_FAILED", "message": "模型服务 API Key 无效或已过期，请检查服务配置。", "status_code": 401}
+    return {"code": "LLM_UPSTREAM_ERROR", "message": "模型服务暂时不可用，请稍后重试。", "status_code": 502}
+
+
+def _chat_task_public(task: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "task_id": task.get("task_id"),
+        "status": task.get("status"),
+        "content": task.get("content") or "",
+        "result": task.get("result"),
+        "error": task.get("error"),
+        "updated_at_epoch": task.get("updated_at_epoch"),
+    }
+
+
+async def _run_chat_poll_task(task_id: str, request: ChatRequest) -> None:
+    user_id = str(request.user_id or "")
+    store = get_state_store()
+    await asyncio.to_thread(store.update_chat_task, task_id, user_id, {
+        "status": "running", "updated_at_epoch": time.time(),
+    })
+    pending_chunks: List[str] = []
+    chunks_changed = asyncio.Event()
+    finished = asyncio.Event()
+    persisted_content = ""
+    last_persisted_at = time.monotonic()
+
+    def publish_chunk(chunk: str) -> None:
+        if chunk:
+            pending_chunks.append(chunk)
+            chunks_changed.set()
+
+    async def persist_progress() -> None:
+        nonlocal persisted_content, last_persisted_at
+        while not finished.is_set() or pending_chunks:
+            try:
+                await asyncio.wait_for(chunks_changed.wait(), timeout=0.35)
+            except asyncio.TimeoutError:
+                pass
+            chunks_changed.clear()
+            if pending_chunks:
+                batch = "".join(pending_chunks)
+                pending_chunks.clear()
+                persisted_content += batch
+                await asyncio.to_thread(store.update_chat_task, task_id, user_id, {
+                    "content": persisted_content,
+                    "updated_at_epoch": time.time(),
+                })
+                last_persisted_at = time.monotonic()
+            elif time.monotonic() - last_persisted_at >= 15:
+                await asyncio.to_thread(store.update_chat_task, task_id, user_id, {
+                    "updated_at_epoch": time.time(),
+                })
+                last_persisted_at = time.monotonic()
+
+    progress_writer = asyncio.create_task(persist_progress())
+    try:
+        result = await _chat_core(request, on_response_chunk=publish_chunk)
+        finished.set()
+        chunks_changed.set()
+        await progress_writer
+        result_payload = result.model_dump() if hasattr(result, "model_dump") else result.dict()
+        await asyncio.to_thread(store.update_chat_task, task_id, user_id, {
+            "status": "completed",
+            "content": result.response or "",
+            "result": result_payload,
+            "error": None,
+            "updated_at_epoch": time.time(),
+        })
+    except Exception as error:
+        finished.set()
+        chunks_changed.set()
+        try:
+            await progress_writer
+        except Exception as progress_error:
+            print(f"[Chat Task] progress persistence failed task_id={task_id} type={type(progress_error).__name__}")
+        await asyncio.to_thread(store.update_chat_task, task_id, user_id, {
+            "status": "failed",
+            "error": _chat_task_error(error),
+            "updated_at_epoch": time.time(),
+        })
+        print(f"[Chat Task] failed task_id={task_id} code={_chat_task_error(error).get('code')}")
+    finally:
+        _chat_poll_tasks.pop(task_id, None)
+
+
+@app.post("/api/v1/chat/tasks")
+async def start_chat_poll_task(request: ChatRequest):
+    user_id = str(request.user_id or "").strip()
+    request_id = str(request.request_id or "").strip()
+    if not user_id or not request_id:
+        raise HTTPException(status_code=422, detail="缺少用户身份或请求编号，无法保存和恢复本次对话")
+    latest_user_message = next((message.content.strip() for message in reversed(request.messages) if message.role == "user" and not message.transient), "")
+    fingerprint_source = {
+        "latest_user_message": latest_user_message,
+        "scenario": request.scenario,
+        "replace_from_message_id": request.replace_from_message_id,
+        "interview_mode": request.interview_mode,
+        "interview_round": request.interview_round,
+        "interview_position": request.interview_position,
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(fingerprint_source, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    now = time.time()
+    task = {
+        "task_id": f"chat-{uuid.uuid4().hex}",
+        "user_id": user_id,
+        "request_id": request_id,
+        "fingerprint": fingerprint,
+        "status": "queued",
+        "content": "",
+        "result": None,
+        "error": None,
+        "created_at_epoch": now,
+        "updated_at_epoch": now,
+    }
+    outcome = await asyncio.to_thread(get_state_store().start_chat_task, task)
+    if outcome.get("conflict"):
+        raise HTTPException(status_code=409, detail={"code": "CHAT_REQUEST_ID_CONFLICT", "message": "请求编号已用于不同内容，请重新发送。"})
+    stored = outcome.get("task") or task
+    if outcome.get("started") and stored.get("task_id") not in _chat_poll_tasks:
+        background = asyncio.create_task(_run_chat_poll_task(str(stored["task_id"]), request))
+        _chat_poll_tasks[str(stored["task_id"])] = background
+    return _chat_task_public(stored)
+
+
+@app.get("/api/v1/chat/tasks/{task_id}")
+async def get_chat_poll_task(task_id: str, user_id: str):
+    task = await asyncio.to_thread(get_state_store().get_chat_task, task_id, user_id)
+    if not task:
+        raise HTTPException(status_code=404, detail={"code": "CHAT_TASK_NOT_FOUND", "message": "没有找到这条对话任务，请返回会话后重试。"})
+    if task.get("status") in {"queued", "running"} and time.time() - float(task.get("updated_at_epoch") or 0) > 180:
+        error = {"code": "CHAT_TASK_INTERRUPTED", "message": "服务在生成期间中断了本次回复。你的问题仍保留，可以点击重试上一问。", "status_code": 503}
+        await asyncio.to_thread(get_state_store().update_chat_task, task_id, user_id, {
+            "status": "interrupted", "error": error, "updated_at_epoch": time.time(),
+        })
+        with _state_lock:
+            state = load_beta_state()
+            user = state.get("users", {}).get(user_id)
+            record = ((user or {}).get("chat_request_records") or {}).get(str(task.get("request_id") or ""))
+            if record and record.get("status") == "running":
+                record.update({"status": "failed", "updated_at_epoch": time.time(), "error": error["message"]})
+                save_beta_state(state)
+        task.update({"status": "interrupted", "error": error, "updated_at_epoch": time.time()})
+    return _chat_task_public(task)
 
 
 @app.post("/api/v1/chat/stream")

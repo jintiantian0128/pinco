@@ -193,9 +193,9 @@ export const apiRequest = async <T>(
   path: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   data?: Record<string, unknown>,
-  options: { preferPublicHttps?: boolean } = {}
+  options: { preferPublicHttps?: boolean; requireCallContainer?: boolean } = {}
 ): Promise<T> => {
-  return apiRequestInternal<T>(path, method, data, true, Boolean(options.preferPublicHttps))
+  return apiRequestInternal<T>(path, method, data, true, Boolean(options.preferPublicHttps), Boolean(options.requireCallContainer))
 }
 
 const apiRequestInternal = async <T>(
@@ -203,7 +203,8 @@ const apiRequestInternal = async <T>(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   data: Record<string, unknown> | undefined,
   allowSessionRecovery: boolean,
-  preferPublicHttps = false
+  preferPublicHttps = false,
+  requireCallContainer = false
 ): Promise<T> => {
   // Long-running/billable POSTs must use one transport attempt only. Racing a
   // 6s callContainer timeout against HTTPS can leave the first request running
@@ -211,7 +212,10 @@ const apiRequestInternal = async <T>(
   const singleShotLongPost = method === 'POST' && (
     path === '/api/v1/chat' || path === '/api/v1/voice/upload'
   )
-  const useCallContainer = canUseCallContainer() && !preferPublicHttps && !singleShotLongPost
+  if (requireCallContainer && !canUseCallContainer()) {
+    throw new Error('当前微信环境不支持云托管内部调用，请升级微信或使用文本输入重试')
+  }
+  const useCallContainer = canUseCallContainer() && !preferPublicHttps && (!singleShotLongPost || requireCallContainer)
 
   if (useCallContainer) {
     console.info('[API] callContainer', method, path, 'env=', CLOUD_ENV, 'service=', CLOUD_SERVICE)
@@ -245,7 +249,7 @@ const apiRequestInternal = async <T>(
           console.warn('[API] session expired, recovering once', path)
           const recovery = await recoverApiSession()
           const retry = remapRecoveredIdentity(path, data, recovery)
-          return apiRequestInternal<T>(retry.path, method, retry.data, false, preferPublicHttps)
+          return apiRequestInternal<T>(retry.path, method, retry.data, false, preferPublicHttps, requireCallContainer)
         }
         throw new ApiResponseError(getErrorMessage(res.data, '服务暂时不可用'), res.statusCode, getErrorCode(res.data))
       }
@@ -255,6 +259,7 @@ const apiRequestInternal = async <T>(
       // 后端已经明确返回了业务错误（如 ASR 未配置），公网重试只会重复提交。
       // 只有 callContainer 链路本身异常时才切换到 Taro.request。
       if (callErr instanceof ApiResponseError) throw callErr
+      if (requireCallContainer) throw callErr
       console.warn('[API] callContainer exception, will try Taro.request', path, callErr?.errMsg || callErr?.message || callErr)
     }
   }
@@ -280,7 +285,7 @@ const apiRequestInternal = async <T>(
       console.warn('[API] session expired, recovering once', path)
       const recovery = await recoverApiSession()
       const retry = remapRecoveredIdentity(path, data, recovery)
-      return apiRequestInternal<T>(retry.path, method, retry.data, false, preferPublicHttps)
+      return apiRequestInternal<T>(retry.path, method, retry.data, false, preferPublicHttps, requireCallContainer)
     }
     throw new ApiResponseError(getErrorMessage(response.data, '服务暂时不可用'), response.statusCode, getErrorCode(response.data))
   }

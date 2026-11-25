@@ -183,6 +183,7 @@ const ConversationPage: React.FC = () => {
 
   const handleCreateNewConversation = () => {
     setConversationScrollKey((current) => current + 1)
+    setShowEvidenceBuilder(false)
     createNewConversation()
   }
 
@@ -1378,7 +1379,7 @@ const ConversationPage: React.FC = () => {
       >
 
         {/* 空状态引导 */}
-        {!hasMessages && (
+        {!hasMessages && !showEvidenceBuilder && (
           <View className={styles.welcomeWrap}>
             <View className={styles.welcomeCard}>
               <Text className={styles.welcomeTitle}>{conversationMeta.title}</Text>

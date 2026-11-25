@@ -263,7 +263,7 @@ jobs:
             if HEALTH_RESPONSE="$response" EXPECTED_RELEASE_SHA="$EXPECTED_RELEASE_SHA" node -e '
               const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
               const ready = health.status === "online"
-                && health.version === "0.7.0"
+                && health.version === "0.7.1"
                 && health.release_sha === process.env.EXPECTED_RELEASE_SHA
                 && health.llm?.online === true
                 && health.state?.durable === true
@@ -307,7 +307,7 @@ jobs:
           if HEALTH_RESPONSE="$response" EXPECTED_RELEASE_SHA="$EXPECTED_RELEASE_SHA" node -e '
             const health = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
             const accepted = health.status === "online"
-              && health.version === "0.7.0"
+              && health.version === "0.7.1"
               && health.release_sha === process.env.EXPECTED_RELEASE_SHA
               && health.llm?.online === true
               && health.state?.durable === true
