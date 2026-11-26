@@ -10019,6 +10019,10 @@ async def voice_upload(request: Request, type: str = "voice"):
 # --- Frontend Static Files ---
 # Serve built Next.js static export; must be registered AFTER all API routes
 # so that API paths take priority.
+ONEPAGER_DIR = os.path.join(BACKEND_DIR, "public", "pinco-career-onepager")
+if os.path.isdir(ONEPAGER_DIR):
+    app.mount("/onepager", StaticFiles(directory=ONEPAGER_DIR, html=True), name="pinco-onepager")
+
 @app.get("/")
 async def serve_index():
     index_path = os.path.join(FRONTEND_DIR, "index.html")
