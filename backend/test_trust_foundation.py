@@ -893,6 +893,42 @@ class TrustFoundationTests(unittest.TestCase):
             self.assertIn("事实条件", offered["support_action"]["prompt"])
             self.assertIsNone(saved["support_action"])
 
+    def test_career_reminder_is_user_scoped_persistent_and_actionable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)
+            with patch.object(main, "_state_store", store), patch.object(main, "exchange_wechat_code", return_value=None):
+                state = main.default_beta_state()
+                user = main.ensure_user(state, "reminder-user", "求职者", "weapp")
+                store.save(state)
+                user_id = user["profile"]["user_id"]
+                job = main.create_workspace_job(main.WorkspaceJobCreateRequest(
+                    user_id=user_id, title="AI 产品经理", company="Pinco 测试公司"
+                ))["job"]
+                due_at = (main.datetime.now() + main.timedelta(days=1)).replace(microsecond=0).isoformat()
+                created = main.create_career_reminder(main.CareerReminderCreateRequest(
+                    user_id=user_id, job_id=job["id"], due_at=due_at, note="询问面试进度"
+                ))["reminder"]
+                listed = main.list_career_reminders(user_id)["reminders"]
+                self.assertEqual(listed[0]["id"], created["id"])
+                self.assertEqual(listed[0]["company"], "Pinco 测试公司")
+                done = main.update_career_reminder_status(
+                    created["id"], main.CareerReminderStatusRequest(user_id=user_id, status="completed")
+                )["reminder"]
+                self.assertEqual(done["status"], "completed")
+                self.assertEqual(store.load()["users"][user_id]["career_reminders"][0]["status"], "completed")
+
+    def test_career_reminder_rejects_invalid_or_past_time(self):
+        with self.assertRaises(HTTPException) as invalid:
+            main.create_career_reminder(main.CareerReminderCreateRequest(
+                user_id="u", job_id="j", due_at="not-a-valid-date"
+            ))
+        self.assertEqual(invalid.exception.status_code, 400)
+        with self.assertRaises(HTTPException) as past:
+            main.create_career_reminder(main.CareerReminderCreateRequest(
+                user_id="u", job_id="j", due_at="2000-01-01T10:00:00"
+            ))
+        self.assertEqual(past.exception.status_code, 400)
+
     def test_community_actions_persist_only_after_real_user_bootstrap(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonFileStateStore(os.path.join(directory, "state.json"), main.default_beta_state)

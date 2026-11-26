@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Text, Textarea, View, Switch } from '@tarojs/components'
+import { Text, Textarea, View, Switch, Picker } from '@tarojs/components'
 import Taro, { useDidShow, usePullDownRefresh, useShareAppMessage } from '@tarojs/taro'
 import classnames from 'classnames'
 import styles from './index.module.scss'
@@ -23,6 +23,7 @@ const TIME_OPTIONS = ['30分钟', '1小时', '2小时', '半天']
 const MATERIAL_OPTIONS = ['简历', 'JD', '面试邀约', 'Offer', '都没有']
 const ANXIETY_OPTIONS = ['不知道投什么', '简历没回音', '面试答不好', '不知道怎么选offer']
 const PILOT_SCORE_OPTIONS = [1, 2, 3, 4, 5]
+const localDateString = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 type PilotFeedback = {
   professional_value_score: number
@@ -41,6 +42,10 @@ const MinePage: React.FC = () => {
   const bootstrap = usePincoStore((state) => state.bootstrap)
   const userProfile = usePincoStore((state) => state.userProfile)
   const jobProgress = usePincoStore((state) => state.jobProgress)
+  const careerReminders = usePincoStore((state) => state.careerReminders)
+  const refreshCareerReminders = usePincoStore((state) => state.refreshCareerReminders)
+  const createCareerReminder = usePincoStore((state) => state.createCareerReminder)
+  const updateCareerReminderStatus = usePincoStore((state) => state.updateCareerReminderStatus)
   const todayTasks = usePincoStore((state) => state.todayTasks)
   const toggleTodayTask = usePincoStore((state) => state.toggleTodayTask)
   const buildTaskCompletionPrompt = usePincoStore((state) => state.buildTaskCompletionPrompt)
@@ -71,6 +76,9 @@ const MinePage: React.FC = () => {
   const [reviewBookingId, setReviewBookingId] = useState('')
   const [reviewScore, setReviewScore] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
+  const [reminderJobId, setReminderJobId] = useState('')
+  const [reminderDate, setReminderDate] = useState(() => localDateString(new Date(Date.now() + 86400000)))
+  const [reminderTime, setReminderTime] = useState('10:00')
   const [contribution, setContribution] = useState<ContributionStatus | null>(null)
   const [professionalValueScore, setProfessionalValueScore] = useState(0)
   const [emotionalValueScore, setEmotionalValueScore] = useState(0)
@@ -141,6 +149,16 @@ const MinePage: React.FC = () => {
 
   const openBookingMessages = (bookingId: string) => {
     Taro.navigateTo({ url: `/pages/booking-chat/index?booking_id=${encodeURIComponent(bookingId)}` })
+  }
+
+  const saveCareerReminder = async (jobId: string) => {
+    try {
+      await createCareerReminder(jobId, `${reminderDate}T${reminderTime}:00+08:00`, '回看求职进度并决定下一步')
+      setReminderJobId('')
+      Taro.showToast({ title: '跟进提醒已保存', icon: 'success' })
+    } catch (error: any) {
+      Taro.showToast({ title: error?.message || '提醒保存失败，请重试', icon: 'none' })
+    }
   }
 
   const getBookingMessageLabel = (booking: BookingItem) => {
@@ -307,12 +325,13 @@ const MinePage: React.FC = () => {
   }
 
   usePullDownRefresh(() => {
-    Promise.all([refreshServiceHealth(), refreshBookings(), loadContribution()]).finally(() => Taro.stopPullDownRefresh())
+    Promise.all([refreshServiceHealth(), refreshBookings(), refreshCareerReminders(), loadContribution()]).finally(() => Taro.stopPullDownRefresh())
   })
 
   useDidShow(() => {
     if (userProfile?.user_id) {
       refreshBookings().catch((error) => console.warn('[Mine] refresh bookings failed', error))
+      refreshCareerReminders().catch((error) => console.warn('[Mine] refresh career reminders failed', error))
       loadContribution()
     }
   })
@@ -443,6 +462,32 @@ const MinePage: React.FC = () => {
               <Text className={styles.funnelLabel}>Offer</Text>
             </View>
           </View>
+          {careerReminders.some((item) => item.status === 'pending') && (
+            <View className={styles.jobList}>
+              <Text className={styles.cardTitle}>求职跟进提醒</Text>
+              <Text className={styles.cardDesc}>到时间后，重新打开小程序即可看到提醒；目前不支持微信后台推送。</Text>
+              {careerReminders.filter((item) => item.status === 'pending').slice(0, 5).map((reminder) => {
+                const due = Date.parse(reminder.due_at)
+                const isDue = Number.isFinite(due) && due <= Date.now()
+                return (
+                  <View key={reminder.id} className={styles.bookingWrap}>
+                    <Text className={styles.bookingExpert}>{reminder.company} · {reminder.title}</Text>
+                    <Text className={styles.bookingDelivery}>{isDue ? '该跟进了' : '计划提醒'} · {reminder.due_at.replace('T', ' ').slice(0, 16)}</Text>
+                    {!!reminder.note && <Text className={styles.bookingDelivery}>{reminder.note}</Text>}
+                    <View className={styles.messageLinkButton} onClick={async () => {
+                      try {
+                        await updateCareerReminderStatus(reminder.id, 'completed')
+                        openConversationTab('general', `提醒我跟进 ${reminder.company} 的 ${reminder.title}。请先回顾已记录的求职进度，再给我一个具体、可执行的下一步。`)
+                      } catch (error) {
+                        Taro.showToast({ title: '操作失败，请刷新后重试', icon: 'none' })
+                      }
+                    }}><Text>开始跟进 ›</Text></View>
+                    <Text className={styles.messageLink} onClick={() => updateCareerReminderStatus(reminder.id, 'dismissed').catch(() => Taro.showToast({ title: '操作失败', icon: 'none' }))}>不再提醒</Text>
+                  </View>
+                )
+              })}
+            </View>
+          )}
           {jobProgress.length ? (
             <View className={styles.jobList}>
               {jobProgress.slice(0, 5).map((job) => (
@@ -460,6 +505,24 @@ const MinePage: React.FC = () => {
                     <Text className={styles.jobStatus}>{job.statusLabel}</Text>
                     <Text className={styles.jobDate}>{job.date}</Text>
                   </View>
+                  <View className={styles.messageLinkButton} onClick={(event) => {
+                    event.stopPropagation?.()
+                    setReminderJobId((current) => current === job.id ? '' : job.id)
+                  }}><Text>{reminderJobId === job.id ? '收起提醒设置' : '设置跟进提醒'}</Text></View>
+                  {reminderJobId === job.id && (
+                    <View className={styles.jobDesc}>
+                      <Text>提醒时间（明确选择后才会提醒）</Text>
+                      <View className={styles.materialRow}>
+                        <Picker mode='date' value={reminderDate} start={localDateString(new Date())} end={localDateString(new Date(Date.now() + 365 * 86400000))} onChange={(event) => setReminderDate(event.detail.value)}>
+                          <View className={styles.progressBadge}><Text>{reminderDate}</Text></View>
+                        </Picker>
+                        <Picker mode='time' value={reminderTime} onChange={(event) => setReminderTime(event.detail.value)}>
+                          <View className={styles.progressBadge}><Text>{reminderTime}</Text></View>
+                        </Picker>
+                        <View className={styles.progressBadge} onClick={(event) => { event.stopPropagation?.(); void saveCareerReminder(job.id) }}><Text>保存</Text></View>
+                      </View>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>

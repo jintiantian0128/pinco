@@ -1015,6 +1015,16 @@ class WorkspaceJobStatusRequest(BaseModel):
     user_id: str
     status: str
 
+class CareerReminderCreateRequest(BaseModel):
+    user_id: str
+    job_id: str = Field(min_length=1, max_length=80)
+    due_at: str = Field(min_length=16, max_length=40)
+    note: str = Field(default="", max_length=240)
+
+class CareerReminderStatusRequest(BaseModel):
+    user_id: str
+    status: str
+
 class JobMaterialGenerateRequest(BaseModel):
     user_id: str
     evidence_ids: List[str] = Field(default_factory=list)
@@ -4927,6 +4937,73 @@ def update_workspace_job_status(job_id: str, request: WorkspaceJobStatusRequest)
         append_product_event_to_state(state, "workspace.job.status_updated", request.user_id, {"job_id": job_id, "status": request.status})
         save_beta_state(state)
     return {"job": job, "support_action": job_status_support_action(job, request.status)}
+
+@app.get("/api/v1/workspace/reminders")
+def list_career_reminders(user_id: str):
+    with _state_lock:
+        state = load_beta_state()
+        user = state.get("users", {}).get(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        reminders = user.get("career_reminders", [])
+        jobs = {item.get("id"): item for item in user.get("jobs", [])}
+        result = []
+        for reminder in reminders:
+            job = jobs.get(reminder.get("job_id"), {})
+            result.append({**reminder, "company": job.get("company", ""), "title": job.get("title", "")})
+    result.sort(key=lambda item: (item.get("status") != "pending", item.get("due_at", "")))
+    return {"reminders": result[:100]}
+
+@app.post("/api/v1/workspace/reminders")
+def create_career_reminder(request: CareerReminderCreateRequest):
+    try:
+        due_at = datetime.fromisoformat(request.due_at.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="提醒时间格式无效")
+    now = datetime.now(due_at.tzinfo) if due_at.tzinfo else datetime.now()
+    if due_at <= now or due_at > now + timedelta(days=365):
+        raise HTTPException(status_code=400, detail="提醒时间需在未来一年内")
+    with _state_lock:
+        state = load_beta_state()
+        user = state.get("users", {}).get(request.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        job = next((item for item in user.get("jobs", []) if item.get("id") == request.job_id), None)
+        if not job:
+            raise HTTPException(status_code=404, detail="对应岗位不存在")
+        reminder = {
+            "id": f"reminder-{uuid.uuid4().hex[:12]}",
+            "job_id": request.job_id,
+            "due_at": due_at.isoformat(),
+            "note": request.note.strip(),
+            "status": "pending",
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+        reminders = user.setdefault("career_reminders", [])
+        reminders.insert(0, reminder)
+        user["career_reminders"] = reminders[:100]
+        append_product_event_to_state(state, "career.reminder.created", request.user_id, {"job_id": request.job_id})
+        save_beta_state(state)
+    return {"reminder": {**reminder, "company": job.get("company", ""), "title": job.get("title", "")}}
+
+@app.post("/api/v1/workspace/reminders/{reminder_id}/status")
+def update_career_reminder_status(reminder_id: str, request: CareerReminderStatusRequest):
+    if request.status not in {"completed", "dismissed"}:
+        raise HTTPException(status_code=400, detail="提醒状态无效")
+    with _state_lock:
+        state = load_beta_state()
+        user = state.get("users", {}).get(request.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        reminder = next((item for item in user.get("career_reminders", []) if item.get("id") == reminder_id), None)
+        if not reminder:
+            raise HTTPException(status_code=404, detail="提醒不存在")
+        reminder["status"] = request.status
+        reminder["updated_at"] = now_iso()
+        append_product_event_to_state(state, f"career.reminder.{request.status}", request.user_id, {"job_id": reminder.get("job_id")})
+        save_beta_state(state)
+    return {"reminder": reminder}
 
 @app.post("/api/v1/workspace/jobs/{job_id}/materials")
 def generate_job_materials(job_id: str, request: JobMaterialGenerateRequest):

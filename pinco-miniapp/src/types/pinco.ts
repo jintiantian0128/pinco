@@ -76,6 +76,16 @@ export interface JobProgressItem {
   updatedAt: number
 }
 
+export interface CareerReminder {
+  id: string
+  job_id: string
+  company: string
+  title: string
+  due_at: string
+  note: string
+  status: 'pending' | 'completed' | 'dismissed'
+}
+
 export interface PendingJobEvent {
   id: string
   company: string

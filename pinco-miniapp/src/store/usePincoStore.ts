@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import Taro from '@tarojs/taro'
 import {
   BookingItem,
+  CareerReminder,
   ConversationScenario,
   ConversationSession,
   InterviewState,
@@ -78,6 +79,7 @@ interface PincoState {
   streamingContent: string
   interviewState: InterviewState | null
   jobProgress: JobProgressItem[]
+  careerReminders: CareerReminder[]
   pendingJobEvent: PendingJobEvent | null
   todayTasks: TodayTask[]
   jobSearchResults: JobSearchResult[]
@@ -110,6 +112,9 @@ interface PincoState {
   dismissPendingJobEvent: () => void
   bindLatestMaterialToJob: (jobId: string, material: keyof JobProgressItem['materials']) => void
   updateJobStatus: (jobId: string, status: JobStatus) => Promise<void>
+  refreshCareerReminders: () => Promise<void>
+  createCareerReminder: (jobId: string, dueAt: string, note?: string) => Promise<void>
+  updateCareerReminderStatus: (reminderId: string, status: 'completed' | 'dismissed') => Promise<void>
   createBookingOrder: (payload: { expert_id: string; expert_name: string; topic: string; slot: string; desc: string; consultation_type: 'chat' | 'phone'; contact_wechat?: string; share_contact_with_expert?: boolean; job_id?: string; share_context_with_expert?: boolean }) => Promise<void>
   cancelBookingOrder: (bookingId: string) => Promise<void>
   refreshBookings: () => Promise<void>
@@ -303,6 +308,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
   streamingContent: '',
   interviewState: null,
   jobProgress: [],
+  careerReminders: [],
   pendingJobEvent: null,
   todayTasks: [],
   jobSearchResults: [],
@@ -534,6 +540,7 @@ export const usePincoStore = create<PincoState>((set, get) => ({
           return []
         })()
       })
+      get().refreshCareerReminders().catch((error) => console.warn('[Store] load career reminders failed', error))
       trackProductEvent('app.bootstrap.succeeded', data.user.user_id, {
         wechat_bound: data.user.wechat_bound,
         durable_ready: data.miniapp_readiness?.items?.find((item) => item.key === 'durable_state')?.ready || false,
@@ -1536,6 +1543,27 @@ export const usePincoStore = create<PincoState>((set, get) => ({
       console.error('[Store] cloud status update failed', error)
       Taro.showToast({ title: '进度更新失败，请重试', icon: 'none' })
     }
+  },
+
+  refreshCareerReminders: async () => {
+    const userId = get().userProfile?.user_id
+    if (!userId) return
+    const data = await apiRequest<{ reminders: CareerReminder[] }>(`/api/v1/workspace/reminders?user_id=${encodeURIComponent(userId)}`)
+    set({ careerReminders: data.reminders || [] })
+  },
+
+  createCareerReminder: async (jobId, dueAt, note = '') => {
+    const userId = get().userProfile?.user_id
+    if (!userId) throw new Error('用户身份尚未准备好')
+    await apiRequest('/api/v1/workspace/reminders', 'POST', { user_id: userId, job_id: jobId, due_at: dueAt, note })
+    await get().refreshCareerReminders()
+  },
+
+  updateCareerReminderStatus: async (reminderId, status) => {
+    const userId = get().userProfile?.user_id
+    if (!userId) return
+    await apiRequest(`/api/v1/workspace/reminders/${reminderId}/status`, 'POST', { user_id: userId, status })
+    await get().refreshCareerReminders()
   },
 
   createBookingOrder: async ({ expert_id, expert_name, topic, slot, desc, consultation_type, contact_wechat, share_contact_with_expert, job_id, share_context_with_expert }) => {

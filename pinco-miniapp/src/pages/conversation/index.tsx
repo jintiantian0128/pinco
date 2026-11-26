@@ -137,6 +137,8 @@ const ConversationPage: React.FC = () => {
   const [interviewJdText, setInterviewJdText] = useState('')
   const messages = usePincoStore((state) => state.messages)
   const userProfile = usePincoStore((state) => state.userProfile)
+  const miniappReadiness = usePincoStore((state) => state.miniappReadiness)
+  const voiceAsrReady = Boolean(miniappReadiness?.items?.some((item) => item.key === 'voice_asr' && item.ready))
   const conversationMeta = usePincoStore((state) => state.conversationMeta)
   const isSending = usePincoStore((state) => state.isSending)
   const isStreaming = usePincoStore((state) => state.isStreaming)
@@ -1425,12 +1427,14 @@ const ConversationPage: React.FC = () => {
                   <Text>同时参考我之前上传的旧简历（只做提炼，不会编造）</Text>
                 </View>
                 <View className={styles.evidencePrimaryRow}>
-                  <Button
-                    className={classnames(styles.evidenceVoiceButton, isRecording && voiceCaptureTargetRef.current === 'evidence' && styles.evidenceVoiceButtonActive)}
-                    onClick={() => handleVoiceClick('evidence')}
-                  >
-                    <Text>{isRecording && voiceCaptureTargetRef.current === 'evidence' ? '再点一次结束' : '用语音讲经历'}</Text>
-                  </Button>
+                  {voiceAsrReady && (
+                    <Button
+                      className={classnames(styles.evidenceVoiceButton, isRecording && voiceCaptureTargetRef.current === 'evidence' && styles.evidenceVoiceButtonActive)}
+                      onClick={() => handleVoiceClick('evidence')}
+                    >
+                      <Text>{isRecording && voiceCaptureTargetRef.current === 'evidence' ? '再点一次结束' : '用语音讲经历'}</Text>
+                    </Button>
+                  )}
                   <View
                     className={classnames(styles.evidenceGenerateButton, evidenceBusy && styles.evidenceButtonDisabled)}
                     onClick={generateEvidenceDraft}
@@ -2055,29 +2059,29 @@ const ConversationPage: React.FC = () => {
               <Text>{isSending ? '发送中' : '发送'}</Text>
             </Button>
           ) : (
-            <Button
-              className={classnames(styles.voiceButton, isRecording && styles.voiceButtonActive)}
-              ariaRole='button'
-              ariaLabel={isRecording ? '正在录音，再点一次发送' : '录音'}
-              onClick={() => handleVoiceClick('composer')}
-            >
-              <Text className={styles.voiceAccessibleLabel}>
-                {isRecording ? '正在录音，再点一次发送' : '录音'}
-              </Text>
-              {isRecording ? (
-                <View className={styles.recordingIndicator}>
-                  <View className={styles.recordingWave} />
-                  <View className={styles.recordingWave} style={{ animationDelay: '0.1s' }} />
-                  <View className={styles.recordingWave} style={{ animationDelay: '0.2s' }} />
-                </View>
-              ) : (
-                <View className={styles.micIcon}>
-                  <View className={styles.micBody} />
-                  <View className={styles.micStem} />
-                  <View className={styles.micBase} />
-                </View>
-              )}
-            </Button>
+            voiceAsrReady ? (
+              <Button
+                className={classnames(styles.voiceButton, isRecording && styles.voiceButtonActive)}
+                ariaRole='button'
+                ariaLabel={isRecording ? '正在录音，再点一次发送' : '录音'}
+                onClick={() => handleVoiceClick('composer')}
+              >
+                <Text className={styles.voiceAccessibleLabel}>{isRecording ? '正在录音，再点一次发送' : '录音'}</Text>
+                {isRecording ? (
+                  <View className={styles.recordingIndicator}>
+                    <View className={styles.recordingWave} />
+                    <View className={styles.recordingWave} style={{ animationDelay: '0.1s' }} />
+                    <View className={styles.recordingWave} style={{ animationDelay: '0.2s' }} />
+                  </View>
+                ) : (
+                  <View className={styles.micIcon}>
+                    <View className={styles.micBody} />
+                    <View className={styles.micStem} />
+                    <View className={styles.micBase} />
+                  </View>
+                )}
+              </Button>
+            ) : null
           )}
         </View>
       </View>
